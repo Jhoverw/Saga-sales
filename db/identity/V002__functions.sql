@@ -22,10 +22,14 @@ BEGIN
     SET XACT_ABORT ON;
 
     IF LEN(LTRIM(RTRIM(@slug))) = 0
-        THROW 50000, 'VALIDATION_ERROR: the slug is required', 1;
+    BEGIN
+        ;THROW 50000, 'VALIDATION_ERROR: the slug is required', 1;
+    END
 
     IF LEN(LTRIM(RTRIM(@admin_email))) = 0
-        THROW 50000, 'VALIDATION_ERROR: the administrator email is required', 1;
+    BEGIN
+        ;THROW 50000, 'VALIDATION_ERROR: the administrator email is required', 1;
+    END
 
     BEGIN TRAN;
 
@@ -89,7 +93,9 @@ BEGIN
     SET XACT_ABORT ON;
 
     IF EXISTS (SELECT 1 FROM dbo.users WHERE tenant_id = @p_tenant_id AND email = @email)
-        THROW 50000, 'CONFLICT: that email already exists in this store', 1;
+    BEGIN
+        ;THROW 50000, 'CONFLICT: that email already exists in this store', 1;
+    END
 
     DECLARE @user_id uniqueidentifier = NEWID();
 
@@ -116,7 +122,9 @@ BEGIN
         RETURN;
 
     IF @matches > 1
-        THROW 50000, 'CONFLICT: that email exists in more than one store; send the store', 1;
+    BEGIN
+        ;THROW 50000, 'CONFLICT: that email exists in more than one store; send the store', 1;
+    END
 
     SELECT id            AS Id,
            tenant_id     AS TenantId,

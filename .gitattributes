@@ -1,0 +1,12 @@
+# Normalize line endings so diffs stay readable and Git stops warning on every file.
+* text=auto eol=crlf
+
+*.sh   text eol=lf
+*.sql  text eol=crlf
+*.cs   text eol=crlf
+*.csproj text eol=crlf
+*.md   text eol=crlf
+
+*.png  binary
+*.jpg  binary
+*.webp binary
