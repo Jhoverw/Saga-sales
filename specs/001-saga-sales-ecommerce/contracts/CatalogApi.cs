@@ -84,9 +84,10 @@ public class StockMovementRequest
 //
 // POST   /api/products                              → 201 ProductDto
 // GET    /api/products                              → 200 PagedResult<ProductDto>
-//        ?pageNumber&pageSize&categoryId&search&sortBy&descending&customerType
-//        Filtering happens before pagination (FR-009); prices are resolved for customerType.
-// GET    /api/products/{id}?customerType=           → 200 ProductDto  · 404
+//        ?pageNumber&pageSize&categoryId&search&sortBy&descending
+//        Filtering happens before pagination (FR-009); rows carry the BASE price.
+//        The price for a customer type comes from the quote endpoint below (FR-007b).
+// GET    /api/products/{id}                          → 200 ProductDto  · 404
 // PUT    /api/products/{id}                         → 200 ProductDto  · 400 · 404
 // DELETE /api/products/{id}                         → 204 (retires, never deletes — FR-010)
 // PUT    /api/products/{id}/prices/{customerType}   → 200 PriceQuoteDto (upsert, FR-007)

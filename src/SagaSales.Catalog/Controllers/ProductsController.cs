@@ -79,9 +79,39 @@ public sealed class ProductsController(IMediator mediator) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Sets the price for one customer type (D5).</summary>
+    [HttpPut("{id:guid}/prices/{customerType}")]
+    [ProducesResponseType(typeof(PriceQuoteDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetPrice(
+        Guid id,
+        CustomerType customerType,
+        [FromBody] SetPriceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new Commands.SetProductPriceCommand(id, customerType, request.Price),
+            cancellationToken);
+
+        return Ok(result.Value);
+    }
+
     /// <summary>
-    /// Atomically reserves stock. Called by the Sales service so it never touches the
-    /// catalog database directly.
+    /// The price that applies to a customer type, telling the caller whether the list price or the
+    /// fallback base price was used (FR-007b).
+    /// </summary>
+    [HttpGet("{id:guid}/price")]
+    [ProducesResponseType(typeof(PriceQuoteDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPrice(
+        Guid id,
+        [FromQuery] CustomerType customerType = CustomerType.Retail,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new Queries.GetProductPriceQuery(id, customerType), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>
+    /// Atomically reserves stock. Called by the Sales service so it never touches this database.
     /// </summary>
     [HttpPost("{id:guid}/stock/reserve")]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
@@ -97,9 +127,7 @@ public sealed class ProductsController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
-    /// <summary>
-    /// Compensating operation for <see cref="ReserveStock"/> when checkout aborts.
-    /// </summary>
+    /// <summary>Compensating operation for <see cref="ReserveStock"/> when checkout aborts.</summary>
     [HttpPost("{id:guid}/stock/release")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> ReleaseStock(

@@ -1,9 +1,13 @@
 namespace SagaSales.Catalog.Commands;
 
+/// <summary>
+/// Retires a product. The row is never deleted, so historical orders keep their name and price
+/// (FR-010); the procedure also raises NOT_FOUND when the product does not belong to the tenant.
+/// </summary>
 public record DeleteProductCommand(Guid Id) : ICommand;
 
 public sealed class DeleteProductCommandHandler(
-    CatalogDbContext dbContext,
+    IProductRepository repository,
     IEventBus eventBus,
     ICurrentUser currentUser) : ICommandHandler<DeleteProductCommand>
 {
@@ -11,23 +15,10 @@ public sealed class DeleteProductCommandHandler(
     {
         Guard.AgainstEmptyGuid(request.Id, nameof(request.Id));
 
-        var tenantId = currentUser.RequireTenantId();
-
-        var product = await dbContext.Products
-            .FirstOrDefaultAsync(p => p.Id == request.Id && p.TenantId == tenantId, cancellationToken);
-
-        if (product is null)
-        {
-            throw new NotFoundException("Product", request.Id);
-        }
-
-        // Soft delete: keeps order history and stock figures consistent.
-        product.Status = ProductStatus.Discontinued;
-        product.UpdatedAt = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await repository.RetireAsync(request.Id, cancellationToken);
 
         await eventBus.PublishAsync(
-            new CatalogProductDeletedEvent(product.Id, product.TenantId),
+            new CatalogProductDeletedEvent(request.Id, currentUser.RequireTenantId()),
             cancellationToken);
 
         return Result.Success();

@@ -1,8 +1,6 @@
 namespace SagaSales.Catalog.Commands;
 
-/// <summary>
-/// Updates a product. FR-001 requires a PUT endpoint; the previous implementation had none.
-/// </summary>
+/// <summary>Updates a product (FR-001).</summary>
 public record UpdateProductCommand(
     Guid Id,
     string Name,
@@ -14,9 +12,8 @@ public record UpdateProductCommand(
     ProductStatus Status) : ICommand<ProductDto>;
 
 public sealed class UpdateProductCommandHandler(
-    CatalogDbContext dbContext,
-    IEventBus eventBus,
-    ICurrentUser currentUser) : ICommandHandler<UpdateProductCommand, ProductDto>
+    IProductRepository repository,
+    IEventBus eventBus) : ICommandHandler<UpdateProductCommand, ProductDto>
 {
     public async Task<Result<ProductDto>> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
     {
@@ -25,26 +22,17 @@ public sealed class UpdateProductCommandHandler(
         Guard.AgainstNegativeOrZero(request.Price, nameof(request.Price));
         Guard.AgainstNegative(request.StockQuantity, nameof(request.StockQuantity));
 
-        var tenantId = currentUser.RequireTenantId();
-
-        var product = await dbContext.Products
-            .FirstOrDefaultAsync(p => p.Id == request.Id && p.TenantId == tenantId, cancellationToken);
-
-        if (product is null)
-        {
-            throw new NotFoundException("Product", request.Id);
-        }
-
-        product.ApplyDetails(
+        // A missing product surfaces from the procedure as NOT_FOUND → 404.
+        var product = await repository.UpdateAsync(
+            request.Id,
             request.Name.Trim(),
             request.Description,
             request.Price,
             string.IsNullOrWhiteSpace(request.Currency) ? "USD" : request.Currency.ToUpperInvariant(),
             request.StockQuantity,
             request.CategoryId,
-            request.Status);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
+            request.Status,
+            cancellationToken);
 
         await eventBus.PublishAsync(
             new CatalogProductUpdatedEvent(

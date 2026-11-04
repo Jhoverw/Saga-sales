@@ -2,6 +2,7 @@ namespace SagaSales.Catalog.Commands;
 
 /// <summary>
 /// Creates a product for the caller's tenant and publishes <c>CatalogProductCreatedEvent</c>.
+/// Validation and the category check live in <c>sp_product_create</c>.
 /// </summary>
 public record CreateProductCommand(
     string Name,
@@ -12,7 +13,7 @@ public record CreateProductCommand(
     Guid? CategoryId = null) : ICommand<ProductDto>;
 
 public sealed class CreateProductCommandHandler(
-    CatalogDbContext dbContext,
+    IProductRepository repository,
     IEventBus eventBus,
     ICurrentUser currentUser) : ICommandHandler<CreateProductCommand, ProductDto>
 {
@@ -22,34 +23,15 @@ public sealed class CreateProductCommandHandler(
         Guard.AgainstNegativeOrZero(request.Price, nameof(request.Price));
         Guard.AgainstNegative(request.StockQuantity, nameof(request.StockQuantity));
 
-        var tenantId = currentUser.RequireTenantId();
-
-        if (request.CategoryId is { } categoryId)
-        {
-            var exists = await dbContext.Categories
-                .AnyAsync(c => c.Id == categoryId && c.TenantId == tenantId, cancellationToken);
-
-            if (!exists)
-            {
-                throw new NotFoundException("Category", categoryId);
-            }
-        }
-
-        var product = new Domain.Product
-        {
-            TenantId = tenantId,
-            Name = request.Name.Trim(),
-            Description = request.Description,
-            Price = request.Price,
-            Currency = string.IsNullOrWhiteSpace(request.Currency) ? "USD" : request.Currency.ToUpperInvariant(),
-            StockQuantity = request.StockQuantity,
-            CategoryId = request.CategoryId,
-            Status = ProductStatus.Active,
-            CreatedBy = currentUser.UserId ?? Guid.Empty,
-        };
-
-        dbContext.Products.Add(product);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        var product = await repository.CreateAsync(
+            request.Name.Trim(),
+            request.Description,
+            request.Price,
+            string.IsNullOrWhiteSpace(request.Currency) ? "USD" : request.Currency.ToUpperInvariant(),
+            request.StockQuantity,
+            request.CategoryId,
+            currentUser.UserId ?? Guid.Empty,
+            cancellationToken);
 
         await eventBus.PublishAsync(
             new CatalogProductCreatedEvent(

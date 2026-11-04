@@ -9,8 +9,10 @@ builder.AddSagaSalesLogging(SagaSalesConstants.ApplicationName);
 builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Catalog");
 
-builder.Services.AddDbContext<CatalogDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Persistence: stored procedures only (constitution §VIII).
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<IPriceListRepository, PriceListRepository>();
 
 // Catalog publishes product events; it consumes none of its own.
 builder.Services.AddSagaSalesMessageBus(builder.Configuration);

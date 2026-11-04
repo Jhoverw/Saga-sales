@@ -1,13 +1,13 @@
 namespace SagaSales.Catalog.Commands;
 
 /// <summary>
-/// Atomically reserves stock for an order line. The whole operation is a single
-/// conditional UPDATE, so concurrent orders cannot oversell (FR-002).
+/// Atomically reserves stock for an order line. The whole operation is one conditional
+/// transaction inside <c>sp_stock_reserve</c>, so concurrent orders cannot oversell (FR-011).
 /// </summary>
 public record ReserveStockCommand(Guid ProductId, int Quantity) : ICommand<ProductDto>;
 
 public sealed class ReserveStockCommandHandler(
-    CatalogDbContext dbContext,
+    IProductRepository repository,
     IEventBus eventBus,
     ICurrentUser currentUser) : ICommandHandler<ReserveStockCommand, ProductDto>
 {
@@ -16,43 +16,25 @@ public sealed class ReserveStockCommandHandler(
         Guard.AgainstEmptyGuid(request.ProductId, nameof(request.ProductId));
         Guard.AgainstNegativeOrZero(request.Quantity, nameof(request.Quantity));
 
-        var tenantId = currentUser.RequireTenantId();
-
-        var affected = await dbContext.Products
-            .Where(p =>
-                p.Id == request.ProductId &&
-                p.TenantId == tenantId &&
-                p.Status == ProductStatus.Active &&
-                p.StockQuantity >= request.Quantity)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(p => p.StockQuantity, p => p.StockQuantity - request.Quantity)
-                    .SetProperty(p => p.UpdatedAt, _ => DateTime.UtcNow),
-                cancellationToken);
-
-        var product = await dbContext.Products
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == request.ProductId && p.TenantId == tenantId, cancellationToken);
-
-        if (product is null)
-        {
-            throw new NotFoundException("Product", request.ProductId);
-        }
-
-        if (affected == 0)
-        {
-            throw new InsufficientStockException(product.Name, request.Quantity, product.StockQuantity);
-        }
+        // NOT_FOUND and INSUFFICIENT_STOCK come from the procedure and map to 404 / 409.
+        var reservation = await repository.ReserveStockAsync(request.ProductId, request.Quantity, cancellationToken);
 
         await eventBus.PublishAsync(
             new CatalogProductUpdatedEvent(
-                product.Id,
-                product.TenantId,
-                product.Name,
-                product.Price,
-                product.StockQuantity),
+                reservation.Id,
+                currentUser.RequireTenantId(),
+                reservation.Name,
+                reservation.Price,
+                reservation.StockQuantity),
             cancellationToken);
 
-        return Result<ProductDto>.Success(product.ToDto());
+        return Result<ProductDto>.Success(new ProductDto
+        {
+            Id = reservation.Id,
+            Name = reservation.Name,
+            BasePrice = reservation.Price,
+            Currency = reservation.Currency,
+            StockQuantity = reservation.StockQuantity,
+        });
     }
 }
