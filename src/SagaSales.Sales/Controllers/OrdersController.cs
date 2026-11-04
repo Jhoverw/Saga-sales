@@ -14,7 +14,10 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         [FromBody] CreateOrderRequest request,
         CancellationToken cancellationToken)
     {
+        // D8: staff places the order for a customer, so the customer comes from the body
+        // and the signed-in user is recorded as `created_by`.
         var command = new Commands.CreateOrderCommand(
+            request.CustomerId,
             request.Items.Select(i => new OrderItemRequest { ProductId = i.ProductId, Quantity = i.Quantity }).ToList(),
             request.ShippingAddress,
             request.Notes);
@@ -50,8 +53,7 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         [FromBody] UpdateOrderStatusRequest request,
         CancellationToken cancellationToken)
     {
-        // A new command is built from the route id: records are immutable, so the previous
-        // `request.OrderId = id` assignment was invalid.
+        // A new command is built from the route id: records are immutable.
         var command = new Commands.UpdateOrderStatusCommand(id, (OrderStatus)request.NewStatus);
         var result = await mediator.Send(command, cancellationToken);
         return Ok(result.Value);

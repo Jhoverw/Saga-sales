@@ -10,10 +10,10 @@ builder.AddSagaSalesLogging(SagaSalesConstants.ApplicationName);
 builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Sales");
 
-builder.Services.AddDbContext<SalesDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Persistence: stored procedures only (constitution §VIII).
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 
-// Catalog is reached over HTTP; Sales no longer references Catalog's DbContext.
+// Catalog is reached over HTTP; Sales never reads Catalog's database.
 builder.Services.AddTransient<ForwardCredentialsHandler>();
 builder.Services
     .AddHttpClient<ICatalogClient, CatalogClient>(http =>

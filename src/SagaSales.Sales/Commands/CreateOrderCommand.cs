@@ -4,16 +4,18 @@ using SagaSales.Sales.Domain;
 using SagaSales.Sales.Infrastructure;
 
 /// <summary>
-/// Places an order: reserves stock in Catalog (atomic), snapshots prices, persists the order
-/// and publishes the order events. Reservations are released if anything fails afterwards.
+/// Places an order on behalf of a customer (D8): reserves stock in Catalog, snapshots the name and
+/// price of every line, persists the order and publishes the events.
+/// Reservations already taken are released if anything fails afterwards (FR-014).
 /// </summary>
 public record CreateOrderCommand(
+    Guid CustomerId,
     IReadOnlyList<OrderItemRequest> Items,
-    string? ShippingAddress,
+    string ShippingAddress,
     string? Notes = null) : ICommand<OrderDto>;
 
 public sealed class CreateOrderCommandHandler(
-    SalesDbContext dbContext,
+    IOrderRepository repository,
     ICatalogClient catalogClient,
     IEventBus eventBus,
     ICurrentUser currentUser) : ICommandHandler<CreateOrderCommand, OrderDto>
@@ -22,15 +24,15 @@ public sealed class CreateOrderCommandHandler(
 
     public async Task<Result<OrderDto>> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
+        Guard.AgainstEmptyGuid(request.CustomerId, nameof(request.CustomerId));
         Guard.AgainstEmpty(request.Items, nameof(request.Items));
         Guard.AgainstNullOrEmpty(request.ShippingAddress, nameof(request.ShippingAddress));
 
         var tenantId = currentUser.RequireTenantId();
-        var customerId = currentUser.RequireUserId();
+        var staffUserId = currentUser.RequireUserId();
 
         var reserved = new List<(Guid ProductId, int Quantity)>();
         var lines = new List<OrderItem>();
-        decimal subtotal = 0m;
 
         try
         {
@@ -38,12 +40,11 @@ public sealed class CreateOrderCommandHandler(
             {
                 Guard.AgainstNegativeOrZero(item.Quantity, $"Quantity for product {item.ProductId}");
 
-                var product = await catalogClient.GetProductAsync(item.ProductId, cancellationToken);
-
+                // Reserve first: the catalogue owns stock, and this call is atomic there (FR-011).
                 await catalogClient.ReserveStockAsync(item.ProductId, item.Quantity, cancellationToken);
                 reserved.Add((item.ProductId, item.Quantity));
 
-                subtotal += product.BasePrice * item.Quantity;
+                var product = await catalogClient.GetProductAsync(item.ProductId, cancellationToken);
 
                 lines.Add(new OrderItem
                 {
@@ -56,21 +57,14 @@ public sealed class CreateOrderCommandHandler(
                 });
             }
 
-            var order = new Order
-            {
-                TenantId = tenantId,
-                CustomerId = customerId,
-                Status = OrderStatus.Pending,
-                Subtotal = subtotal,
-                ShippingAddress = request.ShippingAddress!,
-                Notes = request.Notes ?? string.Empty,
-                OrderDate = DateTime.UtcNow,
-                CreatedBy = customerId,
-                Items = lines,
-            };
-
-            dbContext.Orders.Add(order);
-            await dbContext.SaveChangesAsync(cancellationToken);
+            // Header and lines are written in one transaction inside the procedure.
+            var order = await repository.CreateAsync(
+                request.CustomerId,
+                request.ShippingAddress!.Trim(),
+                request.Notes,
+                staffUserId,
+                lines,
+                cancellationToken);
 
             var snapshot = lines
                 .Select(i => new OrderItemSnapshot(i.ProductId, i.ProductSnapshotName, i.Quantity, i.UnitPrice))
@@ -80,21 +74,21 @@ public sealed class CreateOrderCommandHandler(
                 new OrderPlacedEvent(
                     order.Id,
                     tenantId,
-                    customerId,
+                    order.CustomerId,
                     currentUser.Email ?? string.Empty,
                     snapshot,
-                    subtotal,
+                    order.Subtotal,
                     order.OrderDate),
                 cancellationToken);
 
-            if (subtotal >= HighValueThreshold)
+            if (order.Subtotal >= HighValueThreshold)
             {
                 await eventBus.PublishAsync(
-                    new HighValueOrderAlertEvent(order.Id, tenantId, subtotal, order.OrderDate),
+                    new HighValueOrderAlertEvent(order.Id, tenantId, order.Subtotal, order.OrderDate),
                     cancellationToken);
             }
 
-            return Result<OrderDto>.Success(order.ToDto());
+            return Result<OrderDto>.Success(order.ToDtoWith(lines));
         }
         catch
         {

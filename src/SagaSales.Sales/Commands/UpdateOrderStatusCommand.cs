@@ -2,12 +2,15 @@ namespace SagaSales.Sales.Commands;
 
 using SagaSales.Sales.Domain;
 
+/// <summary>
+/// Moves an order along the state machine. The allowed transitions are enforced inside
+/// <c>sp_order_change_status</c>, so an invalid step returns 409 instead of corrupting the row.
+/// </summary>
 public record UpdateOrderStatusCommand(Guid OrderId, OrderStatus NewStatus) : ICommand<OrderDto>;
 
 public sealed class UpdateOrderStatusCommandHandler(
-    SalesDbContext dbContext,
-    IEventBus eventBus,
-    ICurrentUser currentUser) : ICommandHandler<UpdateOrderStatusCommand, OrderDto>
+    IOrderRepository repository,
+    IEventBus eventBus) : ICommandHandler<UpdateOrderStatusCommand, OrderDto>
 {
     public async Task<Result<OrderDto>> Handle(
         UpdateOrderStatusCommand request,
@@ -15,26 +18,19 @@ public sealed class UpdateOrderStatusCommandHandler(
     {
         Guard.AgainstEmptyGuid(request.OrderId, nameof(request.OrderId));
 
-        var tenantId = currentUser.RequireTenantId();
+        // Read first so the event can carry the previous status.
+        var current = await repository.GetAsync(request.OrderId, cancellationToken)
+                      ?? throw new NotFoundException("Order", request.OrderId);
 
-        var order = await dbContext.Orders
-            .Include(o => o.Items)
-            .FirstOrDefaultAsync(o => o.Id == request.OrderId && o.TenantId == tenantId, cancellationToken);
+        var previous = current.Status;
 
-        if (order is null)
-        {
-            throw new NotFoundException("Order", request.OrderId);
-        }
-
-        var previous = order.Status;
-        order.ChangeStatus(request.NewStatus);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
+        // NOT_FOUND and INVALID_TRANSITION come from the procedure.
+        var order = await repository.ChangeStatusAsync(request.OrderId, request.NewStatus, cancellationToken);
 
         await eventBus.PublishAsync(
             new OrderStatusChangedEvent(
                 order.Id,
-                order.TenantId,
+                current.TenantId,
                 previous.ToString(),
                 order.Status.ToString(),
                 DateTime.UtcNow),

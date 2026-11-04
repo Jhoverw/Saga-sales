@@ -1,25 +1,21 @@
 namespace SagaSales.Sales.Queries;
 
+/// <summary>One order with its lines, which the order row alone cannot carry.</summary>
 public record GetOrderQuery(Guid Id) : IQuery<OrderDto>;
 
-public sealed class GetOrderQueryHandler(
-    SalesDbContext dbContext,
-    ICurrentUser currentUser) : IQueryHandler<GetOrderQuery, OrderDto>
+public sealed class GetOrderQueryHandler(IOrderRepository repository)
+    : IQueryHandler<GetOrderQuery, OrderDto>
 {
     public async Task<Result<OrderDto>> Handle(GetOrderQuery request, CancellationToken cancellationToken)
     {
-        var tenantId = currentUser.RequireTenantId();
+        var order = await repository.GetAsync(request.Id, cancellationToken)
+                    ?? throw new NotFoundException("Order", request.Id);
 
-        var order = await dbContext.Orders
-            .AsNoTracking()
-            .Include(o => o.Items)
-            .FirstOrDefaultAsync(o => o.Id == request.Id && o.TenantId == tenantId, cancellationToken);
+        var lines = await repository.GetLinesAsync(request.Id, cancellationToken);
 
-        if (order is null)
-        {
-            throw new NotFoundException("Order", request.Id);
-        }
+        var dto = order.ToDto();
+        dto.Items = lines.Select(l => l.ToDto()).ToList();
 
-        return Result<OrderDto>.Success(order.ToDto());
+        return Result<OrderDto>.Success(dto);
     }
 }
