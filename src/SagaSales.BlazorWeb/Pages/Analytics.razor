@@ -2,77 +2,127 @@
 @attribute [Authorize]
 @inject ApiClient Api
 
-<h1>Analítica</h1>
+<div class="page-head">
+    <div>
+        <h1>Analítica</h1>
+        <div class="page-head__sub">@From.ToString("dd MMM") — @To.ToString("dd MMM yyyy")</div>
+    </div>
+</div>
 
-<div class="d-flex gap-2 mb-3 align-items-center">
+<div class="toolbar">
     <label class="form-label mb-0">Desde</label>
-    <input class="form-control" type="date" style="max-width:180px;" @bind="From" />
+    <input class="form-control" type="date" style="max-width:170px;" @bind="From" />
     <label class="form-label mb-0">Hasta</label>
-    <input class="form-control" type="date" style="max-width:180px;" @bind="To" />
-    <button class="btn btn-outline-secondary" @onclick="LoadAsync">Actualizar</button>
+    <input class="form-control" type="date" style="max-width:170px;" @bind="To" />
+    <button class="btn btn-primary btn-sm" @onclick="LoadAsync">Actualizar</button>
 </div>
 
 @if (Summary is null)
 {
-    <p class="text-muted">Sin datos para el rango seleccionado.</p>
+    <div class="panel">
+        <div class="empty">Sin datos para el rango seleccionado.</div>
+    </div>
 }
 else
 {
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="text-muted">Ingresos</h6>
-                    <h3>@Summary.TotalRevenue.ToString("C")</h3>
-                </div>
+        <div class="col-12 col-md-4">
+            <div class="kpi">
+                <div class="kpi__label">Ingresos</div>
+                <div class="kpi__value">@Summary.TotalRevenue.ToString("C")</div>
+                <div class="kpi__meta">Total del rango</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="text-muted">Pedidos</h6>
-                    <h3>@Summary.OrderCount</h3>
-                </div>
+        <div class="col-12 col-md-4">
+            <div class="kpi">
+                <div class="kpi__label">Pedidos</div>
+                <div class="kpi__value">@Summary.OrderCount</div>
+                <div class="kpi__meta">Órdenes registradas</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="text-muted">Pagos aprobados</h6>
-                    <h3>@Summary.PaymentSuccessCount</h3>
-                </div>
+        <div class="col-12 col-md-4">
+            <div class="kpi">
+                <div class="kpi__label">Pagos aprobados</div>
+                <div class="kpi__value">@Summary.PaymentSuccessCount</div>
+                <div class="kpi__meta">Cobros confirmados</div>
             </div>
         </div>
     </div>
 
-    <h5>Top productos</h5>
+    <div class="row g-3">
+        <div class="col-12 col-xl-8">
+            <div class="panel h-100">
+                <div class="panel__head">
+                    <div>
+                        <div class="panel__title">Productos que tiran del negocio</div>
+                        <div class="page-head__sub">Por ingresos en el rango</div>
+                    </div>
+                    <div class="legend"><span class="legend__dot"></span> Ingresos</div>
+                </div>
+                <div class="panel__body">
+                    @if (Summary.TopProducts.Count == 0)
+                    {
+                        <div class="empty">Sin ventas registradas en el rango.</div>
+                    }
+                    else
+                    {
+                        @foreach (var product in Summary.TopProducts)
+                        {
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <div style="flex:0 0 34%;color:var(--text-muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                    @product.ProductName
+                                </div>
+                                <div style="flex:1 1 auto;">
+                                    <div style="height:8px;border-radius:6px;background:rgba(15,42,79,.55);overflow:hidden;">
+                                        <div style="height:8px;border-radius:6px;width:@Pct(product.Revenue)%;background:linear-gradient(90deg,var(--blue),#3d86f7);"></div>
+                                    </div>
+                                </div>
+                                <div class="num" style="flex:0 0 110px;text-align:right;font-weight:600;">
+                                    @product.Revenue.ToString("C")
+                                </div>
+                                <div class="num" style="flex:0 0 70px;text-align:right;color:var(--text-faint);font-size:12px;">
+                                    @product.UnitsSold u.
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
 
-    @if (Summary.TopProducts.Count == 0)
-    {
-        <p class="text-muted">Sin ventas registradas en el rango.</p>
-    }
-    else
-    {
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Producto</th>
-                    <th>Unidades</th>
-                    <th>Ingresos</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var product in Summary.TopProducts)
-                {
-                    <tr>
-                        <td>@product.ProductName</td>
-                        <td>@product.UnitsSold</td>
-                        <td>@product.Revenue.ToString("C")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
+        <div class="col-12 col-xl-4">
+            <div class="panel h-100">
+                <div class="panel__head">
+                    <div class="panel__title">Detalle</div>
+                </div>
+                <div class="panel__body">
+                    <div class="stat-row">
+                        <span class="stat-row__k">Ingresos</span>
+                        <span class="stat-row__v">@Summary.TotalRevenue.ToString("C")</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-row__k">Pedidos</span>
+                        <span class="stat-row__v">@Summary.OrderCount</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-row__k">Pagos aprobados</span>
+                        <span class="stat-row__v">@Summary.PaymentSuccessCount</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-row__k">Ticket medio</span>
+                        <span class="stat-row__v">@AverageTicket</span>
+                    </div>
+                    <hr class="divider" />
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="chip @(Summary.OrderCount > 0 ? "chip--ok" : "chip--neutral")">
+                            @(Summary.OrderCount > 0 ? "Con movimiento" : "Sin movimiento")
+                        </span>
+                        <span class="page-head__sub">Exportación CSV en E-06</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
@@ -80,6 +130,18 @@ else
 
     private DateTime From { get; set; } = DateTime.Today.AddDays(-6);
     private DateTime To { get; set; } = DateTime.Today;
+
+    private string AverageTicket => Summary is null || Summary.OrderCount == 0
+        ? "—"
+        : (Summary.TotalRevenue / Summary.OrderCount).ToString("C");
+
+    /// <summary>Largest revenue in the range, used to scale the bars.</summary>
+    private decimal MaxRevenue => Summary is null || Summary.TopProducts.Count == 0
+        ? 0m
+        : Summary.TopProducts.Max(p => p.Revenue);
+
+    private int Pct(decimal value)
+        => MaxRevenue <= 0 ? 0 : (int)Math.Round(value / MaxRevenue * 100, MidpointRounding.AwayFromZero);
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 

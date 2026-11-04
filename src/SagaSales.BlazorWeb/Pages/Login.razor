@@ -3,18 +3,23 @@
 @inject ApiClient Api
 @inject NavigationManager Navigation
 
-<h1>Entrar</h1>
+<div class="page-head">
+    <div>
+        <h1>Entrar</h1>
+        <div class="page-head__sub">Acceso al panel de la tienda</div>
+    </div>
+</div>
 
 @if (!string.IsNullOrWhiteSpace(Error))
 {
     <div class="alert alert-danger">@Error</div>
 }
 
-<div class="card" style="max-width:420px;">
-    <div class="card-body">
+<div class="panel" style="max-width:430px;">
+    <div class="panel__body">
         <div class="mb-3">
             <label class="form-label">Email</label>
-            <input class="form-control" type="email" @bind="Email" @bind:event="oninput" />
+            <input class="form-control" type="email" @bind="Email" @bind:event="oninput" placeholder="admin@demo.local" />
         </div>
         <div class="mb-3">
             <label class="form-label">Contraseña</label>
@@ -23,9 +28,9 @@
         <button class="btn btn-primary w-100" @onclick="SignInAsync" disabled="@Busy">
             @(Busy ? "Entrando..." : "Entrar")
         </button>
-        <hr />
-        <p class="text-muted small mb-0">
-            ¿No tienes cuenta? <a href="/register">Crea un tenant</a>.
+        <hr class="divider" />
+        <p class="page-head__sub mb-0">
+            ¿No tienes cuenta? <a href="/register">Crea una tienda</a>.
         </p>
     </div>
 </div>

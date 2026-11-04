@@ -2,7 +2,12 @@
 @attribute [Authorize]
 @inject ApiClient Api
 
-<h1>Pedidos</h1>
+<div class="page-head">
+    <div>
+        <h1>Pedidos</h1>
+        <div class="page-head__sub">Estado y seguimiento</div>
+    </div>
+</div>
 
 @if (Error is not null)
 {
@@ -54,7 +59,9 @@ else
             {
                 <tr>
                     <td><code>@order.Id</code></td>
-                    <td>@order.Status</td>
+                    <td>
+                        <span class="chip @(order.Status switch { "Delivered" => "chip--ok", "Cancelled" => "chip--danger", "Refunded" => "chip--neutral", "Pending" => "chip--warn", _ => "chip--info" })">@order.Status</span>
+                    </td>
                     <td>@order.Subtotal.ToString("C")</td>
                     <td>@order.OrderDate.ToString("u")</td>
                     <td>

@@ -1,22 +1,62 @@
 @inject NavigationManager Navigation
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="/">🛒 Saga-Sales</a>
-
-        <ul class="navbar-nav me-auto">
-            <li class="nav-item"><a class="nav-link" href="/products">Catálogo</a></li>
-            <li class="nav-item"><a class="nav-link" href="/customers">Clientes</a></li>
-            <li class="nav-item"><a class="nav-link" href="/orders">Pedidos</a></li>
-            <li class="nav-item"><a class="nav-link" href="/analytics">Analítica</a></li>
-        </ul>
-
-        <div class="d-flex gap-2">
-            <a class="btn btn-outline-light btn-sm" href="/login">Entrar</a>
-            <button class="btn btn-outline-warning btn-sm" @onclick="SignOut">Salir</button>
-        </div>
+<aside class="sidebar">
+    <div class="sidebar__brand">
+        <span class="sidebar__mark">S</span>
+        <span>Saga-Sales</span>
     </div>
-</nav>
+
+    <div class="sidebar__section">Operación</div>
+    <nav class="sidebar__nav">
+        <NavLink class="nav-item" href="" Match="NavLinkMatch.All">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="9" rx="1.5"></rect>
+                <rect x="14" y="3" width="7" height="5" rx="1.5"></rect>
+                <rect x="14" y="12" width="7" height="9" rx="1.5"></rect>
+                <rect x="3" y="16" width="7" height="5" rx="1.5"></rect>
+            </svg>
+            <span>Panel</span>
+        </NavLink>
+
+        <NavLink class="nav-item" href="products">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7.5 12 3l9 4.5v9L12 21 3 16.5z"></path>
+                <path d="M3 7.5 12 12l9-4.5M12 12v9"></path>
+            </svg>
+            <span>Catálogo</span>
+        </NavLink>
+
+        <NavLink class="nav-item" href="orders">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 3h12l1.5 4H4.5z"></path>
+                <path d="M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path>
+                <path d="M9 12h6"></path>
+            </svg>
+            <span>Pedidos</span>
+        </NavLink>
+
+        <NavLink class="nav-item" href="customers">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="9" cy="8" r="3.2"></circle>
+                <path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"></path>
+                <path d="M16 11a3 3 0 1 0 0-6"></path>
+                <path d="M17 15c2.2.4 3.8 2.2 3.8 5"></path>
+            </svg>
+            <span>Clientes</span>
+        </NavLink>
+
+        <NavLink class="nav-item" href="analytics">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 20V10M10 20V5M16 20v-7M22 20H2"></path>
+            </svg>
+            <span>Analítica</span>
+        </NavLink>
+    </nav>
+
+    <div class="sidebar__foot">
+        <button class="btn btn-outline-secondary btn-sm w-100" @onclick="SignOut">Cerrar sesión</button>
+    </div>
+</aside>
 
 @code {
     [Inject]

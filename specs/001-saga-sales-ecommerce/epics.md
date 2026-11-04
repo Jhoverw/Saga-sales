@@ -37,12 +37,43 @@ Perfil de operación declarado para el MVP:
 
 **Actores del negocio**
 
-| Actor | Qué necesita |
-|---|---|
-| Dueño/administrador del comercio | Abrir su tienda, controlar precios y stock, ver resultados |
-| Encargado de tienda | Gestionar catálogo, pedidos y clientes del día a día |
-| Comprador (cliente final) | Ver productos reales, comprar sin fricción, recibir confirmación |
-| Operación de plataforma | Que nada se caiga, que nadie vea datos de otro, poder diagnosticar |
+*Personas*
+
+| # | Actor | Dónde vive | Qué necesita | Rol técnico |
+|---|---|---|---|---|
+| 1 | Dueño / administrador | Dentro de una tienda | Abrir la tienda, definir precios y listas, gestionar usuarios, ver resultados | `admin` |
+| 2 | Encargado de tienda | Dentro de una tienda | Catálogo, pedidos y clientes del día a día | `manager` |
+| 3 | Vendedor | Dentro de una tienda | Tomar pedidos y registrar cobros; no toca precios | `sales` |
+| 4 | Comprador (cliente final) | Fuera de la tienda | Ver productos reales, comprar, recibir confirmación | `customer` — **sin login en el MVP** |
+| 5 | Operador de plataforma | Fuera de toda tienda | Que nada se caiga, diagnosticar, atender soporte | ninguno (sin tenant) |
+
+*Sistemas externos*
+
+| # | Actor | Cuándo entra | Qué aporta |
+|---|---|---|---|
+| 6 | Pasarela de pago (Stripe / PayPal) | v1 · E-04b | Autorizaciones y webhooks firmados |
+| 7 | Proveedor de email / SMS | v1 · E-07 | Entrega de confirmaciones y alertas |
+| 8 | Proyecto de facturación electrónica (SRI) | Proyecto aparte · E-10 | Consume los pedidos y emite el comprobante |
+| 9 | Transportista | E-11, a confirmar | Estados de envío y número de guía |
+
+*Actor indirecto*: el **contador del comercio** no usa la plataforma; recibe el CSV de E-06.
+
+**Reparto de permisos**
+
+| Acción | Dueño | Encargado | Vendedor | Comprador | Operador |
+|---|:--:|:--:|:--:|:--:|:--:|
+| Crear la tienda y su administrador | ✅ | — | — | — | — |
+| Gestionar usuarios y roles | ✅ | — | — | — | — |
+| Crear y editar productos | ✅ | ✅ | — | — | — |
+| Definir precios y listas por tipo de cliente | ✅ | ✅ | — | — | — |
+| Crear un pedido | ✅ | ✅ | ✅ | — (lo hace el staff en el MVP) | — |
+| Cambiar el estado de un pedido | ✅ | ✅ | ✅ | — | — |
+| Registrar un cobro manual | ✅ | ✅ | ✅ | — | — |
+| Reembolsar | ✅ | ✅ | — | — | — |
+| Gestionar clientes | ✅ | ✅ | ✅ | — | — |
+| Ver analítica y exportar CSV | ✅ | ✅ | — | — | — |
+| Ver `/health` y diagnosticar | — | — | — | — | ✅ |
+| Ver datos de negocio de una tienda | ✅ | ✅ | ✅ (solo sus pedidos) | — | ❌ por defecto |
 
 ---
 
@@ -475,6 +506,9 @@ Pendientes:
 - Falta desglosar E-07 en tareas propias: hoy `tasks.md` no la cubre.
 - `spec.md` necesita una historia para **alta de tenant** (E-01 no tiene US y la tiene que tener).
 - `data-model.md` debe reescribirse sin EF y con los procedimientos por agregado.
+- **Cambio de alcance (D5)**: el tipo de cliente y las listas de precios amplían E-02 (precios por
+  tipo sobre el precio base) y E-05 (tipo de cliente), y añaden un paso de resolución de precio al
+  checkout de E-03. Es el único cambio que aumenta trabajo del MVP, no solo lo reordena.
 
 ---
 
@@ -486,6 +520,12 @@ Pendientes:
 | D2 | **Cobro manual en el MVP** | E-04 se parte en E-04a (MVP) y E-04b (v1, pasarela) |
 | D3 | **SRI en un proyecto separado** | E-10 sale del alcance; el modelo solo reserva campos fiscales |
 | D4 | **Reportes en CSV es suficiente** | E-06 exporta CSV; no se genera `.xlsx` |
+| D5 | **Listas de precios por tipo de cliente** (retail/mayorista) | E-02 suma precios por tipo sobre el precio base; E-05 suma el tipo de cliente (retail por defecto) |
+| D6 | **Una sola moneda: USD** | Sin tipos de cambio ni conversión en los reportes |
+| D7 | **Dirección de envío siempre obligatoria** | El checkout la exige para cualquier tipo de producto |
+| D8 | **El comprador no inicia sesión en el MVP** | Es un registro de cliente creado por el staff; la cuenta propia llega con el storefront (E-09) |
+| D9 | **El rol vendedor existe con alcance acotado** | Crea pedidos, registra cobros y consulta catálogo/clientes; no edita precios, no reembolsa, no gestiona usuarios |
+| D10 | **El operador de plataforma no lee datos de negocio** | Solo ve salud, logs y métricas; la impersonación auditada queda fuera del MVP |
 
 ---
 

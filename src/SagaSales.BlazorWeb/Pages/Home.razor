@@ -1,54 +1,107 @@
 @page "/"
 @attribute [AllowAnonymous]
 
-<h1>Panel de Saga-Sales</h1>
+<div class="page-head">
+    <div>
+        <h1>Panel</h1>
+        <div class="page-head__sub">Resumen de la tienda</div>
+    </div>
+</div>
 
 <AuthorizeView>
     <Authorized>
-        <p class="lead">Hola, <strong>@context.User.Identity?.Name ?? context.User.FindFirst(ClaimTypes.Email)?.Value</strong>.</p>
-        <p>Tenant: <code>@context.User.FindFirst(SagaSalesConstants.Claims.TenantId)?.Value</code></p>
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-4">
+                <div class="kpi">
+                    <div class="kpi__label">Sesión</div>
+                    <div class="kpi__value" style="font-size:1.05rem;font-weight:600;">
+                        @(context.User.FindFirst(ClaimTypes.Email)?.Value ?? "—")
+                    </div>
+                    <div class="kpi__meta">
+                        Rol <strong>@context.User.FindFirst(ClaimTypes.Role)?.Value</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="kpi">
+                    <div class="kpi__label">Tienda</div>
+                    <div class="kpi__value" style="font-size:1.05rem;font-weight:600;word-break:break-all;">
+                        @context.User.FindFirst(SagaSalesConstants.Claims.TenantId)?.Value
+                    </div>
+                    <div class="kpi__meta">Identificador del tenant</div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="kpi">
+                    <div class="kpi__label">Estado</div>
+                    <div class="kpi__value" style="font-size:1.05rem;">
+                        <span class="chip chip--ok">Activo</span>
+                    </div>
+                    <div class="kpi__meta">Sesión válida y tienda resuelta</div>
+                </div>
+            </div>
+        </div>
     </Authorized>
     <NotAuthorized>
-        <p class="lead">No has iniciado sesión.</p>
-        <a class="btn btn-primary" href="/login">Entrar</a>
-        <a class="btn btn-outline-secondary" href="/register">Crear tenant</a>
+        <div class="panel mb-4">
+            <div class="panel__body d-flex flex-wrap align-items-center gap-3">
+                <div style="flex:1 1 260px;">
+                    <div class="panel__title">No has iniciado sesión</div>
+                    <div class="page-head__sub">Entra con tu cuenta o crea una tienda nueva.</div>
+                </div>
+                <a class="btn btn-primary" href="/login">Entrar</a>
+                <a class="btn btn-outline-primary" href="/register">Crear tienda</a>
+            </div>
+        </div>
     </NotAuthorized>
 </AuthorizeView>
 
-<div class="row g-3 mt-4">
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Catálogo</h5>
-                <p class="card-text small">Productos, categorías y stock.</p>
-                <a class="btn btn-sm btn-outline-primary" href="/products">Abrir</a>
+<div class="row g-3">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="panel h-100">
+            <div class="panel__body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="chip chip--info">Catálogo</span>
+                </div>
+                <div class="panel__title mb-1">Productos y stock</div>
+                <p class="page-head__sub mb-3">Publica el surtido, define precios por tipo de cliente y controla existencias.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/products">Abrir</a>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Clientes</h5>
-                <p class="card-text small">Alta y búsqueda por email o teléfono.</p>
-                <a class="btn btn-sm btn-outline-primary" href="/customers">Abrir</a>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="panel h-100">
+            <div class="panel__body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="chip chip--info">Pedidos</span>
+                </div>
+                <div class="panel__title mb-1">Órdenes y estados</div>
+                <p class="page-head__sub mb-3">Crea pedidos, registra el cobro y mueve cada orden por su ciclo.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/orders">Abrir</a>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Pedidos</h5>
-                <p class="card-text small">Creación y cambios de estado.</p>
-                <a class="btn btn-sm btn-outline-primary" href="/orders">Abrir</a>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="panel h-100">
+            <div class="panel__body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="chip chip--info">Clientes</span>
+                </div>
+                <div class="panel__title mb-1">Compradores</div>
+                <p class="page-head__sub mb-3">Alta, tipo de cliente y búsqueda por email o teléfono.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/customers">Abrir</a>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Analítica</h5>
-                <p class="card-text small">Ingresos y top de productos.</p>
-                <a class="btn btn-sm btn-outline-primary" href="/analytics">Abrir</a>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="panel h-100">
+            <div class="panel__body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="chip chip--info">Analítica</span>
+                </div>
+                <div class="panel__title mb-1">Resultados</div>
+                <p class="page-head__sub mb-3">Ingresos, pedidos y productos que tiran del negocio.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/analytics">Abrir</a>
             </div>
         </div>
     </div>

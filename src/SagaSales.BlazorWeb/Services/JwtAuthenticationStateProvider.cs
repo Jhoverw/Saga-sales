@@ -100,7 +100,7 @@ public sealed class JwtAuthenticationStateProvider(TokenStore store) : Authentic
     {
         var value = input.Replace('-', '+').Replace('_', '/');
 
-        return value.Length % 4 switch
+        return (value.Length % 4) switch
         {
             2 => value + "==",
             3 => value + "=",

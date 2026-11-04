@@ -37,7 +37,7 @@ es por HTTP (Sales → Catalog para reservar stock) o por eventos de MassTransit
 
 ## Requisitos
 
-- .NET SDK 8.0 (el proyecto fija `net8.0` en `Directory.Build.props`)
+- .NET SDK 10.0 (el proyecto fija `net10.0` en `Directory.Build.props`)
 - Docker (PostgreSQL, RabbitMQ)
 - Acceso a nuget.org para restaurar paquetes
 

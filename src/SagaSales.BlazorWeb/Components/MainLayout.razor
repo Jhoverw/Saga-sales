@@ -1,13 +1,50 @@
 @inherits LayoutComponentBase
 
-<div class="container-fluid">
+<div class="app-shell">
     <MainMenu />
 
-    <main class="py-3">
-        @Body
-    </main>
+    <div class="app-main">
+        <header class="topbar">
+            <div>
+                <div class="topbar__title">@Title</div>
+                <div class="topbar__sub">@Subtitle</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="chip chip--ok">Sistema operativo</span>
+            </div>
+        </header>
 
-    <footer class="text-center text-muted py-3 border-top">
-        <small>Saga-Sales &mdash; MVP</small>
-    </footer>
+        <main class="content">
+            @Body
+        </main>
+    </div>
 </div>
+
+@code {
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    private string Title => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0] switch
+    {
+        "" => "Panel",
+        "products" => "Catálogo",
+        "customers" => "Clientes",
+        "orders" => "Pedidos",
+        "analytics" => "Analítica",
+        "login" => "Iniciar sesión",
+        "register" => "Crear tienda",
+        var other => string.IsNullOrWhiteSpace(other) ? "Panel" : other,
+    };
+
+    private string Subtitle => Title switch
+    {
+        "Panel" => "Resumen de la tienda",
+        "Catálogo" => "Productos, precios y existencias",
+        "Clientes" => "Compradores y datos de contacto",
+        "Pedidos" => "Estado y seguimiento",
+        "Analítica" => "Ingresos y productos más vendidos",
+        "Iniciar sesión" => "Acceso al panel",
+        "Crear tienda" => "Alta de un comercio nuevo",
+        _ => string.Empty,
+    };
+}

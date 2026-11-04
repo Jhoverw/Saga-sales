@@ -2,7 +2,12 @@
 @attribute [Authorize]
 @inject ApiClient Api
 
-<h1>Clientes</h1>
+<div class="page-head">
+    <div>
+        <h1>Clientes</h1>
+        <div class="page-head__sub">Compradores y datos de contacto</div>
+    </div>
+</div>
 
 @if (Error is not null)
 {
@@ -63,7 +68,9 @@ else
                     <td>@customer.FirstName @customer.LastName</td>
                     <td>@customer.Email</td>
                     <td>@customer.Phone</td>
-                    <td>@customer.Status</td>
+                    <td>
+                        <span class="chip @(customer.Status switch { CustomerStatus.Active => "chip--ok", CustomerStatus.Suspended => "chip--danger", CustomerStatus.Deleted => "chip--neutral", _ => "chip--info" })">@customer.Status</span>
+                    </td>
                 </tr>
             }
         </tbody>

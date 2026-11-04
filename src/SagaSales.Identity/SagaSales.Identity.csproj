@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>SagaSales.Identity</RootNamespace>
     <AssemblyName>SagaSales.Identity</AssemblyName>
     <UserSecretsId>saga-sales-identity-secrets</UserSecretsId>

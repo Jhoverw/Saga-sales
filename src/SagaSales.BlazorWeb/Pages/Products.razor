@@ -2,7 +2,12 @@
 @attribute [Authorize]
 @inject ApiClient Api
 
-<h1>Catálogo</h1>
+<div class="page-head">
+    <div>
+        <h1>Catálogo</h1>
+        <div class="page-head__sub">Productos, precios y existencias</div>
+    </div>
+</div>
 
 @if (Error is not null)
 {
@@ -51,7 +56,9 @@ else
                     <td>@product.Name</td>
                     <td>@product.Price.ToString("C") @product.Currency</td>
                     <td>@product.StockQuantity</td>
-                    <td>@product.Status</td>
+                    <td>
+                        <span class="chip @(product.Status switch { ProductStatus.Active => "chip--ok", ProductStatus.OutOfStock => "chip--danger", ProductStatus.Discontinued => "chip--neutral", ProductStatus.Draft => "chip--neutral", _ => "chip--info" })">@product.Status</span>
+                    </td>
                 </tr>
             }
         </tbody>
