@@ -1,0 +1,20 @@
+# Keep the build context small and avoid copying stale build output into the image:
+# an obj/ folder copied from the host carries absolute paths and breaks restore.
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+
+.git/
+.gitattributes
+zz-probe/
+tests/
+specs/
+.specify/
+.github/
+docs/
+deploy/
+
+# Tests and documents are not needed to publish a service.
+*.md
+docker-compose*.yml

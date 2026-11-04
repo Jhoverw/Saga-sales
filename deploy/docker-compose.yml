@@ -9,6 +9,8 @@ x-app-env: &app-env
   ASPNETCORE_URLS: "http://+:80"
   Jwt__Issuer: "SagaSales.Identity"
   Jwt__Audience: "SagaSales.Api"
+  # Every service needs the same signing key to validate the tokens the gateway accepts.
+  Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
   RabbitMQ__Host: rabbitmq
   RabbitMQ__Username: saga_sales
   RabbitMQ__Password: saga_sales_dev
