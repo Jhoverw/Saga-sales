@@ -1,0 +1,142 @@
+@page "/orders"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<h1>Pedidos</h1>
+
+@if (Error is not null)
+{
+    <div class="alert alert-danger">@Error</div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Nuevo pedido</h5>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <input class="form-control" placeholder="Id del producto (GUID)" @bind="ProductId" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2">
+                <input class="form-control" type="number" min="1" placeholder="Cantidad" @bind="Quantity" />
+            </div>
+            <div class="col-md-4">
+                <input class="form-control" placeholder="Dirección de envío" @bind="ShippingAddress" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" @onclick="CreateAsync" disabled="@Busy">Crear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Result is null)
+{
+    <p>Cargando...</p>
+}
+else if (Result.Items.Count == 0)
+{
+    <p class="text-muted">Todavía no hay pedidos.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Pedido</th>
+                <th>Estado</th>
+                <th>Subtotal</th>
+                <th>Fecha</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in Result.Items)
+            {
+                <tr>
+                    <td><code>@order.Id</code></td>
+                    <td>@order.Status</td>
+                    <td>@order.Subtotal.ToString("C")</td>
+                    <td>@order.OrderDate.ToString("u")</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-success" @onclick="() => AdvanceAsync(order)">Avanzar</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private PagedResult<OrderDto>? Result { get; set; }
+
+    private string ProductId { get; set; } = string.Empty;
+    private int Quantity { get; set; } = 1;
+    private string ShippingAddress { get; set; } = string.Empty;
+
+    private string? Error { get; set; }
+    private bool Busy { get; set; }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Result = await Api.GetOrdersAsync(1, 20);
+    }
+
+    private async Task CreateAsync()
+    {
+        Busy = true;
+        Error = null;
+
+        try
+        {
+            if (!Guid.TryParse(ProductId, out var productId))
+            {
+                Error = "El id del producto debe ser un GUID válido.";
+                return;
+            }
+
+            var request = new CreateOrderRequest
+            {
+                ShippingAddress = ShippingAddress,
+                Items = [new OrderItemRequest { ProductId = productId, Quantity = Quantity }],
+            };
+
+            var created = await Api.CreateOrderAsync(request);
+
+            if (created is null)
+            {
+                Error = "No se pudo crear el pedido (revisa el stock y el id del producto).";
+                return;
+            }
+
+            ProductId = string.Empty;
+            Quantity = 1;
+            await LoadAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task AdvanceAsync(OrderDto order)
+    {
+        var next = order.Status switch
+        {
+            "Pending" => OrderStatus.Confirmed,
+            "Confirmed" => OrderStatus.Processing,
+            "Processing" => OrderStatus.Shipped,
+            "Shipped" => OrderStatus.Delivered,
+            _ => (OrderStatus?)null,
+        };
+
+        if (next is null)
+        {
+            return;
+        }
+
+        await Api.UpdateOrderStatusAsync(order.Id, next.Value);
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,10 @@
+PLACEHOLDER — no es un archivo de pruebas.
+
+Este archivo (sin extensión .cs, sin proyecto que lo compile) contenía un "test" que nunca se
+ejecutó: le faltaba `using Xunit;` y sus tres líneas no eran aserciones, solo expresiones
+sueltas (`product.Name.Length > 0;`), que C# evalúa y descarta.
+
+Las pruebas unitarias reales están en:
+    tests/SagaSales.UnitTests/
+
+Ver specs/saga-sales-ecommerce/epics.md §12 (Definición de Terminado).

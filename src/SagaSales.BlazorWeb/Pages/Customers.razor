@@ -1,0 +1,126 @@
+@page "/customers"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<h1>Clientes</h1>
+
+@if (Error is not null)
+{
+    <div class="alert alert-danger">@Error</div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Nuevo cliente</h5>
+        <div class="row g-2">
+            <div class="col-md-2">
+                <input class="form-control" placeholder="Nombre" @bind="FirstName" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2">
+                <input class="form-control" placeholder="Apellido" @bind="LastName" @bind:event="oninput" />
+            </div>
+            <div class="col-md-3">
+                <input class="form-control" type="email" placeholder="Email" @bind="Email" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2">
+                <input class="form-control" placeholder="Teléfono" @bind="Phone" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" @onclick="CreateAsync" disabled="@Busy">Añadir</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+    <input class="form-control" style="max-width:320px;" placeholder="Buscar por email, teléfono o nombre..." @bind="Search" @bind:event="oninput" />
+    <button class="btn btn-outline-secondary" @onclick="SearchAsync">Buscar</button>
+</div>
+
+@if (Result is null)
+{
+    <p>Cargando...</p>
+}
+else if (Result.Items.Count == 0)
+{
+    <p class="text-muted">No hay clientes que coincidan.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Teléfono</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var customer in Result.Items)
+            {
+                <tr>
+                    <td>@customer.FirstName @customer.LastName</td>
+                    <td>@customer.Email</td>
+                    <td>@customer.Phone</td>
+                    <td>@customer.Status</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private PagedResult<CustomerDto>? Result { get; set; }
+
+    private string FirstName { get; set; } = string.Empty;
+    private string LastName { get; set; } = string.Empty;
+    private string Email { get; set; } = string.Empty;
+    private string Phone { get; set; } = string.Empty;
+    private string Search { get; set; } = string.Empty;
+
+    private string? Error { get; set; }
+    private bool Busy { get; set; }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Result = await Api.GetCustomersAsync(1, 20, Search);
+    }
+
+    private async Task SearchAsync() => await LoadAsync();
+
+    private async Task CreateAsync()
+    {
+        Busy = true;
+        Error = null;
+
+        try
+        {
+            var created = await Api.CreateCustomerAsync(new CreateCustomerRequest
+            {
+                FirstName = FirstName,
+                LastName = LastName,
+                Email = Email,
+                Phone = string.IsNullOrWhiteSpace(Phone) ? null : Phone,
+            });
+
+            if (created is null)
+            {
+                Error = "No se pudo crear el cliente. Revisa los datos.";
+                return;
+            }
+
+            FirstName = string.Empty;
+            LastName = string.Empty;
+            Email = string.Empty;
+            Phone = string.Empty;
+            await LoadAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+}

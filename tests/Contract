@@ -1,0 +1,12 @@
+PLACEHOLDER — no es un archivo de pruebas.
+
+Este archivo (sin extensión .cs, sin proyecto que lo compile) no compilaba: empezaba con un
+encabezado Markdown (`# Contract Test — Catalog Service`) y referenciaba `IProductRepository`,
+un tipo que no existe en el repositorio. Su única "aserción" era
+`await repoMock.Object.SaveChangesAsync();`, que sobre un mock devuelve null y lanzaría
+NullReferenceException sin comprobar nada.
+
+Las pruebas de contrato requieren un servicio en ejecución y se añadirán en:
+    tests/SagaSales.ContractTests/    (pendiente)
+
+Ver specs/saga-sales-ecommerce/epics.md §12 (Definición de Terminado).

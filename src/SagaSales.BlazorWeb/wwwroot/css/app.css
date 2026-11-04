@@ -1,0 +1,9 @@
+:root {
+  --primary: #4f46e5;
+  --primary-dark: #4338ca;
+  --bg: #f8fafc;
+  --text: #1e293b;
+}
+body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; }
+.page-header { background: var(--primary); color: white; padding: 1rem; }
+.card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.1); padding: 1rem; }

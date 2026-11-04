@@ -1,0 +1,69 @@
+@page "/register"
+@attribute [AllowAnonymous]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<h1>Crear tenant</h1>
+
+@if (Message is not null)
+{
+    <div class="alert alert-info">@Message</div>
+}
+
+<div class="card" style="max-width:520px;">
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">Identificador (slug)</label>
+            <input class="form-control" @bind="Slug" @bind:event="oninput" placeholder="mi-tienda" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Nombre visible</label>
+            <input class="form-control" @bind="DisplayName" @bind:event="oninput" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Email del administrador</label>
+            <input class="form-control" type="email" @bind="AdminEmail" @bind:event="oninput" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Contraseña (mínimo 8 caracteres)</label>
+            <input class="form-control" type="password" @bind="AdminPassword" @bind:event="oninput" />
+        </div>
+        <button class="btn btn-primary" @onclick="RegisterAsync" disabled="@Busy">
+            @(Busy ? "Creando..." : "Crear tenant")
+        </button>
+    </div>
+</div>
+
+@code {
+    private string Slug { get; set; } = string.Empty;
+    private string DisplayName { get; set; } = string.Empty;
+    private string AdminEmail { get; set; } = string.Empty;
+    private string AdminPassword { get; set; } = string.Empty;
+    private string? Message { get; set; }
+    private bool Busy { get; set; }
+
+    private async Task RegisterAsync()
+    {
+        Busy = true;
+        Message = null;
+
+        try
+        {
+            var response = await Api.RegisterTenantAsync(new RegisterTenantRequest
+            {
+                Slug = Slug,
+                DisplayName = DisplayName,
+                AdminEmail = AdminEmail,
+                AdminPassword = AdminPassword,
+            });
+
+            Message = response is null
+                ? "No se pudo crear el tenant. Revisa los datos."
+                : $"Tenant creado. Ya puedes entrar con {response.AdminEmail}.";
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+}

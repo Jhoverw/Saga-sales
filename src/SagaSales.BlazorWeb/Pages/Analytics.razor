@@ -1,0 +1,92 @@
+@page "/analytics"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<h1>Analítica</h1>
+
+<div class="d-flex gap-2 mb-3 align-items-center">
+    <label class="form-label mb-0">Desde</label>
+    <input class="form-control" type="date" style="max-width:180px;" @bind="From" />
+    <label class="form-label mb-0">Hasta</label>
+    <input class="form-control" type="date" style="max-width:180px;" @bind="To" />
+    <button class="btn btn-outline-secondary" @onclick="LoadAsync">Actualizar</button>
+</div>
+
+@if (Summary is null)
+{
+    <p class="text-muted">Sin datos para el rango seleccionado.</p>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Ingresos</h6>
+                    <h3>@Summary.TotalRevenue.ToString("C")</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Pedidos</h6>
+                    <h3>@Summary.OrderCount</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Pagos aprobados</h6>
+                    <h3>@Summary.PaymentSuccessCount</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h5>Top productos</h5>
+
+    @if (Summary.TopProducts.Count == 0)
+    {
+        <p class="text-muted">Sin ventas registradas en el rango.</p>
+    }
+    else
+    {
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Unidades</th>
+                    <th>Ingresos</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var product in Summary.TopProducts)
+                {
+                    <tr>
+                        <td>@product.ProductName</td>
+                        <td>@product.UnitsSold</td>
+                        <td>@product.Revenue.ToString("C")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private SalesSummaryDto? Summary { get; set; }
+
+    private DateTime From { get; set; } = DateTime.Today.AddDays(-6);
+    private DateTime To { get; set; } = DateTime.Today;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Summary = await Api.GetSalesSummaryAsync(
+            DateOnly.FromDateTime(From),
+            DateOnly.FromDateTime(To));
+    }
+}

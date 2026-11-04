@@ -1,0 +1,131 @@
+@page "/products"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<h1>Catálogo</h1>
+
+@if (Error is not null)
+{
+    <div class="alert alert-danger">@Error</div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Nuevo producto</h5>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <input class="form-control" placeholder="Nombre" @bind="NewName" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2">
+                <input class="form-control" type="number" step="0.01" placeholder="Precio" @bind="NewPrice" />
+            </div>
+            <div class="col-md-2">
+                <input class="form-control" type="number" placeholder="Stock" @bind="NewStock" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" @onclick="CreateAsync" disabled="@Busy">Añadir</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Result is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var product in Result.Items)
+            {
+                <tr>
+                    <td>@product.Name</td>
+                    <td>@product.Price.ToString("C") @product.Currency</td>
+                    <td>@product.StockQuantity</td>
+                    <td>@product.Status</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="d-flex gap-2 align-items-center">
+        <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousAsync" disabled="@(Page <= 1)">Anterior</button>
+        <span>Página @Page de @Result.TotalPages (@Result.TotalCount productos)</span>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="NextAsync" disabled="@(!Result.HasNextPage)">Siguiente</button>
+    </div>
+}
+
+@code {
+    private PagedResult<ProductDto>? Result { get; set; }
+    private int Page { get; set; } = 1;
+    private const int PageSize = 10;
+
+    private string NewName { get; set; } = string.Empty;
+    private decimal NewPrice { get; set; } = 9.99m;
+    private int NewStock { get; set; } = 10;
+
+    private string? Error { get; set; }
+    private bool Busy { get; set; }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Result = await Api.GetProductsAsync(Page, PageSize);
+    }
+
+    private async Task PreviousAsync()
+    {
+        if (Page > 1)
+        {
+            Page--;
+            await LoadAsync();
+        }
+    }
+
+    private async Task NextAsync()
+    {
+        Page++;
+        await LoadAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        Busy = true;
+        Error = null;
+
+        try
+        {
+            var created = await Api.CreateProductAsync(new CreateProductRequest
+            {
+                Name = NewName,
+                Price = NewPrice,
+                StockQuantity = NewStock,
+                Currency = "USD",
+            });
+
+            if (created is null)
+            {
+                Error = "No se pudo crear el producto. Revisa los datos.";
+                return;
+            }
+
+            NewName = string.Empty;
+            Page = 1;
+            await LoadAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+}

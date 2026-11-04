@@ -1,0 +1,90 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34522.111
+MinimumVisualStudioVersion = 17.0.31726.2038
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.Shared", "src\SagaSales.Shared\SagaSales.Shared.csproj", "{A1B2C3D1-1111-4A1B-9C1D-111111111111}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.BuildingBlocks", "src\SagaSales.BuildingBlocks\SagaSales.BuildingBlocks.csproj", "{A1B2C3D2-2222-4A1B-9C1D-222222222222}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.Identity", "src\SagaSales.Identity\SagaSales.Identity.csproj", "{A1B2C3D3-3333-4A1B-9C1D-333333333333}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.Catalog", "src\SagaSales.Catalog\SagaSales.Catalog.csproj", "{A1B2C3D4-4444-4A1B-9C1D-444444444444}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.Sales", "src\SagaSales.Sales\SagaSales.Sales.csproj", "{A1B2C3D5-5555-4A1B-9C1D-555555555555}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.Payment", "src\SagaSales.Payment\SagaSales.Payment.csproj", "{A1B2C3D6-6666-4A1B-9C1D-666666666666}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.Customer", "src\SagaSales.Customer\SagaSales.Customer.csproj", "{A1B2C3D7-7777-4A1B-9C1D-777777777777}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.Analytics", "src\SagaSales.Analytics\SagaSales.Analytics.csproj", "{A1B2C3D8-8888-4A1B-9C1D-888888888888}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.Notification", "src\SagaSales.Notification\SagaSales.Notification.csproj", "{A1B2C3D9-9999-4A1B-9C1D-999999999999}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.ApiGateway", "src\SagaSales.ApiGateway\SagaSales.ApiGateway.csproj", "{A1B2C3DA-AAAA-4A1B-9C1D-AAAAAAAAAAAA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.BlazorWeb", "src\SagaSales.BlazorWeb\SagaSales.BlazorWeb.csproj", "{A1B2C3DB-BBBB-4A1B-9C1D-BBBBBBBBBBBB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.UnitTests", "tests\SagaSales.UnitTests\SagaSales.UnitTests.csproj", "{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1B2C3D1-1111-4A1B-9C1D-111111111111}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D1-1111-4A1B-9C1D-111111111111}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D1-1111-4A1B-9C1D-111111111111}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D1-1111-4A1B-9C1D-111111111111}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D2-2222-4A1B-9C1D-222222222222}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D2-2222-4A1B-9C1D-222222222222}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D2-2222-4A1B-9C1D-222222222222}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D2-2222-4A1B-9C1D-222222222222}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D3-3333-4A1B-9C1D-333333333333}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D3-3333-4A1B-9C1D-333333333333}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D3-3333-4A1B-9C1D-333333333333}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D3-3333-4A1B-9C1D-333333333333}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-4444-4A1B-9C1D-444444444444}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-4444-4A1B-9C1D-444444444444}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-4444-4A1B-9C1D-444444444444}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-4444-4A1B-9C1D-444444444444}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D5-5555-4A1B-9C1D-555555555555}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D5-5555-4A1B-9C1D-555555555555}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D5-5555-4A1B-9C1D-555555555555}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D5-5555-4A1B-9C1D-555555555555}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D6-6666-4A1B-9C1D-666666666666}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D6-6666-4A1B-9C1D-666666666666}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D6-6666-4A1B-9C1D-666666666666}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D6-6666-4A1B-9C1D-666666666666}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D7-7777-4A1B-9C1D-777777777777}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D7-7777-4A1B-9C1D-777777777777}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D7-7777-4A1B-9C1D-777777777777}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D7-7777-4A1B-9C1D-777777777777}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D8-8888-4A1B-9C1D-888888888888}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D8-8888-4A1B-9C1D-888888888888}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D8-8888-4A1B-9C1D-888888888888}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D8-8888-4A1B-9C1D-888888888888}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D9-9999-4A1B-9C1D-999999999999}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D9-9999-4A1B-9C1D-999999999999}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D9-9999-4A1B-9C1D-999999999999}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D9-9999-4A1B-9C1D-999999999999}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3DA-AAAA-4A1B-9C1D-AAAAAAAAAAAA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3DA-AAAA-4A1B-9C1D-AAAAAAAAAAAA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3DA-AAAA-4A1B-9C1D-AAAAAAAAAAAA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3DA-AAAA-4A1B-9C1D-AAAAAAAAAAAA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3DB-BBBB-4A1B-9C1D-BBBBBBBBBBBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3DB-BBBB-4A1B-9C1D-BBBBBBBBBBBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3DB-BBBB-4A1B-9C1D-BBBBBBBBBBBB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3DB-BBBB-4A1B-9C1D-BBBBBBBBBBBB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F0E1D2C3-B4A5-4968-8778-99AABBCCDDEE}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,55 @@
+@page "/"
+@attribute [AllowAnonymous]
+
+<h1>Panel de Saga-Sales</h1>
+
+<AuthorizeView>
+    <Authorized>
+        <p class="lead">Hola, <strong>@context.User.Identity?.Name ?? context.User.FindFirst(ClaimTypes.Email)?.Value</strong>.</p>
+        <p>Tenant: <code>@context.User.FindFirst(SagaSalesConstants.Claims.TenantId)?.Value</code></p>
+    </Authorized>
+    <NotAuthorized>
+        <p class="lead">No has iniciado sesión.</p>
+        <a class="btn btn-primary" href="/login">Entrar</a>
+        <a class="btn btn-outline-secondary" href="/register">Crear tenant</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+<div class="row g-3 mt-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Catálogo</h5>
+                <p class="card-text small">Productos, categorías y stock.</p>
+                <a class="btn btn-sm btn-outline-primary" href="/products">Abrir</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Clientes</h5>
+                <p class="card-text small">Alta y búsqueda por email o teléfono.</p>
+                <a class="btn btn-sm btn-outline-primary" href="/customers">Abrir</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Pedidos</h5>
+                <p class="card-text small">Creación y cambios de estado.</p>
+                <a class="btn btn-sm btn-outline-primary" href="/orders">Abrir</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Analítica</h5>
+                <p class="card-text small">Ingresos y top de productos.</p>
+                <a class="btn btn-sm btn-outline-primary" href="/analytics">Abrir</a>
+            </div>
+        </div>
+    </div>
+</div>

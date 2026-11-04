@@ -1,0 +1,16 @@
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 80
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY . .
+RUN dotnet build src\SagaSales.Catalog\SagaSales.Catalog.csproj -c Release -o /app/bin
+
+FROM base AS publish
+WORKDIR /app
+COPY --from=build /app/bin ./bin
+COPY --from=publish /app /app
+
+FROM base AS final
+WORKDIR /app
+ENTRYPOINT ["dotnet", "SagaSales.Catalog.dll"]

@@ -1,0 +1,61 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<h1>Entrar</h1>
+
+@if (!string.IsNullOrWhiteSpace(Error))
+{
+    <div class="alert alert-danger">@Error</div>
+}
+
+<div class="card" style="max-width:420px;">
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input class="form-control" type="email" @bind="Email" @bind:event="oninput" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Contraseña</label>
+            <input class="form-control" type="password" @bind="Password" @bind:event="oninput" />
+        </div>
+        <button class="btn btn-primary w-100" @onclick="SignInAsync" disabled="@Busy">
+            @(Busy ? "Entrando..." : "Entrar")
+        </button>
+        <hr />
+        <p class="text-muted small mb-0">
+            ¿No tienes cuenta? <a href="/register">Crea un tenant</a>.
+        </p>
+    </div>
+</div>
+
+@code {
+    private string Email { get; set; } = string.Empty;
+    private string Password { get; set; } = string.Empty;
+    private string? Error { get; set; }
+    private bool Busy { get; set; }
+
+    private async Task SignInAsync()
+    {
+        Busy = true;
+        Error = null;
+
+        try
+        {
+            var login = await Api.LoginAsync(new LoginRequest { Email = Email, Password = Password });
+
+            if (login is null)
+            {
+                Error = "Email o contraseña incorrectos.";
+                return;
+            }
+
+            Navigation.NavigateTo("/");
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+}

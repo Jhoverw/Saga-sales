@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SagaSales.UnitTests</RootNamespace>
+    <AssemblyName>SagaSales.UnitTests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SagaSales.Shared\SagaSales.Shared.csproj" />
+    <ProjectReference Include="..\..\src\SagaSales.Sales\SagaSales.Sales.csproj" />
+    <ProjectReference Include="..\..\src\SagaSales.Payment\SagaSales.Payment.csproj" />
+    <ProjectReference Include="..\..\src\SagaSales.Identity\SagaSales.Identity.csproj" />
+  </ItemGroup>
+
+</Project>
