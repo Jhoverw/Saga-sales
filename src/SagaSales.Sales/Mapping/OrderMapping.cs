@@ -14,14 +14,19 @@ public static class OrderMapping
         ShippingAddress = order.ShippingAddress,
         OrderDate = order.OrderDate,
         PaidDate = order.PaidDate,
+        CreatedBy = order.CreatedBy,
         Items = order.Items.Select(i => i.ToDto()).ToList(),
     };
 
-    public static OrderItemDto ToDto(this OrderItem item) => new()
+    public static OrderLineDto ToDto(this OrderItem item) => new()
     {
         ProductId = item.ProductId,
         ProductName = item.ProductSnapshotName,
         Quantity = item.Quantity,
         UnitPrice = item.UnitPrice,
+
+        // Until pricing per customer type reaches the order (phase US2/US3), every line is priced
+        // from the product's base price.
+        PriceSource = PriceSource.Base,
     };
 }

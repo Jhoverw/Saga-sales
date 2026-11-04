@@ -23,7 +23,7 @@ public class PaymentDbContext(DbContextOptions<PaymentDbContext> options) : DbCo
             b.Property(p => p.RefundedAmount).HasPrecision(18, 2);
             b.Property(p => p.Currency).IsRequired().HasMaxLength(3);
             b.Property(p => p.TransactionReference).HasMaxLength(255);
-            b.Property(p => p.GatewayResponse).HasColumnType("jsonb");
+            b.Property(p => p.GatewayResponse).HasColumnType("nvarchar(max)");
             b.HasIndex(p => p.OrderId);
             b.HasIndex(p => new { p.TenantId, p.Status });
         });

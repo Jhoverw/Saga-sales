@@ -18,13 +18,16 @@
     <div class="card-body">
         <h5 class="card-title">Nuevo pedido</h5>
         <div class="row g-2">
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <input class="form-control" placeholder="Id del cliente (GUID)" @bind="CustomerId" @bind:event="oninput" />
+            </div>
+            <div class="col-md-3">
                 <input class="form-control" placeholder="Id del producto (GUID)" @bind="ProductId" @bind:event="oninput" />
             </div>
             <div class="col-md-2">
                 <input class="form-control" type="number" min="1" placeholder="Cantidad" @bind="Quantity" />
             </div>
-            <div class="col-md-4">
+            <div class="col-md-2">
                 <input class="form-control" placeholder="Dirección de envío" @bind="ShippingAddress" @bind:event="oninput" />
             </div>
             <div class="col-md-2">
@@ -77,6 +80,7 @@ else
     private PagedResult<OrderDto>? Result { get; set; }
 
     private string ProductId { get; set; } = string.Empty;
+    private string CustomerId { get; set; } = string.Empty;
     private int Quantity { get; set; } = 1;
     private string ShippingAddress { get; set; } = string.Empty;
 
@@ -103,8 +107,15 @@ else
                 return;
             }
 
+            if (!Guid.TryParse(CustomerId, out var customerId))
+            {
+                Error = "El id del cliente debe ser un GUID válido.";
+                return;
+            }
+
             var request = new CreateOrderRequest
             {
+                CustomerId = customerId,
                 ShippingAddress = ShippingAddress,
                 Items = [new OrderItemRequest { ProductId = productId, Quantity = Quantity }],
             };
@@ -118,6 +129,7 @@ else
             }
 
             ProductId = string.Empty;
+            CustomerId = string.Empty;
             Quantity = 1;
             await LoadAsync();
         }

@@ -11,7 +11,7 @@ builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Analytics");
 
 builder.Services.AddDbContext<AnalyticsDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddSagaSalesMessageBus(builder.Configuration, bus =>
 {
@@ -23,7 +23,7 @@ builder.Services.AddSagaSalesMessageBus(builder.Configuration, bus =>
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(GetSalesSummaryQuery).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(GetSalesSummaryQuery).Assembly);
 
-builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck<AnalyticsDbContext>>("database");
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

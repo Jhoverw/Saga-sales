@@ -1,15 +1,15 @@
 namespace SagaSales.BuildingBlocks.Extensions;
 
+using System.Data.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Json;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SagaSales.BuildingBlocks.Data;
 using SagaSales.Shared.Exceptions;
 
 /// <summary>
-/// Turns domain exceptions into consistent JSON problem responses, so controllers do not
-/// repeat try/catch blocks per endpoint.
+/// Turns domain exceptions — and the error codes raised by the stored procedures — into consistent
+/// JSON responses, so controllers do not repeat try/catch per endpoint.
 /// </summary>
 public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
 {
@@ -23,6 +23,21 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
         {
             logger.LogWarning(ex, "Domain error {Code} on {Path}", ex.Code, context.Request.Path);
             await WriteAsync(context, ex.StatusCode, ex.Code, ex.Message);
+        }
+        catch (DbException ex) when (SqlErrorMapper.TryMap(ex, out var code, out var statusCode))
+        {
+            // A procedure raised a known code: this is a business outcome, not a server failure.
+            logger.LogWarning(ex, "Database domain error {Code} on {Path}", code, context.Request.Path);
+            await WriteAsync(context, statusCode, code, ex.ToClientMessage());
+        }
+        catch (DbException ex)
+        {
+            logger.LogError(ex, "Unhandled database error on {Path}", context.Request.Path);
+            await WriteAsync(
+                context,
+                StatusCodes.Status500InternalServerError,
+                "DatabaseError",
+                "The request could not be completed.");
         }
         catch (BadHttpRequestException ex)
         {

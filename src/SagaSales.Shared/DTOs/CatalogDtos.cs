@@ -8,7 +8,8 @@ public class ProductDto
 
     public string? Description { get; set; }
 
-    public decimal Price { get; set; }
+    /// <summary>The price that applies when no list price exists for the buyer's customer type.</summary>
+    public decimal BasePrice { get; set; }
 
     public string Currency { get; set; } = "USD";
 
@@ -21,6 +22,24 @@ public class ProductDto
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>Resolved price for one product and one customer type (FR-007b).</summary>
+public class PriceQuoteDto
+{
+    public Guid ProductId { get; set; }
+
+    public Enums.CustomerType CustomerType { get; set; }
+
+    public decimal Price { get; set; }
+
+    /// <summary>Tells the caller whether the list price or the fallback base price was used.</summary>
+    public Enums.PriceSource Source { get; set; }
+}
+
+public class SetPriceRequest
+{
+    public decimal Price { get; set; }
 }
 
 public class CreateProductRequest

@@ -11,7 +11,7 @@ builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Sales");
 
 builder.Services.AddDbContext<SalesDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Catalog is reached over HTTP; Sales no longer references Catalog's DbContext.
 builder.Services.AddTransient<ForwardCredentialsHandler>();
@@ -25,7 +25,7 @@ builder.Services.AddSagaSalesMessageBus(builder.Configuration);
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateOrderCommandHandler).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(CreateOrderCommandHandler).Assembly);
 
-builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck<SalesDbContext>>("database");
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

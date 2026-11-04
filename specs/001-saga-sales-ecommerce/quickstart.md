@@ -16,29 +16,26 @@ stock reservation), E-04a (manual payment), E-08 (platform operation).
 | Requirement | Notes |
 |---|---|
 | .NET 10 SDK | `dotnet --version` reports 10.0.x |
-| Docker | For PostgreSQL 16 and RabbitMQ 3.13 |
-| `psql` client | To apply the scripts in `db/<service>/` |
+| Docker | For SQL Server 2022, RabbitMQ 3.13 and Seq |
+| `sqlcmd` | SQL Server command-line tools, to apply the scripts in `db/<service>/` |
 | A terminal | PowerShell on Windows |
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d postgres rabbitmq seq
+docker compose -f deploy/docker-compose.yml up -d sqlserver rabbitmq seq
 ```
 
 ## 1. Apply the schema
 
-There are no migrations. Each service has numbered scripts, applied in order:
+There are no migrations. Each service has numbered T-SQL scripts; `apply-db.ps1` applies them in
+version order, creates the database when it is missing and records each version in
+`dbo.schema_version`.
 
-```bash
-for svc in identity catalog sales payment customer analytics notification; do
-  psql "host=localhost dbname=saga_$svc user=saga_sales password=saga_sales_dev" \
-       -v ON_ERROR_STOP=1 \
-       -f db/$svc/V001__schema.sql \
-       -f db/$svc/V002__functions.sql
-done
+```powershell
+./scripts/apply-db.ps1 -Server localhost,1433 -User sa -Password $env:MSSQL_SA_PASSWORD
 ```
 
-**Expected**: every database ends with rows in `schema_version` and no error. Re-running must be a
-no-op, not a failure.
+**Expected**: every database ends with rows in `dbo.schema_version` and no error. Re-running must be
+a no-op, not a failure. Use `-Service catalog` to apply only one, or `-DryRun` to see the plan.
 
 ## 2. Start the services
 

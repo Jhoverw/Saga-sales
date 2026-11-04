@@ -27,6 +27,11 @@ this document governs behaviour.
 - **Q**: Does a dedicated sales role exist? → **A**: Yes. It places orders and records payments; it cannot edit prices, refund, or manage users.
 - **Q**: May the platform operator read business data? → **A**: No. The operator sees service status, logs and metrics only; audited impersonation is out of scope for the MVP.
 
+### Session 2026-11-04 (remediation from `/speckit-analyze`)
+
+- **Q**: How is an anonymous buyer identified when ordering through the storefront? → **A**: The checkout captures the buyer's email and phone. The platform creates the customer in that store when the email is new, or reuses the existing one, so an order always references a customer record and never free-text buyer data.
+- **Q**: Which roles may change prices or refund? → **A**: Only administrator and manager. The sales role places orders and records payments, and cannot touch prices, refunds or users.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Open a store and sign in (Priority: P1) · E-01 · US-017
@@ -71,9 +76,10 @@ retire the product. Delivers a usable catalogue on its own.
 
 ### User Story 3 - Place an order with stock reserved (Priority: P1) · E-03 · US-004, US-006, US-007
 
-A buyer selects products and quantities and receives an order confirmation. The order keeps the
-price and name of each product as they were at that moment, and the stock is decremented so the
-same unit cannot be sold twice.
+Store staff takes the order for a customer: they pick products and quantities, and the buyer
+receives the confirmation. The order keeps the price and name of each product as they were at that
+moment, and the stock is decremented so the same unit cannot be sold twice. Self-service checkout
+is Story 10; in the MVP the buyer does not sign in (see Clarifications).
 
 **Why this priority**: this is the moment revenue is created. Getting stock wrong here destroys
 trust immediately.

@@ -12,10 +12,12 @@ public static class PaymentMapping
         Method = payment.Method,
         Status = payment.Status,
         Amount = payment.Amount,
+        RefundedAmount = payment.RefundedAmount,
         Currency = payment.Currency,
         TransactionReference = payment.TransactionReference,
         CreatedAt = payment.CreatedAt,
         PaidAt = payment.PaidAt,
+        CapturedAt = payment.CapturedAt,
         RefundedAt = payment.RefundedAt,
     };
 }

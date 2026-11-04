@@ -43,15 +43,15 @@ public sealed class CreateOrderCommandHandler(
                 await catalogClient.ReserveStockAsync(item.ProductId, item.Quantity, cancellationToken);
                 reserved.Add((item.ProductId, item.Quantity));
 
-                subtotal += product.Price * item.Quantity;
+                subtotal += product.BasePrice * item.Quantity;
 
                 lines.Add(new OrderItem
                 {
                     ProductId = product.Id,
                     Quantity = item.Quantity,
-                    UnitPrice = product.Price,
+                    UnitPrice = product.BasePrice,
                     ProductSnapshotName = product.Name,
-                    ProductSnapshotPrice = product.Price,
+                    ProductSnapshotPrice = product.BasePrice,
                     ProductSnapshotStockAtPurchase = product.StockQuantity,
                 });
             }

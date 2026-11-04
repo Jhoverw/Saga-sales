@@ -37,7 +37,7 @@ public class NotificationDbContext(DbContextOptions<NotificationDbContext> optio
             b.Property(t => t.Key).IsRequired().HasMaxLength(100);
             b.Property(t => t.Subject).IsRequired().HasMaxLength(255);
             b.Property(t => t.Body).IsRequired().HasColumnType("text");
-            b.Property(t => t.Variables).HasColumnType("jsonb");
+            b.Property(t => t.Variables).HasColumnType("nvarchar(max)");
             b.HasIndex(t => new { t.TenantId, t.Key }).IsUnique();
         });
     }

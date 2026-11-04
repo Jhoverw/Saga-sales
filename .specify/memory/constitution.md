@@ -52,7 +52,7 @@ For features touching products, orders, payments and customers:
 - Products track stock with real-time availability checks.
 - Orders capture line items with quantity and price **at creation time** (immutable snapshot).
 - Payments are recorded atomically with the order status transition they cause.
-- All monetary amounts use `decimal` (PostgreSQL `numeric(18,2)`). Floating point is forbidden
+- All monetary amounts use `decimal` (SQL Server `decimal(18,2)`). Floating point is forbidden
   for money.
 - Stock deduction is atomic: concurrent orders must never oversell.
 
@@ -62,7 +62,8 @@ For features touching products, orders, payments and customers:
 - Every query MUST be scoped to a tenant. A query without a tenant filter is a defect.
 - A request with no resolvable tenant MUST be rejected, never defaulted.
 - Cross-tenant access raises `TenantNotFoundException`/403 and is treated as a security incident.
-- Redis cache keys MUST be prefixed with the tenant ID.
+- Redis is **not part of the MVP**. When caching lands, every cache key MUST be prefixed with the
+  tenant ID.
 - **Database-level enforcement**: every stored procedure takes `p_tenant_id` as its first
   parameter and filters by it. The database enforces isolation, not programmer discipline.
 
@@ -71,7 +72,7 @@ For features touching products, orders, payments and customers:
 Every service MUST provide:
 
 - Structured logging through Serilog with correlation IDs.
-- Health checks for PostgreSQL and RabbitMQ dependencies (`/health`).
+- Health checks for SQL Server and RabbitMQ dependencies (`/health`).
 - Circuit breakers (Polly) around external calls.
 - Distributed tracing through OpenTelemetry.
 - Graceful degradation: a failing downstream dependency MUST NOT take down read paths.
@@ -89,19 +90,19 @@ Every service MUST provide:
 
 This principle supersedes any earlier "framework trust" wording that implied an ORM.
 
-- Persistence uses **PL/pgSQL stored procedures and functions** accessed through **Dapper**.
+- Persistence uses **T-SQL stored procedures on SQL Server** accessed through **Dapper**.
 - EF Core, EF migrations and any other ORM are **not permitted** in this solution.
 - Schema changes are versioned SQL scripts under `db/<service>/V###__*.sql`
   (`V001__schema.sql`, `V002__functions.sql`, `V003__seed.sql`).
 - Every multi-table write (create order, reserve stock) is **one procedure** with its own
-  transaction.
-- Concurrency is handled in SQL (`SELECT … FOR UPDATE`), not in application memory.
+  transaction (`BEGIN TRAN … BEGIN CATCH … ROLLBACK … THROW`).
+- Concurrency is handled in SQL (`WITH (UPDLOCK, ROWLOCK)`), not in application memory.
 - Domain entities stay persistence-ignorant: no attributes, no ORM navigations leaked into
   business rules.
 
 ### IX. Integration-First Testing
 
-- Integration tests use a real PostgreSQL, never a mocked database.
+- Integration tests use a real SQL Server, never a mocked database.
 - Event-bus tests use a real RabbitMQ connection.
 - Contract tests are mandatory before implementation code is generated.
 - Critical user journeys (checkout, payment, refund) require end-to-end coverage.
@@ -112,7 +113,7 @@ This principle supersedes any earlier "framework trust" wording that implied an 
 | Concern | Decision |
 |---|---|
 | Runtime | .NET 10 (C# 14) |
-| Persistence | PostgreSQL 16 + PL/pgSQL stored procedures |
+| Database | **SQL Server 2022**, T-SQL stored procedures |
 | Data access | Dapper (no ORM) |
 | Messaging | MassTransit + RabbitMQ |
 | API gateway | YARP |
@@ -168,5 +169,6 @@ Gates that SHALL block progress:
 | 1.1.0 | 2026-11-03 | §VII microservice cap raised from 6 to 9 with justification |
 | 2.0.0 | 2026-11-04 | §VIII rewritten: stored procedures + Dapper replace the ORM; §V adds database-level tenant enforcement; Technology Constraints and Scope Boundaries added; Quality Gates formalised (analyze + Definition of Done) |
 | 2.1.0 | 2026-11-04 | Runtime moved from .NET 8 to .NET 10: the build host no longer has the .NET 8 targeting pack, and all projects now target `net10.0` |
+| 2.2.0 | 2026-11-04 | **Database corrected to SQL Server 2022 (T-SQL)**. Every earlier reference to PostgreSQL / PL/pgSQL is superseded: driver `Microsoft.Data.SqlClient`, locking with `UPDLOCK`, errors raised with `THROW` |
 
-**Version**: 2.1.0 | **Ratified**: 2026-11-03 | **Last Amended**: 2026-11-04
+**Version**: 2.2.0 | **Ratified**: 2026-11-03 | **Last Amended**: 2026-11-04

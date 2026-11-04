@@ -10,32 +10,35 @@ v2.0.0 and from [`spec.md`](./spec.md).
 
 ---
 
-## R1 — Data access: Dapper over PL/pgSQL stored procedures
+## R1 — Data access: Dapper over T-SQL stored procedures
 
-**Decision**: all persistence goes through PostgreSQL stored procedures and functions, called
-with Dapper. There is no ORM and no LINQ-to-SQL in the solution.
+**Decision**: all persistence goes through **SQL Server 2022** stored procedures, called with
+Dapper through `Microsoft.Data.SqlClient`. There is no ORM and no LINQ-to-SQL in the solution.
 
-*Rationale*: it is the team's standard (Constitution §VIII). Beyond that, procedures put the
-transaction, the concurrency control and the tenant filter in one place the database enforces,
-instead of spread across handlers.
+*Rationale*: it is the team's standard (Constitution §VIII), and SQL Server is the platform the
+team operates. Procedures put the transaction, the concurrency control and the tenant filter in one
+place the database enforces, instead of spreading them across handlers.
 
 **Alternatives considered**:
 - *EF Core* — forbidden by §VIII; it also hid the tenant filter in application code, which failed
   review twice in this project.
 - *Dapper with inline SQL in repositories* — no central transaction boundary for multi-table
   writes such as order creation; the same SQL would be duplicated per handler.
+- *PostgreSQL* — earlier drafts assumed it; superseded by decision D11 (SQL Server).
 
-## R2 — Schema versioning: numbered SQL scripts plus a `schema_version` table
+## R2 — Schema versioning: numbered T-SQL scripts plus a `schema_version` table
 
-**Decision**: scripts live in `db/<service>/V###__description.sql`; a runner applies them in order
-and records each one in `schema_version`. Runner: DbUp (native .NET, no extra runtime).
+**Decision**: scripts live in `db/<service>/V###__description.sql`; `scripts/apply-db.ps1` applies
+them in order with `sqlcmd -b` and records each one in `dbo.schema_version`.
 
 *Rationale*: EF migrations are unavailable (§VIII) and the team needs the schema under version
-control in plain SQL, reviewable in a diff.
+control in plain T-SQL, reviewable in a diff.
 
 **Alternatives considered**:
-- *Flyway* — works, but adds a JVM dependency to a .NET stack.
-- *Manual `psql` runs* — no record of what was applied; unacceptable with 7 databases.
+- *EF migrations* — forbidden by §VIII.
+- *DACPAC / SqlPackage* — a valid option later, but it needs an extra toolchain for a schema this
+  small.
+- *Manual `sqlcmd` runs* — no record of what was applied; unacceptable with 7 databases.
 
 ## R3 — Service topology: 8 deployable services + 1 static SPA
 
@@ -82,20 +85,20 @@ claim or `X-Tenant-Id`; if it cannot, the request is rejected before reaching th
 - *Filtering in application code* — this is precisely what produced the cross-tenant risks found
   during review.
 
-## R6 — Stock concurrency: `SELECT … FOR UPDATE` inside the procedure
+## R6 — Stock concurrency: `UPDLOCK` inside the procedure
 
-**Decision**: `sp_stock_reserve` locks the product row, checks availability and decrements in one
-transaction; `sp_stock_release` compensates. A checkout that fails after reserving releases what
-it took.
+**Decision**: `sp_stock_reserve` takes an update lock on the product row
+(`WITH (UPDLOCK, ROWLOCK)`), checks availability and decrements inside one transaction;
+`sp_stock_release` compensates. A checkout that fails after reserving releases what it took.
 
 *Rationale*: three concurrent buyers of the last unit must produce exactly one success
 (SC-003). Row locking gives that without application-level retries.
 
 **Alternatives considered**:
-- *Optimistic concurrency with a version column* — correct but noisier: it turns a business
-  refusal into a retry loop.
-- *Atomic `UPDATE … WHERE stock >= n`* — good for the decrement, but it cannot tell the caller
-  the product's name and price in the same statement, which the order snapshot needs.
+- *Optimistic concurrency with `rowversion`* — correct but noisier: it turns a business refusal into
+  a retry loop.
+- *Atomic `UPDATE … WHERE stock >= n`* — good for the decrement, but it cannot return the product's
+  name and price in the same statement, which the order snapshot needs.
 
 ## R7 — Messaging: MassTransit over RabbitMQ, contracts in `Shared`
 
@@ -164,7 +167,7 @@ decimal comma, UTF-8 with BOM) so it opens in Excel without a wizard.
 ## R12 — Testing strategy
 
 **Decision**: three layers — unit tests for domain rules (no database), integration tests against
-a real PostgreSQL for every procedure, and contract tests over HTTP against a running service.
+a real SQL Server for every procedure, and contract tests over HTTP against a running service.
 xUnit for all three.
 
 *Rationale*: Constitutions §III and §IX forbid mock databases and demand contract tests before
@@ -181,7 +184,7 @@ implementation.
 
 | Unknown from Technical Context | Resolution |
 |---|---|
-| Which persistence mechanism | R1 — stored procedures + Dapper |
+| Which persistence mechanism | R1 — stored procedures + Dapper on SQL Server (D11) |
 | How the schema is versioned | R2 — numbered scripts + `schema_version` |
 | How many services | R3 — 8 + SPA, within the cap of 9 |
 | How services read each other's data | R4 — HTTP for decisions, events for consequences |
@@ -195,3 +198,25 @@ implementation.
 | How correctness is proven | R12 — unit + integration + contract |
 
 **No unresolved clarification remains.** Phase 1 may proceed.
+
+---
+
+## D11 — Database engine: SQL Server, not PostgreSQL
+
+**Decision**: the platform targets **SQL Server 2022** with T-SQL stored procedures, driven by
+`Microsoft.Data.SqlClient`.
+
+*Rationale*: it is the engine the team operates and the original intent of the project. Earlier
+drafts (R1, R2, R6 and `data-model.md`) assumed PostgreSQL; this decision supersedes every one of
+those references.
+
+**Consequences**:
+- driver `Npgsql` → `Microsoft.Data.SqlClient`;
+- types: `uuid`→`uniqueidentifier`, `varchar`→`nvarchar`, `timestamptz`→`datetime2(3)`,
+  `numeric(18,2)`→`decimal(18,2)`, `boolean`→`bit`, `jsonb`→`nvarchar(max)` with `ISJSON`;
+- locking: `SELECT … FOR UPDATE` → `WITH (UPDLOCK, ROWLOCK)`;
+- errors: `raise exception 'CODE: …'` → `THROW 50000, 'CODE: …', 1`;
+- aggregation to JSON: `jsonb_agg` → `FOR JSON PATH`;
+- `scripts/apply-db.ps1` uses `sqlcmd`, and the compose file runs `mssql/server:2022`.
+
+**Alternatives considered**: staying on PostgreSQL — rejected: the team does not operate it.

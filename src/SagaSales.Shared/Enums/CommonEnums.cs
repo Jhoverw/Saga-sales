@@ -84,3 +84,25 @@ public enum Currency
     CLP = 152,
     PEN = 604
 }
+
+/// <summary>Who the buyer is for pricing purposes (decision D5).</summary>
+public enum CustomerType
+{
+    Retail = 1,
+    Wholesale = 2,
+}
+
+/// <summary>Which price was applied to a quote or an order line (FR-007b).</summary>
+public enum PriceSource
+{
+    Base = 1,
+    List = 2,
+}
+
+/// <summary>How money was received when there is no online gateway (E-04a).</summary>
+public enum ManualPaymentMethod
+{
+    Transfer = 4,
+    Cash = 5,
+    Deposit = 9,
+}

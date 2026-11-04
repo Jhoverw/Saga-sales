@@ -10,7 +10,7 @@ builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Catalog");
 
 builder.Services.AddDbContext<CatalogDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Catalog publishes product events; it consumes none of its own.
 builder.Services.AddSagaSalesMessageBus(builder.Configuration);
@@ -18,7 +18,7 @@ builder.Services.AddSagaSalesMessageBus(builder.Configuration);
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateProductCommandHandler).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(CreateProductCommandHandler).Assembly);
 
-builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck<CatalogDbContext>>("database");
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

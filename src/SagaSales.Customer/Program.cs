@@ -10,14 +10,14 @@ builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Customer");
 
 builder.Services.AddDbContext<CustomerDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddSagaSalesMessageBus(builder.Configuration);
 
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateCustomerCommandHandler).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(CreateCustomerCommandHandler).Assembly);
 
-builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck<CustomerDbContext>>("database");
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

@@ -54,7 +54,7 @@ else
             {
                 <tr>
                     <td>@product.Name</td>
-                    <td>@product.Price.ToString("C") @product.Currency</td>
+                    <td>@product.BasePrice.ToString("C") @product.Currency</td>
                     <td>@product.StockQuantity</td>
                     <td>
                         <span class="chip @(product.Status switch { ProductStatus.Active => "chip--ok", ProductStatus.OutOfStock => "chip--danger", ProductStatus.Discontinued => "chip--neutral", ProductStatus.Draft => "chip--neutral", _ => "chip--info" })">@product.Status</span>

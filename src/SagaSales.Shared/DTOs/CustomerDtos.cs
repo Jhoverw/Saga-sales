@@ -25,6 +25,9 @@ public class CustomerDto
 
     public string? Phone { get; set; }
 
+    /// <summary>Drives which price list applies when this customer orders (D5).</summary>
+    public Enums.CustomerType CustomerType { get; set; }
+
     public Enums.CustomerStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
@@ -42,6 +45,9 @@ public class CreateCustomerRequest
 
     public string? Phone { get; set; }
 
+    /// <summary>Defaults to retail when omitted (FR-007a).</summary>
+    public Enums.CustomerType CustomerType { get; set; } = Enums.CustomerType.Retail;
+
     public AddressDto? Address { get; set; }
 }
 
@@ -52,6 +58,8 @@ public class UpdateCustomerRequest
     public string LastName { get; set; } = string.Empty;
 
     public string? Phone { get; set; }
+
+    public Enums.CustomerType CustomerType { get; set; } = Enums.CustomerType.Retail;
 
     public Enums.CustomerStatus Status { get; set; } = Enums.CustomerStatus.Active;
 }

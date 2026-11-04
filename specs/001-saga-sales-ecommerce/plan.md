@@ -10,7 +10,7 @@ Deliver the MVP of a multi-tenant e-commerce platform in which a merchant opens 
 a catalogue with per-customer-type prices, takes orders that reserve stock atomically, records the
 payment received outside the platform, and sees daily sales figures exportable to a spreadsheet.
 
-Technical approach: eight .NET 10 services behind a YARP gateway, one PostgreSQL database per
+Technical approach: eight .NET 10 services behind a YARP gateway, one SQL Server database per
 service accessed **only through PL/pgSQL stored procedures called with Dapper**, asynchronous
 consequences through MassTransit/RabbitMQ, and a Blazor WebAssembly SPA that only talks to the
 gateway. The tenant is the first parameter of every procedure, so isolation is enforced by the
@@ -28,16 +28,16 @@ sequenced later; the schema and events already reserve what they need.
 FluentValidation (input rules), Serilog + Seq (logs), OpenTelemetry (traces), Swashbuckle (API docs),
 Blazor WebAssembly (SPA). FluentAssertions and xUnit (tests). No ORM.
 
-**Storage**: PostgreSQL 16, one database per service (`saga_identity`, `saga_catalog`, `saga_sales`,
+**Storage**: SQL Server 2022, one database per service (`saga_identity`, `saga_catalog`, `saga_sales`,
 `saga_payment`, `saga_customer`, `saga_analytics`, `saga_notification`). Schema versioned with
 numbered SQL scripts and a `schema_version` table. Redis is used only for cache keys prefixed with
 the tenant, and is not required for the MVP to work.
 
-**Testing**: xUnit — unit tests for domain rules, integration tests against a real PostgreSQL for
+**Testing**: xUnit — unit tests for domain rules, integration tests against a real SQL Server for
 every procedure, contract tests over HTTP against the gateway. Target: every procedure that holds
 a business rule is covered by at least one integration test.
 
-**Target Platform**: Linux containers (Docker Compose for PostgreSQL, RabbitMQ, Seq); Windows for
+**Target Platform**: Linux containers (Docker Compose for SQL Server, RabbitMQ, Seq); Windows for
 local development.
 
 **Project Type**: web services (8) + single-page web application (1), monorepo.
@@ -122,7 +122,7 @@ db/                              # NEW: schema and procedures, one folder per se
 
 tests/
 ├── SagaSales.UnitTests/         # domain rules, no database
-├── SagaSales.IntegrationTests/  # NEW: procedures against a real PostgreSQL
+├── SagaSales.IntegrationTests/  # NEW: procedures against a real SQL Server
 └── SagaSales.ContractTests/     # NEW: HTTP contracts against the gateway
 
 deploy/                          # docker-compose, database init, Dockerfiles

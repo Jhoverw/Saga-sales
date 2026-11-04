@@ -455,7 +455,7 @@ A partir de aquí la persistencia es **PL/pgSQL + acceso con Dapper**.
 
 | Hoy | Debe pasar a |
 |---|---|
-| `Microsoft.EntityFrameworkCore*`, `Npgsql.EntityFrameworkCore.PostgreSQL` | `Npgsql` + `Dapper` (paquetes EF fuera) |
+| `Microsoft.EntityFrameworkCore*` | fuera; entra `Microsoft.Data.SqlClient` + `Dapper` |
 | `*DbContext : DbContext` con `OnModelCreating` | `*Repository` + `IDbConnectionFactory` |
 | `Migrations/` (no existe) o `dotnet ef` | `db/<servicio>/V###__descripcion.sql` versionados |
 | `ExecuteUpdateAsync` para stock atómico | `sp_reserve_stock` con `SELECT … FOR UPDATE` |
@@ -476,7 +476,7 @@ db/<servicio>/
   V002__functions.sql       sp_create_*, sp_get_*, sp_list_*, sp_update_*
   V003__seed.sql            datos de desarrollo
 ```
-Versionado con una tabla `schema_version` aplicada por un runner (DbUp, Flyway o `psql`).
+Versionado con una tabla `schema_version` aplicada por `scripts/apply-db.ps1` con `sqlcmd`.
 
 ---
 
@@ -537,7 +537,7 @@ existe en el proyecto.
 1. **Historias en `spec.md`** con al menos un criterio de aceptación por historia.
 2. **Pruebas** (Art. III de la constitución):
    - unitarias del dominio (reglas de negocio, transiciones, validaciones);
-   - de integración contra PostgreSQL real con los procedimientos;
+   - de integración contra SQL Server real con los procedimientos;
    - de contrato para cada endpoint publicado.
    Sin pruebas en verde, la épica vuelve a *En curso*.
 3. **Procedimientos SQL** versionados en `db/<servicio>/` con `p_tenant_id` obligatorio.
@@ -548,6 +548,6 @@ existe en el proyecto.
 > **Estado actual de la puerta 2 (2026-11-04):** parcialmente en verde.
 > - **Unitarias: existen y pasan** — `tests/SagaSales.UnitTests`, 34 casos en verde
 >   (máquina de estados del pedido, reembolsos, hashing de contraseñas, `Result`/paginación).
-> - **Integración y contrato: pendientes** — requieren PostgreSQL y los servicios en ejecución.
+> - **Integración y contrato: pendientes** — requieren SQL Server y los servicios en ejecución.
 > - Antes de esta corrección, `tests/Unit` y `tests/Contract` eran dos archivos **sin extensión,
 >   sin proyecto y sin una sola aserción**; quedaron documentados como placeholder.

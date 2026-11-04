@@ -1,23 +1,8 @@
-#!/bin/bash
-# Script to create multiple databases in PostgreSQL
+OBSOLETO — este script era la inicialización de PostgreSQL (creaba varias bases al arrancar el
+contenedor). La plataforma usa SQL Server, que no tiene un directorio de init scripts equivalente.
 
-set -e
-set -u
+Las bases de datos las crea `scripts/apply-db.ps1` en su primera ejecución
+(`IF DB_ID('saga_<servicio>') IS NULL CREATE DATABASE ...`), y el esquema lo aplican los scripts
+versionados de `db/<servicio>/`.
 
-function create_user_and_database() {
-    local database=$1
-    echo "Creating user and database '$database'"
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
-        CREATE USER $database WITH PASSWORD '$database';
-        CREATE DATABASE $database;
-        GRANT ALL PRIVILEGES ON DATABASE $database TO $database;
-EOSQL
-}
-
-if [ -n "$POSTGRES_MULTIPLE_DATABASES" ]; then
-    echo "Multiple database creation requested: $POSTGRES_MULTIPLE_DATABASES"
-    for db in $(echo $POSTGRES_MULTIPLE_DATABASES | tr ',' ' '); do
-        create_user_and_database $db
-    done
-    echo "Multiple databases created"
-fi
+Puedes borrar este archivo.

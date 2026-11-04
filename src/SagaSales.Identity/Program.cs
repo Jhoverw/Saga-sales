@@ -10,15 +10,15 @@ builder.AddSagaSalesLogging(SagaSalesConstants.ApplicationName);
 builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Identity");
 
-builder.Services.AddDbContext<TenantDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Persistence: stored procedures only. The tenant is the first parameter of every procedure.
+builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 
 builder.Services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
 
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(LoginCommandHandler).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(LoginCommandHandler).Assembly);
 
-builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck<TenantDbContext>>("database");
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

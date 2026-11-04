@@ -26,6 +26,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.BlazorWeb", "src\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.UnitTests", "tests\SagaSales.UnitTests\SagaSales.UnitTests.csproj", "{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.IntegrationTests", "tests\SagaSales.IntegrationTests\SagaSales.IntegrationTests.csproj", "{A1B2C3DD-DDDD-4A1B-9C1D-DDDDDDDDDDDD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaSales.ContractTests", "tests\SagaSales.ContractTests\SagaSales.ContractTests.csproj", "{A1B2C3DE-EEEE-4A1B-9C1D-EEEEEEEEEEEE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +84,14 @@ Global
 		{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3DC-CCCC-4A1B-9C1D-CCCCCCCCCCCC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3DD-DDDD-4A1B-9C1D-DDDDDDDDDDDD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3DD-DDDD-4A1B-9C1D-DDDDDDDDDDDD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3DD-DDDD-4A1B-9C1D-DDDDDDDDDDDD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3DD-DDDD-4A1B-9C1D-DDDDDDDDDDDD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3DE-EEEE-4A1B-9C1D-EEEEEEEEEEEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3DE-EEEE-4A1B-9C1D-EEEEEEEEEEEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3DE-EEEE-4A1B-9C1D-EEEEEEEEEEEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3DE-EEEE-4A1B-9C1D-EEEEEEEEEEEE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

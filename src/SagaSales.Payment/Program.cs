@@ -12,7 +12,7 @@ builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Payment");
 
 builder.Services.AddDbContext<PaymentDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // The stub gateway authorizes without moving money. Phase 2 swaps in a real provider.
 builder.Services.AddScoped<IPaymentGateway, StubPaymentGateway>();
@@ -23,7 +23,7 @@ builder.Services.AddSagaSalesMessageBus(builder.Configuration, bus =>
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreatePaymentCommandHandler).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(CreatePaymentCommandHandler).Assembly);
 
-builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck<PaymentDbContext>>("database");
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

@@ -1,13 +1,14 @@
 namespace SagaSales.Identity.Commands;
 
 /// <summary>
-/// Authenticates a user and returns a signed access token. The previous version built
-/// the tokens and then discarded them, so login never returned a usable token.
+/// Authenticates a user and returns a signed access token.
+/// The user is looked up through <c>sp_user_find_by_email</c>; the last sign-in is stamped by
+/// <c>sp_user_touch_login</c>. Nothing here touches an ORM.
 /// </summary>
 public record LoginCommand(string Email, string Password) : ICommand<LoginResponse>;
 
 public sealed class LoginCommandHandler(
-    TenantDbContext dbContext,
+    ITenantRepository repository,
     IPasswordHasher passwordHasher,
     IJwtTokenService tokenService) : ICommandHandler<LoginCommand, LoginResponse>
 {
@@ -18,9 +19,7 @@ public sealed class LoginCommandHandler(
 
         var email = request.Email.Trim().ToLowerInvariant();
 
-        var user = await dbContext.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Email == email && u.IsActive, cancellationToken);
+        var user = await repository.FindUserByEmailAsync(email, cancellationToken);
 
         if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
         {
@@ -28,9 +27,7 @@ public sealed class LoginCommandHandler(
             throw new UnauthorizedException("Invalid email or password.");
         }
 
-        await dbContext.Users
-            .Where(u => u.Id == user.Id)
-            .ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAt, DateTime.UtcNow), cancellationToken);
+        await repository.TouchLoginAsync(user.TenantId, user.Id, cancellationToken);
 
         var claims = new[]
         {

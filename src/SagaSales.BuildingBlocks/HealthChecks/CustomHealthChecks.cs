@@ -1,14 +1,14 @@
 namespace SagaSales.BuildingBlocks.HealthChecks;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using SagaSales.BuildingBlocks.Data;
 
 /// <summary>
-/// Health check for an EF Core context. Registered with
-/// <c>AddCheck&lt;DatabaseHealthCheck&lt;TContext&gt;&gt;("database")</c>.
+/// Health check for a service database. It opens a real connection through
+/// <see cref="IDbConnectionFactory"/>, so it proves the credentials and the network, not just that
+/// an object was constructed.
 /// </summary>
-public sealed class DatabaseHealthCheck<TContext>(TContext dbContext) : IHealthCheck
-    where TContext : DbContext
+public sealed class DatabaseHealthCheck(IDbConnectionFactory connectionFactory) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
@@ -16,10 +16,8 @@ public sealed class DatabaseHealthCheck<TContext>(TContext dbContext) : IHealthC
     {
         try
         {
-            var canConnect = await dbContext.Database.CanConnectAsync(cancellationToken);
-            return canConnect
-                ? HealthCheckResult.Healthy("Database connection is healthy")
-                : HealthCheckResult.Unhealthy("Database refused the connection");
+            using var connection = await connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+            return HealthCheckResult.Healthy("Database connection is healthy");
         }
         catch (Exception ex)
         {

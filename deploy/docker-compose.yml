@@ -1,24 +1,46 @@
+# Saga-Sales — local stack.
+# Database: SQL Server 2022. There are no migrations: apply db/<service>/V###__*.sql with
+# scripts/apply-db.ps1 (it creates each database on first run).
 version: '3.8'
 
+# Shared by every .NET service so the stack is configured in one place.
+x-app-env: &app-env
+  ASPNETCORE_ENVIRONMENT: Development
+  ASPNETCORE_URLS: "http://+:80"
+  Jwt__Issuer: "SagaSales.Identity"
+  Jwt__Audience: "SagaSales.Api"
+  RabbitMQ__Host: rabbitmq
+  RabbitMQ__Username: saga_sales
+  RabbitMQ__Password: saga_sales_dev
+  Seq__ServerUrl: "http://seq:5341"
+
+x-app-depends: &app-depends
+  sqlserver:
+    condition: service_healthy
+  rabbitmq:
+    condition: service_healthy
+
 services:
-  # Infrastructure
-  postgres:
-    image: postgres:16-alpine
-    container_name: saga-sales-postgres
+  # ── Infrastructure ────────────────────────────────────────────────────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: saga-sales-sqlserver
     environment:
-      POSTGRES_USER: saga_sales
-      POSTGRES_PASSWORD: saga_sales_dev
-      POSTGRES_MULTIPLE_DATABASES: identity,catalog,sales,payment,customer,analytics,notification
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!}"
+      MSSQL_PID: Developer
     ports:
-      - "5432:5432"
+      - "1433:1433"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+      - sqlserver_data:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U saga_sales"]
-      interval: 10s
+      test:
+        - CMD-SHELL
+        - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" || exit 1
+      interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     networks:
       - saga-sales-network
 
@@ -41,21 +63,6 @@ services:
     networks:
       - saga-sales-network
 
-  redis:
-    image: redis:7-alpine
-    container_name: saga-sales-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - saga-sales-network
-
   seq:
     image: datalust/seq:2024.2
     container_name: saga-sales-seq
@@ -69,246 +76,134 @@ services:
     networks:
       - saga-sales-network
 
-  # API Gateway
+  # ── Services ──────────────────────────────────────────────────────────────
   api-gateway:
     build:
       context: ..
       dockerfile: src/SagaSales.ApiGateway/Dockerfile
     container_name: saga-sales-api-gateway
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ConnectionStrings__Postgres: "Host=postgres;Database=identity;Username=saga_sales;Password=saga_sales_dev"
-      IdentityServer__Authority: "http://identity:80"
-      ReverseProxy__Clusters__catalog__Destinations__destination1__Address: "http://catalog:80"
-      ReverseProxy__Clusters__sales__Destinations__destination1__Address: "http://sales:80"
-      ReverseProxy__Clusters__payment__Destinations__destination1__Address: "http://payment:80"
-      ReverseProxy__Clusters__customer__Destinations__destination1__Address: "http://customer:80"
-      ReverseProxy__Clusters__analytics__Destinations__destination1__Address: "http://analytics:80"
-      ReverseProxy__Clusters__notification__Destinations__destination1__Address: "http://notification:80"
-      ReverseProxy__Clusters__identity__Destinations__destination1__Address: "http://identity:80"
+      <<: *app-env
     ports:
       - "5000:80"
     depends_on:
-      postgres:
-        condition: service_healthy
+      <<: *app-depends
       identity:
-        condition: service_healthy
+        condition: service_started
     networks:
       - saga-sales-network
 
-  # Identity Service
   identity:
     build:
       context: ..
       dockerfile: src/SagaSales.Identity/Dockerfile
     container_name: saga-sales-identity
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=identity;Username=saga_sales;Password=saga_sales_dev"
-      ConnectionStrings__IdentityServer: "Host=postgres;Database=identity;Username=saga_sales;Password=saga_sales_dev"
-      Jwt__Key: "SagaSalesSuperSecretKeyForJWTTokenGeneration2026!"
-      Jwt__Issuer: "SagaSales.Identity"
-      Jwt__Audience: "SagaSales.Api"
-      IdentityServer__IssuerUri: "http://localhost:5001"
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: saga_sales
-      RabbitMQ__Password: saga_sales_dev
-      Redis__ConnectionString: "redis:6379"
-      Seq__ServerUrl: "http://seq:5341"
+      <<: *app-env
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_identity;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
     ports:
       - "5001:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    depends_on: *app-depends
     networks:
       - saga-sales-network
 
-  # Catalog Service
   catalog:
     build:
       context: ..
       dockerfile: src/SagaSales.Catalog/Dockerfile
     container_name: saga-sales-catalog
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=catalog;Username=saga_sales;Password=saga_sales_dev"
-      Jwt__Key: "SagaSalesSuperSecretKeyForJWTTokenGeneration2026!"
-      Jwt__Issuer: "SagaSales.Identity"
-      Jwt__Audience: "SagaSales.Api"
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: saga_sales
-      RabbitMQ__Password: saga_sales_dev
-      Redis__ConnectionString: "redis:6379"
-      Seq__ServerUrl: "http://seq:5341"
+      <<: *app-env
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_catalog;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
     ports:
       - "5002:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    depends_on: *app-depends
     networks:
       - saga-sales-network
 
-  # Sales Service
   sales:
     build:
       context: ..
       dockerfile: src/SagaSales.Sales/Dockerfile
     container_name: saga-sales-sales
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=sales;Username=saga_sales;Password=saga_sales_dev"
-      Jwt__Key: "SagaSalesSuperSecretKeyForJWTTokenGeneration2026!"
-      Jwt__Issuer: "SagaSales.Identity"
-      Jwt__Audience: "SagaSales.Api"
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: saga_sales
-      RabbitMQ__Password: saga_sales_dev
-      Redis__ConnectionString: "redis:6379"
-      Seq__ServerUrl: "http://seq:5341"
-      CatalogService__BaseUrl: "http://catalog:80"
+      <<: *app-env
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_sales;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
+      Services__Catalog: "http://catalog:80"
     ports:
       - "5003:80"
     depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *app-depends
       catalog:
         condition: service_started
     networks:
       - saga-sales-network
 
-  # Payment Service
   payment:
     build:
       context: ..
       dockerfile: src/SagaSales.Payment/Dockerfile
     container_name: saga-sales-payment
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=payment;Username=saga_sales;Password=saga_sales_dev"
-      Jwt__Key: "SagaSalesSuperSecretKeyForJWTTokenGeneration2026!"
-      Jwt__Issuer: "SagaSales.Identity"
-      Jwt__Audience: "SagaSales.Api"
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: saga_sales
-      RabbitMQ__Password: saga_sales_dev
-      Redis__ConnectionString: "redis:6379"
-      Seq__ServerUrl: "http://seq:5341"
+      <<: *app-env
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_payment;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
+      Payments__Provider: Stub
       Stripe__SecretKey: "${STRIPE_SECRET_KEY}"
       Stripe__PublishableKey: "${STRIPE_PUBLISHABLE_KEY}"
       Stripe__WebhookSecret: "${STRIPE_WEBHOOK_SECRET}"
       PayPal__ClientId: "${PAYPAL_CLIENT_ID}"
       PayPal__ClientSecret: "${PAYPAL_CLIENT_SECRET}"
-      PayPal__Mode: "sandbox"
+      PayPal__Mode: sandbox
     ports:
       - "5004:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    depends_on: *app-depends
     networks:
       - saga-sales-network
 
-  # Customer Service
   customer:
     build:
       context: ..
       dockerfile: src/SagaSales.Customer/Dockerfile
     container_name: saga-sales-customer
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=customer;Username=saga_sales;Password=saga_sales_dev"
-      Jwt__Key: "SagaSalesSuperSecretKeyForJWTTokenGeneration2026!"
-      Jwt__Issuer: "SagaSales.Identity"
-      Jwt__Audience: "SagaSales.Api"
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: saga_sales
-      RabbitMQ__Password: saga_sales_dev
-      Redis__ConnectionString: "redis:6379"
-      Seq__ServerUrl: "http://seq:5341"
+      <<: *app-env
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_customer;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
     ports:
       - "5005:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      identity:
-        condition: service_healthy
+    depends_on: *app-depends
     networks:
       - saga-sales-network
 
-  # Analytics Service
   analytics:
     build:
       context: ..
       dockerfile: src/SagaSales.Analytics/Dockerfile
     container_name: saga-sales-analytics
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=analytics;Username=saga_sales;Password=saga_sales_dev"
-      ConnectionStrings__ReadOnly: "Host=postgres;Database=sales;Username=saga_sales;Password=saga_sales_dev"
-      Jwt__Key: "SagaSalesSuperSecretKeyForJWTTokenGeneration2026!"
-      Jwt__Issuer: "SagaSales.Identity"
-      Jwt__Audience: "SagaSales.Api"
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: saga_sales
-      RabbitMQ__Password: saga_sales_dev
-      Redis__ConnectionString: "redis:6379"
-      Seq__ServerUrl: "http://seq:5341"
+      <<: *app-env
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_analytics;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
     ports:
       - "5006:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    depends_on: *app-depends
     networks:
       - saga-sales-network
 
-  # Notification Service
   notification:
     build:
       context: ..
       dockerfile: src/SagaSales.Notification/Dockerfile
     container_name: saga-sales-notification
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=notification;Username=saga_sales;Password=saga_sales_dev"
-      Jwt__Key: "SagaSalesSuperSecretKeyForJWTTokenGeneration2026!"
-      Jwt__Issuer: "SagaSales.Identity"
-      Jwt__Audience: "SagaSales.Api"
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: saga_sales
-      RabbitMQ__Password: saga_sales_dev
-      Redis__ConnectionString: "redis:6379"
-      Seq__ServerUrl: "http://seq:5341"
+      <<: *app-env
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_notification;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
+      Notifications__OpsPhone: "${OPS_PHONE}"
       Email__SmtpHost: "${EMAIL_SMTP_HOST}"
       Email__SmtpPort: "${EMAIL_SMTP_PORT}"
       Email__Username: "${EMAIL_USERNAME}"
@@ -317,27 +212,17 @@ services:
       Twilio__AccountSid: "${TWILIO_ACCOUNT_SID}"
       Twilio__AuthToken: "${TWILIO_AUTH_TOKEN}"
       Twilio__FromNumber: "${TWILIO_FROM_NUMBER}"
-      Firebase__ProjectId: "${FIREBASE_PROJECT_ID}"
     ports:
       - "5007:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    depends_on: *app-depends
     networks:
       - saga-sales-network
 
-  # Blazor WebAssembly (served by nginx in prod, dev server in dev)
   blazor-web:
     build:
       context: ..
       dockerfile: src/SagaSales.BlazorWeb/Dockerfile
     container_name: saga-sales-blazor-web
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
     ports:
       - "5008:80"
     depends_on:
@@ -346,9 +231,8 @@ services:
       - saga-sales-network
 
 volumes:
-  postgres_data:
+  sqlserver_data:
   rabbitmq_data:
-  redis_data:
   seq_data:
 
 networks:

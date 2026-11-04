@@ -1,7 +1,7 @@
 # Saga-Sales
 
 Plataforma de e-commerce multi-tenant en .NET 8: microservicios con CQRS (MediatR),
-eventos de integración por RabbitMQ (MassTransit), PostgreSQL por servicio y un frontend
+eventos de integración por RabbitMQ (MassTransit), SQL Server por servicio y un frontend
 Blazor WebAssembly que consume todo a través de un API Gateway (YARP).
 
 ## Estructura
@@ -21,7 +21,7 @@ src/
 └── SagaSales.BlazorWeb/        SPA Blazor WebAssembly
 specs/saga-sales-ecommerce/     Especificación, plan y tareas
 memory/constitution.md          Principios del proyecto
-deploy/                         docker-compose e inicialización de PostgreSQL
+deploy/                         docker-compose e inicialización de SQL Server
 tests/                          (vacío — ver "Pendiente")
 ```
 
@@ -38,7 +38,7 @@ es por HTTP (Sales → Catalog para reservar stock) o por eventos de MassTransit
 ## Requisitos
 
 - .NET SDK 10.0 (el proyecto fija `net10.0` en `Directory.Build.props`)
-- Docker (PostgreSQL, RabbitMQ)
+- Docker (SQL Server, RabbitMQ)
 - Acceso a nuget.org para restaurar paquetes
 
 ## Puesta en marcha
@@ -52,13 +52,11 @@ es por HTTP (Sales → Catalog para reservar stock) o por eventos de MassTransit
 dotnet restore SagaSales.sln
 dotnet build SagaSales.sln
 
-# 2. Infraestructura (PostgreSQL + RabbitMQ + Redis + Seq)
-docker compose -f deploy/docker-compose.yml up -d postgres rabbitmq redis seq
+# 2. Infraestructura (SQL Server + RabbitMQ + Seq)
+docker compose -f deploy/docker-compose.yml up -d sqlserver rabbitmq seq
 
-# 3. Crear el esquema de cada base de datos (aún no hay migraciones: ver "Pendiente")
-#    Cuando existan:
-#    dotnet ef migrations add Initial --project src/SagaSales.Catalog
-#    dotnet ef database update --project src/SagaSales.Catalog
+# 3. Crear el esquema de cada base de datos (scripts T-SQL versionados, sin EF ni migraciones)
+./scripts/apply-db.ps1 -Server localhost,1433 -User sa -Password $env:MSSQL_SA_PASSWORD
 
 # 4. Arrancar los servicios (una consola por servicio)
 dotnet run --project src/SagaSales.Identity
@@ -115,7 +113,7 @@ dotnet test tests/SagaSales.UnitTests        # 34 casos unitarios (dominio, segu
 
 Cubren la máquina de estados del pedido, las reglas de reembolso, el hashing PBKDF2 de
 contraseñas y los tipos base (`Result`, paginación). Las pruebas de integración (contra
-PostgreSQL con los procedimientos) y de contrato (contra los servicios en ejecución) están
+SQL Server con los procedimientos) y de contrato (contra los servicios en ejecución) están
 pendientes — ver "Pendiente (fase 2)".
 
 ## Eventos de integración

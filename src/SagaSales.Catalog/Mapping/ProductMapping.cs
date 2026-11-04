@@ -9,7 +9,7 @@ public static class ProductMapping
         Id = product.Id,
         Name = product.Name,
         Description = product.Description,
-        Price = product.Price,
+        BasePrice = product.Price,
         Currency = product.Currency,
         StockQuantity = product.StockQuantity,
         CategoryId = product.CategoryId,

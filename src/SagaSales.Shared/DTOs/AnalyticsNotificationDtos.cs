@@ -26,6 +26,16 @@ public class TopProductDto
     public decimal Revenue { get; set; }
 }
 
+/// <summary>One point of the day-by-day series.</summary>
+public class DailyPointDto
+{
+    public DateOnly Date { get; set; }
+
+    public decimal Revenue { get; set; }
+
+    public int Orders { get; set; }
+}
+
 public class NotificationDto
 {
     public Guid Id { get; set; }

@@ -1,9 +1,8 @@
 namespace SagaSales.Identity.Commands;
 
 /// <summary>
-/// Registers tenant plus its first admin user. The admin password is now supplied by the
-/// caller and hashed with PBKDF2 — previously it was generated, weakly hashed and printed
-/// to the log.
+/// Registers a store plus its first administrator. Uniqueness and the atomic creation of both
+/// records are enforced by <c>sp_tenant_create</c>, not by the handler.
 /// </summary>
 public record RegisterTenantCommand(
     string Slug,
@@ -13,7 +12,7 @@ public record RegisterTenantCommand(
     string? CustomDomain = null) : ICommand<RegisterTenantResponse>;
 
 public sealed class RegisterTenantCommandHandler(
-    TenantDbContext dbContext,
+    ITenantRepository repository,
     IPasswordHasher passwordHasher) : ICommandHandler<RegisterTenantCommand, RegisterTenantResponse>
 {
     public async Task<Result<RegisterTenantResponse>> Handle(
@@ -28,40 +27,20 @@ public sealed class RegisterTenantCommandHandler(
         var slug = request.Slug.Trim().ToLowerInvariant();
         var email = request.AdminEmail.Trim().ToLowerInvariant();
 
-        var slugTaken = await dbContext.Tenants.AnyAsync(t => t.Slug == slug, cancellationToken);
-        if (slugTaken)
-        {
-            throw new ConflictException($"Tenant slug '{slug}' already exists.");
-        }
-
-        var tenant = new Domain.Tenant
-        {
-            Slug = slug,
-            DisplayName = request.DisplayName.Trim(),
-            Plan = "trial",
-            Status = TenantStatus.Trial,
-            CustomDomain = request.CustomDomain,
-        };
-
-        var admin = new Domain.User
-        {
-            TenantId = tenant.Id,
-            Email = email,
-            PasswordHash = passwordHasher.Hash(request.AdminPassword),
-            Role = "admin",
-            DisplayName = "Administrator",
-            IsActive = true,
-        };
-
-        dbContext.Tenants.Add(tenant);
-        dbContext.Users.Add(admin);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        // A duplicate slug surfaces from the procedure as CONFLICT → 409.
+        var registration = await repository.CreateAsync(
+            slug,
+            request.DisplayName.Trim(),
+            email,
+            passwordHasher.Hash(request.AdminPassword),
+            request.CustomDomain,
+            cancellationToken);
 
         return Result<RegisterTenantResponse>.Success(new RegisterTenantResponse
         {
-            TenantId = tenant.Id,
-            AdminEmail = admin.Email,
-            Role = admin.Role,
+            TenantId = registration.Id,
+            AdminEmail = registration.AdminEmail,
+            Role = "admin",
         });
     }
 }

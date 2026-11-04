@@ -12,7 +12,7 @@ builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Notification");
 
 builder.Services.AddDbContext<NotificationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // No provider is configured yet: this sender logs instead of delivering (Phase 2: MailKit/Twilio).
 builder.Services.AddSingleton<INotificationSender, LoggingNotificationSender>();
@@ -27,7 +27,7 @@ builder.Services.AddSagaSalesMessageBus(builder.Configuration, bus =>
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(SendNotificationCommand).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(SendNotificationCommand).Assembly);
 
-builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck<NotificationDbContext>>("database");
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
