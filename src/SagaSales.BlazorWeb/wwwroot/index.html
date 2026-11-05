@@ -6,18 +6,55 @@
     <title>Saga-Sales</title>
     <base href="/" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- No web fonts: the first paint must never wait on a third-party host. -->
 
-    <!-- Bootstrap only for the grid and spacing utilities; the theme is ours. -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Bootstrap is used only for the 12-column grid and a few utilities, and it is loaded
+         NON-BLOCKING on purpose: if the CDN is slow or unreachable the app still paints. -->
+    <link rel="preload" as="style"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+          onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+    </noscript>
+
     <link href="css/app.css" rel="stylesheet" />
+
+    <style>
+        /* Self-contained splash: no external CSS needed to show something immediately. */
+        @keyframes saga-spin { to { transform: rotate(360deg); } }
+        .saga-splash {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #0b0f1a;
+            color: #e6eefc;
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        .saga-splash__ring {
+            width: 34px;
+            height: 34px;
+            margin: 0 auto 16px;
+            border: 3px solid rgba(31, 111, 235, 0.25);
+            border-top-color: #2dd4ff;
+            border-radius: 50%;
+            animation: saga-spin 0.9s linear infinite;
+        }
+        .saga-splash__text {
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            opacity: 0.65;
+        }
+    </style>
 </head>
 <body>
     <div id="app">
-        <div style="display:grid;place-items:center;height:100vh;">
-            <div class="spinner-border" style="color:#1f6feb;" role="status"></div>
+        <div class="saga-splash">
+            <div style="text-align:center">
+                <div class="saga-splash__ring"></div>
+                <div class="saga-splash__text">Cargando Saga-Sales</div>
+            </div>
         </div>
     </div>
 
