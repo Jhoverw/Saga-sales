@@ -114,8 +114,26 @@ foreach ($svc in $services) {
 
     Write-Host "$svc -> $database" -ForegroundColor Cyan
 
+    # Create the database even when the service has no scripts yet. A service pointed at a database
+    # that does not exist makes every health check wait for the connection timeout; an existing
+    # (empty) database answers immediately and tells the truth: schema pending, service alive.
+    if (-not $DryRun) {
+        try {
+            $exists = Invoke-Sql -Database 'master' -Query "SET NOCOUNT ON; SELECT CASE WHEN DB_ID('$database') IS NULL THEN 0 ELSE 1 END"
+            if ($exists -ne '1') {
+                Invoke-Sql -Database 'master' -Query "CREATE DATABASE [$database]" | Out-Null
+                Write-Host "  created $database" -ForegroundColor DarkCyan
+            }
+        } catch {
+            $failed += "$svc (create database)"
+            Write-Host ("  FAIL creating {0}" -f $database) -ForegroundColor Red
+            Write-Host ("       " + $_.Exception.Message.Split([Environment]::NewLine)[0]) -ForegroundColor DarkRed
+            continue
+        }
+    }
+
     if (-not $scripts) {
-        Write-Host '  no scripts' -ForegroundColor DarkGray
+        Write-Host '  no scripts (database ready, schema arrives with its story)' -ForegroundColor DarkGray
         continue
     }
 
