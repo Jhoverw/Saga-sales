@@ -21,11 +21,15 @@
 param(
     [string]$Server = 'localhost,1433',
     [string]$User = 'sa',
-    [string]$Password = $env:MSSQL_SA_PASSWORD,
+    # Falls back to the password deploy/docker-compose.yml uses when MSSQL_SA_PASSWORD is unset.
+    [string]$Password = $(if ($env:MSSQL_SA_PASSWORD) { $env:MSSQL_SA_PASSWORD } else { 'SagaSales_Dev_2026!' }),
     [string]$Service,
     [string]$DatabasePrefix = 'saga_',
     [switch]$TrustServerCertificate = $true,
-    [switch]$DryRun
+    [switch]$DryRun,
+    # Run sqlcmd inside the SQL Server container, so no host sqlcmd is required.
+    [switch]$UseContainer,
+    [string]$Container = 'saga-sales-sqlserver'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,15 +38,39 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $dbRoot   = Join-Path $repoRoot 'db'
 
 if (-not (Test-Path $dbRoot)) { throw "No db/ directory found at $dbRoot" }
-if (-not (Get-Command sqlcmd -ErrorAction SilentlyContinue)) {
-    throw 'sqlcmd is not on PATH. Install the SQL Server command-line tools (sqlcmd / go-sqlcmd).'
+
+$hasSqlcmd = $null -ne (Get-Command sqlcmd -ErrorAction SilentlyContinue)
+$hasDocker = $null -ne (Get-Command docker -ErrorAction SilentlyContinue)
+$useDocker = $UseContainer -or (-not $hasSqlcmd -and $hasDocker)
+
+if (-not $DryRun) {
+    if (-not $hasSqlcmd -and -not $hasDocker) {
+        throw 'Neither sqlcmd nor docker is on PATH. Install the SQL Server command-line tools, or run the stack with docker.'
+    }
+
+    if ($useDocker) {
+        $running = & docker inspect -f '{{.State.Running}}' $Container 2>$null
+        if ($running -ne 'true') {
+            throw "Container '$Container' is not running. Start it with: docker compose -f deploy/docker-compose.yml up -d sqlserver"
+        }
+        Write-Host "sqlcmd mode: inside container $Container" -ForegroundColor DarkCyan
+    }
 }
+
 if ([string]::IsNullOrWhiteSpace($Password)) {
     throw 'No password supplied. Pass -Password or set MSSQL_SA_PASSWORD.'
 }
 
 function Invoke-Sql {
     param([string]$Database, [string]$Query)
+
+    if ($useDocker) {
+        $result = & docker exec $Container /opt/mssql-tools18/bin/sqlcmd `
+            -S localhost -U $User -P "$Password" -C -d $Database -b -h -1 -W -Q $Query 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($result -join [Environment]::NewLine) }
+        return ($result -join "`n").Trim()
+    }
+
     $arguments = @('-S', $Server, '-U', $User, '-P', $Password, '-d', $Database, '-b', '-h', '-1', '-W', '-Q', $Query)
     if ($TrustServerCertificate) { $arguments += @('-C') }
     $result = & sqlcmd @arguments 2>&1
@@ -52,6 +80,15 @@ function Invoke-Sql {
 
 function Invoke-SqlFile {
     param([string]$Database, [string]$Path)
+
+    if ($useDocker) {
+        # Without -Q and -i, sqlcmd executes what it reads from stdin.
+        Get-Content $Path -Raw | docker exec -i $Container /opt/mssql-tools18/bin/sqlcmd `
+            -S localhost -U $User -P "$Password" -C -d $Database -b
+        if ($LASTEXITCODE -ne 0) { throw "Script failed: $Path" }
+        return
+    }
+
     $arguments = @('-S', $Server, '-U', $User, '-P', $Password, '-d', $Database, '-b', '-i', $Path)
     if ($TrustServerCertificate) { $arguments += @('-C') }
     & sqlcmd @arguments
