@@ -1,7 +1,6 @@
 # Saga-Sales — local stack.
 # Database: SQL Server 2022. There are no migrations: apply db/<service>/V###__*.sql with
 # scripts/apply-db.ps1 (it creates each database on first run).
-version: '3.8'
 
 # Shared by every .NET service so the stack is configured in one place.
 x-app-env: &app-env

@@ -18,6 +18,8 @@ builder.Services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(LoginCommandHandler).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(LoginCommandHandler).Assembly);
 
+builder.Services.AddControllers();
+
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();

@@ -27,6 +27,8 @@ builder.Services.AddSagaSalesMessageBus(builder.Configuration, bus =>
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(SendNotificationCommand).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(SendNotificationCommand).Assembly);
 
+builder.Services.AddControllers();
+
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.AddEndpointsApiExplorer();
