@@ -500,10 +500,8 @@ BEGIN
     ) AS agg
     WHERE dbo.purchases.id = @purchase_id;
 
-    COMMIT;
-
-    -- Receiving in the same call is the default: register and enter the inventory look like one
-    -- action to the operator, and there is no half-done draft if something fails in between.
+    -- Receiving happens INSIDE the same transaction: either the document and the stock both land,
+    -- or neither does. A half-done draft is exactly what this is meant to avoid.
     IF @receive = 1
     BEGIN
         EXEC dbo.sp_purchase_receive
@@ -512,15 +510,15 @@ BEGIN
             @received_by = @created_by,
             @branch_id = @branch_id;
     END
-    ELSE
-    BEGIN
-        SELECT id AS Id, supplier_id AS SupplierId, status AS Status, branch_id AS BranchId,
-               supplier_invoice_number AS SupplierInvoiceNumber, purchased_at AS PurchasedAt,
-               received_at AS ReceivedAt, subtotal AS Subtotal, tax_amount AS TaxAmount,
-               total AS Total, notes AS Notes
-        FROM dbo.purchases
-        WHERE id = @purchase_id;
-    END
+
+    COMMIT;
+
+    SELECT id AS Id, supplier_id AS SupplierId, status AS Status, branch_id AS BranchId,
+           supplier_invoice_number AS SupplierInvoiceNumber, purchased_at AS PurchasedAt,
+           received_at AS ReceivedAt, subtotal AS Subtotal, tax_amount AS TaxAmount,
+           total AS Total, notes AS Notes
+    FROM dbo.purchases
+    WHERE id = @purchase_id;
 END
 GO
 
