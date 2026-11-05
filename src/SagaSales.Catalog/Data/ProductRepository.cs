@@ -52,7 +52,19 @@ public interface IProductRepository
 
 public sealed record ProductListResult(IReadOnlyList<Product> Items, int TotalCount);
 
-public sealed record StockReservation(Guid Id, string Name, decimal Price, string Currency, int StockQuantity);
+// Mapped by Dapper by property name (plain class, not a positional record).
+public sealed class StockReservation
+{
+    public Guid Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public decimal Price { get; set; }
+
+    public string Currency { get; set; } = "USD";
+
+    public int StockQuantity { get; set; }
+}
 
 public sealed class ProductRepository(
     IStoredProcedureExecutor executor,

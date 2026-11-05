@@ -27,21 +27,38 @@ public interface ITenantRepository
     Task TouchLoginAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken);
 }
 
-public sealed record TenantRegistration(
-    Guid Id,
-    string Slug,
-    string DisplayName,
-    short Status,
-    Guid AdminUserId,
-    string AdminEmail);
+// Mapped by Dapper by property name. Deliberately plain classes with settable properties:
+// a positional record forces Dapper to match the constructor signature exactly, and
+// sp_user_find_by_email returns one column more than the entity needs (is_active).
+public sealed class TenantRegistration
+{
+    public Guid Id { get; set; }
 
-public sealed record AuthenticatedUser(
-    Guid Id,
-    Guid TenantId,
-    string Email,
-    string PasswordHash,
-    string Role,
-    string DisplayName);
+    public string Slug { get; set; } = string.Empty;
+
+    public string DisplayName { get; set; } = string.Empty;
+
+    public short Status { get; set; }
+
+    public Guid AdminUserId { get; set; }
+
+    public string AdminEmail { get; set; } = string.Empty;
+}
+
+public sealed class AuthenticatedUser
+{
+    public Guid Id { get; set; }
+
+    public Guid TenantId { get; set; }
+
+    public string Email { get; set; } = string.Empty;
+
+    public string PasswordHash { get; set; } = string.Empty;
+
+    public string Role { get; set; } = string.Empty;
+
+    public string DisplayName { get; set; } = string.Empty;
+}
 
 public sealed class TenantRepository(IStoredProcedureExecutor executor, ILogger<TenantRepository> logger)
     : ITenantRepository
