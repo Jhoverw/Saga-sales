@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@using System.Security.Claims
 
 <div class="app-shell">
     <MainMenu />
@@ -9,9 +10,26 @@
                 <div class="topbar__title">@Title</div>
                 <div class="topbar__sub">@Subtitle</div>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                <span class="chip chip--ok">Sistema operativo</span>
-            </div>
+
+            <!-- Always visible: which store and which user. Both come from the JWT, so the header
+                 never depends on another service being reachable. -->
+            <AuthorizeView>
+                <Authorized Context="auth">
+                    <div class="topbar__meta" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <span class="chip" title="Tienda">
+                            @TenantLabel(auth.User)
+                        </span>
+                        <span class="chip chip--ok" title="@RoleLabel(auth.User)">
+                            @UserLabel(auth.User)
+                        </span>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <div class="topbar__meta">
+                        <span class="chip chip--warn">Sin sesión</span>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
         </header>
 
         <main class="content">
@@ -31,6 +49,8 @@
         "customers" => "Clientes",
         "orders" => "Pedidos",
         "analytics" => "Analítica",
+        "suppliers" => "Proveedores",
+        "purchases" => "Compras",
         "login" => "Iniciar sesión",
         "register" => "Crear tienda",
         var other => string.IsNullOrWhiteSpace(other) ? "Panel" : other,
@@ -43,8 +63,27 @@
         "Clientes" => "Compradores y datos de contacto",
         "Pedidos" => "Estado y seguimiento",
         "Analítica" => "Ingresos y productos más vendidos",
+        "Proveedores" => "A quién le compras y en qué condiciones",
+        "Compras" => "Lo que entra al inventario y a qué costo",
         "Iniciar sesión" => "Acceso al panel",
         "Crear tienda" => "Alta de un comercio nuevo",
         _ => string.Empty,
     };
+
+    private static string TenantLabel(ClaimsPrincipal user)
+        => user.FindFirst("tenant_name")?.Value is { Length: > 0 } name
+            ? name
+            : user.FindFirst("tenant_slug")?.Value is { Length: > 0 } slug
+                ? slug
+                : "Tienda";
+
+    private static string UserLabel(ClaimsPrincipal user)
+        => user.FindFirst(ClaimTypes.Email)?.Value
+           ?? user.FindFirst(ClaimTypes.Name)?.Value
+           ?? "Usuario";
+
+    private static string RoleLabel(ClaimsPrincipal user)
+        => user.FindFirst(ClaimTypes.Role)?.Value is { Length: > 0 } role
+            ? $"Rol: {role}"
+            : "Rol desconocido";
 }

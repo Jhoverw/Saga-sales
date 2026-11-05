@@ -33,9 +33,13 @@ public sealed class LoginCommandHandler(
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Name, user.DisplayName),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim(SagaSalesConstants.Claims.TenantId, user.TenantId.ToString()),
-            new Claim(SagaSalesConstants.Claims.Email, user.Email),
+
+            // Carried in the token so every screen can say which store the user is in.
+            new Claim("tenant_name", user.TenantName),
+            new Claim("tenant_slug", user.TenantSlug),
         };
 
         var response = new LoginResponse

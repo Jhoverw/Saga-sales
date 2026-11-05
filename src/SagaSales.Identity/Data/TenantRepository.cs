@@ -58,6 +58,11 @@ public sealed class AuthenticatedUser
     public string Role { get; set; } = string.Empty;
 
     public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Store name, so the panel can show where the user is without another request.</summary>
+    public string TenantName { get; set; } = string.Empty;
+
+    public string TenantSlug { get; set; } = string.Empty;
 }
 
 public sealed class TenantRepository(IStoredProcedureExecutor executor, ILogger<TenantRepository> logger)
