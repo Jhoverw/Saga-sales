@@ -496,18 +496,18 @@ BEGIN
         ;THROW 50000, 'INSUFFICIENT_STOCK: not enough units available', 1;
     END
 
-    DECLARE @after table (stock_after int);
+    DECLARE @stock_rows table (stock_after int);
 
     UPDATE dbo.products
     SET stock_quantity = stock_quantity - @quantity,
         updated_at     = SYSUTCDATETIME()
-    OUTPUT inserted.stock_quantity INTO @after
+    OUTPUT inserted.stock_quantity INTO @stock_rows
     WHERE id = @product_id AND tenant_id = @p_tenant_id;
 
     INSERT INTO dbo.stock_movements (tenant_id, product_id, kind, quantity, unit_cost,
                                      stock_after, reference_type, reference_id, created_by)
     SELECT @p_tenant_id, @product_id, 2, -@quantity, NULL, stock_after, N'order', NULL, NULL
-    FROM @after;
+    FROM @stock_rows;
 
     COMMIT;
 
@@ -535,12 +535,12 @@ BEGIN
 
     BEGIN TRAN;
 
-    DECLARE @after table (stock_after int);
+    DECLARE @stock_rows table (stock_after int);
 
     UPDATE dbo.products
     SET stock_quantity = stock_quantity + @quantity,
         updated_at     = SYSUTCDATETIME()
-    OUTPUT inserted.stock_quantity INTO @after
+    OUTPUT inserted.stock_quantity INTO @stock_rows
     WHERE id = @product_id AND tenant_id = @p_tenant_id;
 
     IF @@ROWCOUNT = 0
@@ -552,7 +552,7 @@ BEGIN
     INSERT INTO dbo.stock_movements (tenant_id, product_id, kind, quantity, unit_cost,
                                      stock_after, reference_type, reference_id, created_by)
     SELECT @p_tenant_id, @product_id, 4, @quantity, NULL, stock_after, N'order', NULL, NULL
-    FROM @after;
+    FROM @stock_rows;
 
     COMMIT;
 END
