@@ -127,16 +127,35 @@ $endpoints = [ordered]@{
     'panel     ' = 'http://localhost:5008/'
 }
 
+# A service whose database has no schema yet answers 503 on /health. That is expected until its
+# story is implemented, so it is reported as pending instead of as a failure.
+$pending = @('payment', 'customer', 'analytics', 'notifica.')
+
 $failures = 0
 foreach ($name in $endpoints.Keys) {
+    $code = $null
+
     try {
-        $code = (Invoke-WebRequest $endpoints[$name] -UseBasicParsing -TimeoutSec 10).StatusCode
-        $colour = if ($code -ge 200 -and $code -lt 300) { 'Green' } else { 'Yellow' }
-        Write-Host ("  {0} HTTP {1}" -f $name, $code) -ForegroundColor $colour
-        if ($code -ge 400) { $failures++ }
+        $code = [int](Invoke-WebRequest $endpoints[$name] -UseBasicParsing -TimeoutSec 10).StatusCode
     }
     catch {
+        # Invoke-WebRequest throws on 4xx/5xx: the status code is in the response, not in the message.
+        $response = $_.Exception.Response
+        if ($null -ne $response) { $code = [int]$response.StatusCode }
+    }
+
+    if ($null -eq $code) {
         Write-Host ("  {0} sin respuesta ({1})" -f $name, $endpoints[$name]) -ForegroundColor Red
+        $failures++
+    }
+    elseif ($code -ge 200 -and $code -lt 300) {
+        Write-Host ("  {0} HTTP {1}" -f $name, $code) -ForegroundColor Green
+    }
+    elseif ($code -eq 503 -and $pending -contains $name.Trim()) {
+        Write-Host ("  {0} HTTP 503  (sin esquema todavia: historia pendiente)" -f $name) -ForegroundColor DarkYellow
+    }
+    else {
+        Write-Host ("  {0} HTTP {1}" -f $name, $code) -ForegroundColor Yellow
         $failures++
     }
 }
