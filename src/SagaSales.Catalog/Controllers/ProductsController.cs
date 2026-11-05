@@ -138,4 +138,19 @@ public sealed class ProductsController(IMediator mediator) : ControllerBase
         await mediator.Send(new Commands.ReleaseStockCommand(id, request.Quantity), cancellationToken);
         return NoContent();
     }
+
+    /// <summary>
+    /// The kardex of a product: every purchase that brought stock in and every sale that took it
+    /// out, with the resulting quantity (E-12).
+    /// </summary>
+    [HttpGet("{id:guid}/movements")]
+    [ProducesResponseType(typeof(IReadOnlyList<StockMovementDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Movements(
+        Guid id,
+        [FromQuery] int maxRows = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new Queries.GetStockMovementsQuery(id, maxRows), cancellationToken);
+        return Ok(result.Value);
+    }
 }

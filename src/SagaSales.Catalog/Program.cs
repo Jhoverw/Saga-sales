@@ -13,6 +13,8 @@ builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Catalog
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IPriceListRepository, PriceListRepository>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<IPurchaseRepository, PurchaseRepository>();
 
 // Catalog publishes product events; it consumes none of its own.
 builder.Services.AddSagaSalesMessageBus(builder.Configuration);

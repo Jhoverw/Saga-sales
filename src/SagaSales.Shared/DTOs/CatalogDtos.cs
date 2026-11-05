@@ -22,6 +22,21 @@ public class ProductDto
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Weighted average cost from received purchases. Null means "unknown": the product has never
+    /// been received, so any margin would be a guess.
+    /// </summary>
+    public decimal? Cost { get; set; }
+
+    /// <summary>Unit margin (PVP − cost), or null when the cost is unknown (E-12, D12).</summary>
+    public decimal? Margin => Cost.HasValue ? BasePrice - Cost.Value : null;
+
+    /// <summary>Margin over the selling price, as a percentage, or null when it cannot be known.</summary>
+    public decimal? MarginPercent =>
+        Cost.HasValue && BasePrice > 0
+            ? Math.Round(((BasePrice - Cost.Value) / BasePrice) * 100m, 2)
+            : null;
 }
 
 /// <summary>Resolved price for one product and one customer type (FR-007b).</summary>

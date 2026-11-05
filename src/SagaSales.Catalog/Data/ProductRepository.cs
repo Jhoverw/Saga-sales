@@ -217,6 +217,9 @@ public sealed class ProductRepository(
 
         public DateTime UpdatedAt { get; set; }
 
+        /// <summary>Weighted average cost; null until the first received purchase (E-12).</summary>
+        public decimal? Cost { get; set; }
+
         public int TotalCount { get; set; }
 
         public Product ToProduct() => new()
@@ -231,6 +234,7 @@ public sealed class ProductRepository(
             Status = (ProductStatus)Status,
             CreatedAt = CreatedAt,
             UpdatedAt = UpdatedAt,
+            Cost = Cost,
         };
     }
 }

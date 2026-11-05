@@ -16,6 +16,12 @@ public class Product
 
     public int StockQuantity { get; set; }
 
+    /// <summary>
+    /// Weighted average cost from received purchases (E-12, D12). Null means unknown: the product
+    /// has never been received, so it has no real margin yet.
+    /// </summary>
+    public decimal? Cost { get; set; }
+
     public Guid? CategoryId { get; set; }
 
     public ProductStatus Status { get; set; } = ProductStatus.Active;
