@@ -39,7 +39,13 @@ param(
     [switch]$SkipDb
 )
 
-$ErrorActionPreference = 'Stop'
+# Docker writes its "variable is not set" warnings to stderr. With 'Stop', Windows PowerShell turns
+# that stderr into a terminating error and the script dies before starting anything, so the setting
+# is 'Continue' and every docker call is followed by an explicit exit-code check.
+$ErrorActionPreference = 'Continue'
+
+# Drops docker's stderr warnings so they do not look like failures.
+$dockerQuiet = { param($line) $line -notmatch 'level=warning' }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $compose = Join-Path $repoRoot 'deploy\docker-compose.yml'
@@ -64,13 +70,13 @@ Write-Step 'Construyendo y arrancando'
 
 if ($Service) {
     Write-Host "  reconstruyo solo $Service y reinicio el gateway" -ForegroundColor Yellow
-    & docker compose @composeArgs up -d --build $Service
+    & docker compose @composeArgs up -d --build $Service 2>&1 | Where-Object $dockerQuiet
 }
 elseif ($Rebuild) {
-    & docker compose @composeArgs up -d --build
+    & docker compose @composeArgs up -d --build 2>&1 | Where-Object $dockerQuiet
 }
 else {
-    & docker compose @composeArgs up -d
+    & docker compose @composeArgs up -d 2>&1 | Where-Object $dockerQuiet
 }
 
 if ($LASTEXITCODE -ne 0) {
