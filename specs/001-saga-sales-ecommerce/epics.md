@@ -91,6 +91,7 @@ Perfil de operación declarado para el MVP:
 | **E-08** | Operación de la plataforma | Que la plataforma sea confiable, aislada y diagnosticable | Must (transversal) | Gateway + todos | FR-003, FR-007, FR-008, NFR |
 | **E-09** | Experiencia de compra (storefront) | Que el comprador pueda comprar sin ayuda del comercio | Should (v2) | BlazorWeb | US-003, US-006 |
 | **E-11** | Logística y entrega | Saber dónde está el pedido y quién lo lleva | *A confirmar* | nuevo | — |
+| **E-12** | Compras y costos | Saber cuánto te cuesta lo que vendes y que el stock entre por un documento | **Must (MVP)** | Catalog | US-021, US-022, US-023 |
 
 > **E-10 (facturación electrónica / SRI) sale de este alcance**: se implementará como
 > **proyecto separado** y consumirá esta plataforma. Ver §11.
@@ -400,6 +401,93 @@ sin que el comercio intervenga.
 
 ---
 
+### E-12 · Compras y costos
+
+**Objetivo**: registrar lo que el comercio **compra a sus proveedores** con el costo real de cada
+producto, para saber cuánto gana de verdad y para que el inventario entre por un documento y no a
+mano.
+
+Hoy el sistema sólo conoce el **PVP** (lo que cobras). Sin el costo, un producto que se vende a
+50 ¢ no dice si deja 15 ¢ o 10 ¢ de margen, y no hay forma de comparar proveedores.
+
+**Indicadores**
+- 100 % del stock entra por una compra recibida o por un ajuste registrado: **cero ediciones
+  manuales sin rastro**.
+- Margen por producto (PVP − costo promedio) visible al abrir el catálogo.
+- Diferencias de inventario inexplicables tras un mes de operación: **0**.
+
+**Alcance**
+- **Proveedores**: alta, edición y baja lógica, con identificación, contacto y condiciones.
+- **Compra como documento**: cabecera (proveedor, fecha, número de factura del proveedor, notas)
+  más líneas (producto, cantidad, **costo unitario**). El costo vive en la línea, no en el producto.
+- **Dos velocidades, un solo estándar**:
+  - *Compra rápida*: una a tres líneas en una pantalla, para «me llegaron 24 gaseosas a 35 ¢».
+  - *Compra completa*: muchas líneas, factura del proveedor y condiciones, para el ingreso grande.
+  Ambas escriben las mismas tablas y el mismo kardex, así que los reportes no las distinguen.
+- **Estados**: `borrador` → `recibida`. Sólo al recibir se mueve el stock.
+- **Costo promedio ponderado (CPP)**: al recibir se recalcula
+  `(stock_previo × costo_previo + cantidad × costo_nuevo) / (stock_previo + cantidad)`.
+- **Kardex**: cada movimiento deja rastro (entrada por compra, salida por venta, ajuste) con
+  cantidad, costo y documento de origen.
+- **Margen visible**: el catálogo muestra costo, PVP y margen unitario y porcentual.
+
+**Fuera de alcance (MVP)**: órdenes de compra con aprobación, cuentas por pagar y vencimientos,
+FIFO por capas, multi-bodega, importación desde CSV o Excel.
+
+**Historias**
+
+| ID | Historia | Resultado de negocio |
+|---|---|---|
+| US-021 | Registrar un proveedor | Sé a quién le compro y con qué condiciones |
+| US-022 | Registrar una compra con sus líneas y costos | El costo real queda guardado en un documento, no en la memoria de alguien |
+| US-023 | Recibir la compra | El stock sube, el costo promedio se recalcula y queda el kardex |
+
+**Criterios de aceptación**
+```gherkin
+Escenario: compra pequeña
+  Dado un producto "Gaseosa" con stock 0 y costo 0
+  Cuando registro una compra de 24 unidades a 0,35 y la recibo
+  Entonces el stock pasa a 24
+  Y el costo del producto queda en 0,35
+  Y existe un movimiento de entrada de 24 unidades por esa compra
+
+Escenario: dos proveedores y costo promedio ponderado
+  Dado un producto con stock 100 y costo 0,35
+  Cuando recibo una compra de 100 unidades a 0,40
+  Entonces el stock pasa a 200
+  Y el costo del producto pasa a 0,375
+
+Escenario: margen con el costo real
+  Dado un producto con costo 0,375 y PVP 0,50
+  Cuando consulto el catálogo
+  Entonces el margen unitario es 0,125 y el margen porcentual es 25 %
+
+Escenario: el borrador no toca el stock
+  Dado un producto con stock 10
+  Cuando registro una compra de 50 unidades y la dejo en borrador
+  Entonces el stock sigue en 10
+  Y no existe movimiento de entrada
+
+Escenario: recepción única
+  Dada una compra ya recibida
+  Cuando intento recibirla otra vez
+  Entonces recibo 409 y el stock no cambia
+
+Escenario: costo inválido
+  Cuando registro una línea con costo 0
+  Entonces recibo 400 y la compra no se guarda
+```
+
+**Riesgos**: recibir dos veces la misma compra (se rechaza con 409 y el estado lo impide); costo
+en cero por descuido (se valida `> 0`); stock que no cuadra si alguien sigue ajustando cantidades a
+mano (el kardex lo delata); producto vendido antes de tener costo (su margen aparece como
+desconocido, no como 0).
+
+**Decisiones asociadas**: D12 (costo promedio ponderado), D13 (recibir suma stock), D14 (factura
+del proveedor), D15 (vive en Catalog, sin servicio nuevo).
+
+---
+
 ## 5. Épicas candidatas (pendientes de confirmar)
 
 ### E-11 · Logística y entrega
@@ -423,7 +511,7 @@ Así el día que se construya la facturación no hay que migrar pedidos históri
 
 | Release | Épicas | Criterio de salida |
 |---|---|---|
-| **MVP** | E-01, E-02, E-03, E-04a, E-08 | Un comercio registra su tienda, publica productos, recibe un pedido con stock correcto, registra el cobro a mano y se ve en `/health`. |
+| **MVP** | E-01, E-02, E-03, E-04a, **E-12**, E-08 | Un comercio registra su tienda, publica productos, **registra lo que compra y a qué costo**, recibe un pedido con stock correcto, registra el cobro a mano y se ve en `/health`. |
 | **v1** | E-04b, E-05, E-07 | Cobro online real con webhooks, devoluciones, clientes y confirmación automática por email. |
 | **v2** | E-06, E-09, (E-11) | El comercio exporta su reporte diario a CSV y el comprador compra solo por la web. |
 | **Proyecto aparte** | E-10 | Facturación electrónica (SRI), consumiendo los pedidos de esta plataforma. |
@@ -443,6 +531,7 @@ Así el día que se construya la facturación no hay que migrar pedidos históri
 | E-07 | US-015, US-016 | FR-006 | (falta desglose) |
 | E-08 | — | FR-003, FR-007, FR-008, NFR-001…005 | P03, P04 |
 | E-09 | US-003, US-006 | — | P51–P57 |
+| E-12 | US-021, US-022, US-023 (nuevas) | FR-031…FR-038 (nuevos) | T114 en adelante |
 
 ---
 
@@ -526,6 +615,10 @@ Pendientes:
 | D8 | **El comprador no inicia sesión en el MVP** | Es un registro de cliente creado por el staff; la cuenta propia llega con el storefront (E-09) |
 | D9 | **El rol vendedor existe con alcance acotado** | Crea pedidos, registra cobros y consulta catálogo/clientes; no edita precios, no reembolsa, no gestiona usuarios |
 | D10 | **El operador de plataforma no lee datos de negocio** | Solo ve salud, logs y métricas; la impersonación auditada queda fuera del MVP |
+| D12 | **Costo promedio ponderado (CPP)** como método de costeo | Al recibir una compra: `(stock × costo + cantidad × costo_nuevo) / (stock + cantidad)`. FIFO y último costo quedan descartados para el MVP |
+| D13 | **Recibir una compra suma stock**; el borrador no lo toca | El stock nunca se edita a mano: entra por compra recibida o por ajuste registrado |
+| D14 | **La compra guarda la factura del proveedor** (número y fecha) | Las cuentas por pagar y los vencimientos quedan fuera del MVP |
+| D15 | **Compras vive dentro de Catalog**, sin servicio nuevo | El costo y el stock son del catálogo; además la constitución limita a 9 servicios y ya hay 8 |
 
 ---
 
