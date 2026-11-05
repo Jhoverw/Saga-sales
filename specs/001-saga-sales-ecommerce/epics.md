@@ -469,6 +469,19 @@ Escenario: el borrador no toca el stock
   Entonces el stock sigue en 10
   Y no existe movimiento de entrada
 
+Escenario: compra rápida que entra al inventario de una vez
+  Dado un producto con stock 0 en la sucursal Norte
+  Cuando registro una compra de 24 unidades a 0,35 en la sucursal Norte y pido recibirla ahora
+  Entonces el stock de Norte pasa a 24 en ese mismo paso
+  Y la compra queda recibida, sin borrador intermedio
+  Y existe un movimiento de entrada de 24 unidades
+
+Escenario: compra grande que se guarda para después
+  Dado una compra de 200 unidades en cinco líneas
+  Cuando la guardo sin recibir
+  Entonces queda en borrador y ningún producto cambia de stock
+  Y al recibirla más tarde entra todo junto
+
 Escenario: recepción única
   Dada una compra ya recibida
   Cuando intento recibirla otra vez
@@ -715,7 +728,7 @@ Pendientes:
 | D9 | **El rol vendedor existe con alcance acotado** | Crea pedidos, registra cobros y consulta catálogo/clientes; no edita precios, no reembolsa, no gestiona usuarios |
 | D10 | **El operador de plataforma no lee datos de negocio** | Solo ve salud, logs y métricas; la impersonación auditada queda fuera del MVP |
 | D12 | **Costo promedio ponderado (CPP)** como método de costeo | Al recibir una compra: `(stock × costo + cantidad × costo_nuevo) / (stock + cantidad)`. FIFO y último costo quedan descartados para el MVP |
-| D13 | **Recibir una compra suma stock**; el borrador no lo toca | El stock nunca se edita a mano: entra por compra recibida o por ajuste registrado |
+| D13 | **Recibir una compra suma stock**; el borrador no lo toca | El stock nunca se edita a mano: entra por compra recibida o por ajuste registrado. **Recibir es el comportamiento por defecto**: registrar una compra la recibe en la misma transacción, y `receiveNow: false` queda para el pedido grande que llega después |
 | D14 | **La compra guarda la factura del proveedor** (número y fecha) | Las cuentas por pagar y los vencimientos quedan fuera del MVP |
 | D15 | **Compras vive dentro de Catalog**, sin servicio nuevo | El costo y el stock son del catálogo; además la constitución limita a 9 servicios y ya hay 8 |
 | D16 | **El stock es por sucursal** | `products.stock_quantity` deja de ser la verdad: el total se calcula sumando sucursales. Vender exige sucursal y no cruza stock entre locales |
