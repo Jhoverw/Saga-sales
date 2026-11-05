@@ -6,11 +6,15 @@ public sealed class RegisterTenantCommandValidator : AbstractValidator<Commands.
 {
     public RegisterTenantCommandValidator()
     {
+        // The slug is normalised in the handler ("Mi Tienda Cafe" -> "mi-tienda-cafe"), so the
+        // validator only checks that there is something a slug can be built from. Enforcing the
+        // final shape here rejected perfectly valid store names before the handler could clean them.
         RuleFor(x => x.Slug)
             .NotEmpty()
-            .MaximumLength(50)
-            .Matches("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
-            .WithMessage("Slug must be lowercase letters, digits and hyphens.");
+            .WithMessage("Escribe un identificador para la tienda.")
+            .MaximumLength(200)
+            .Must(value => value is not null && value.Any(char.IsLetterOrDigit))
+            .WithMessage("El identificador necesita al menos una letra o un digito.");
 
         RuleFor(x => x.DisplayName).NotEmpty().MaximumLength(200);
 

@@ -19,6 +19,17 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
         {
             await next(context);
         }
+        catch (ValidationException ex)
+        {
+            // The field-level reasons are the useful part: without them the client can only say
+            // "validation failed" and the operator has no idea which box to fix.
+            logger.LogWarning(
+                "Validation error on {Path}: {Errors}",
+                context.Request.Path,
+                string.Join("; ", ex.Errors.Select(e => $"{e.Key}: {string.Join(", ", e.Value)}")));
+
+            await WriteAsync(context, ex.StatusCode, ex.Code, ex.Message, ex.Errors);
+        }
         catch (SagaSalesException ex)
         {
             logger.LogWarning(ex, "Domain error {Code} on {Path}", ex.Code, context.Request.Path);
@@ -54,7 +65,12 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
         }
     }
 
-    private static async Task WriteAsync(HttpContext context, int statusCode, string code, string message)
+    private static async Task WriteAsync(
+        HttpContext context,
+        int statusCode,
+        string code,
+        string message,
+        object? details = null)
     {
         if (context.Response.HasStarted)
         {
@@ -63,7 +79,14 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
 
         context.Response.Clear();
         context.Response.StatusCode = statusCode;
-        await context.Response.WriteAsJsonAsync(new { code, message });
+
+        if (details is null)
+        {
+            await context.Response.WriteAsJsonAsync(new { code, message });
+            return;
+        }
+
+        await context.Response.WriteAsJsonAsync(new { code, message, errors = details });
     }
 }
 
