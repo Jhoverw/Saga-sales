@@ -13,13 +13,19 @@
   </ItemGroup>
 
   <!--
-    No PackageReference to Microsoft.AspNetCore.Components.*: the BlazorWebAssembly SDK already
-    supplies the runtime, the components and the matching blazor.webassembly.js.
+    No PackageReference to Microsoft.AspNetCore.Components.WebAssembly: the SDK already supplies
+    the runtime and the matching blazor.webassembly.js.
 
-    Pinning those packages to an older band was the cause of
-    "TypeError: Cannot read properties of undefined (reading 'getI32')": a v8 script was being
-    loaded against the .NET 10 runtime, so the renderer's memory view did not exist.
+    Pinning it to 8.0.4 was the cause of
+    "TypeError: Cannot read properties of undefined (reading 'getI32')": the v8 script was loaded
+    against the .NET 10 runtime, so the renderer's memory view did not exist.
   -->
+
+  <ItemGroup>
+    <!-- AuthorizeView / AddAuthorizationCore are not in the Blazor runtime pack. It ships only
+         managed code, so it must merely match the framework band (10.x). -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <Content Update="wwwroot\appsettings.json" CopyToOutputDirectory="PreserveNewest" />
