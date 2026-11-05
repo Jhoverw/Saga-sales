@@ -1,0 +1,285 @@
+@page "/purchases"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<div class="page-head">
+    <div>
+        <h1>Compras</h1>
+        <div class="page-head__sub">Lo que entra al inventario, a qué costo y con qué lote</div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+@if (Branches.Count == 0)
+{
+    <div class="panel">
+        <div class="panel__body">
+            <p class="mb-3">Antes de registrar una compra necesitas una sucursal donde recibir la mercancía.</p>
+            <button class="btn btn-primary" @onclick="CreateFirstBranchAsync">Crear sucursal «Principal»</button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="panel">
+        <div class="panel__head">Registrar compra</div>
+        <div class="panel__body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Proveedor</label>
+                    <select class="form-select" @bind="SupplierId">
+                        <option value="@Guid.Empty">— elige —</option>
+                        @foreach (var s in Suppliers)
+                        {
+                            <option value="@s.Id">@s.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Sucursal</label>
+                    <select class="form-select" @bind="BranchId">
+                        @foreach (var b in Branches)
+                        {
+                            <option value="@b.Id">@b.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Producto</label>
+                    <select class="form-select" @bind="ProductId">
+                        <option value="@Guid.Empty">— elige —</option>
+                        @foreach (var p in Products)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Factura del proveedor</label>
+                    <input class="form-control" @bind="InvoiceNumber" @bind:event="oninput" placeholder="opcional" />
+                </div>
+            </div>
+
+            <div class="row g-2 align-items-end mt-1">
+                <div class="col-md-2">
+                    <label class="form-label">Cantidad</label>
+                    <input class="form-control" type="number" min="1" @bind="Quantity" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Costo unitario</label>
+                    <input class="form-control" type="number" step="0.01" min="0.01" @bind="UnitCost" />
+                </div>
+
+                @if (SelectedProductTracksBatches)
+                {
+                    <div class="col-md-2">
+                        <label class="form-label">Lote</label>
+                        <input class="form-control" @bind="LotCode" @bind:event="oninput" placeholder="A-2026" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Caduca</label>
+                        <input class="form-control" type="date" @bind="ExpiresAt" />
+                    </div>
+                }
+
+                <div class="col-md-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="ReceiveNow" id="receiveNow" />
+                        <label class="form-check-label" for="receiveNow">Recibir ahora</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" @onclick="RegisterAsync" disabled="@Busy">
+                        @(Busy ? "Guardando..." : "Registrar")
+                    </button>
+                </div>
+            </div>
+
+            <p class="page-head__sub mb-0 mt-2">
+                Con «Recibir ahora» el stock entra en el mismo paso. Desmárcalo si la mercancía llega después.
+            </p>
+        </div>
+    </div>
+}
+
+<div class="panel mt-3">
+    <div class="panel__head">Últimas compras</div>
+    <div class="panel__body p-0">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Proveedor</th>
+                    <th>Sucursal</th>
+                    <th>Factura</th>
+                    <th class="text-end">Total</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var purchase in PurchaseList)
+                {
+                    <tr>
+                        <td>@purchase.PurchasedAt.ToString("dd/MM/yyyy")</td>
+                        <td>@SupplierName(purchase.SupplierId)</td>
+                        <td>@BranchName(purchase.BranchId)</td>
+                        <td>@(purchase.SupplierInvoiceNumber ?? "—")</td>
+                        <td class="text-end">@purchase.Total.ToString("C")</td>
+                        <td><span class="chip">@StatusLabel(purchase.Status)</span></td>
+                    </tr>
+                }
+                @if (PurchaseList.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center py-3">Todavía no hay compras.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private List<BranchDto> Branches { get; set; } = [];
+    private List<SupplierDto> Suppliers { get; set; } = [];
+    private List<ProductDto> Products { get; set; } = [];
+    private List<PurchaseDto> PurchaseList { get; set; } = [];
+
+    private Guid SupplierId { get; set; } = Guid.Empty;
+    private Guid BranchId { get; set; } = Guid.Empty;
+    private Guid ProductId { get; set; } = Guid.Empty;
+    private string InvoiceNumber { get; set; } = string.Empty;
+    private string LotCode { get; set; } = string.Empty;
+    private string ExpiresAt { get; set; } = string.Empty;
+    private int Quantity { get; set; } = 1;
+    private decimal UnitCost { get; set; }
+    private bool ReceiveNow { get; set; } = true;
+
+    private string? Message { get; set; }
+    private bool Error { get; set; }
+    private bool Busy { get; set; }
+
+    private bool SelectedProductTracksBatches
+        => Products.FirstOrDefault(p => p.Id == ProductId)?.TracksBatches ?? false;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Branches = await Api.GetBranchesAsync() ?? [];
+        Suppliers = await Api.GetSuppliersAsync() ?? [];
+        Products = await Api.GetProductsAsync(1, 100) is { } page ? page.Items.ToList() : [];
+        PurchaseList = await Api.GetPurchasesAsync(1, 20) is { } purchases ? purchases.Items.ToList() : [];
+
+        if (BranchId == Guid.Empty && Branches.Count > 0)
+        {
+            BranchId = Branches.First(b => b.IsDefault).Id;
+        }
+
+        if (SupplierId == Guid.Empty && Suppliers.Count > 0)
+        {
+            SupplierId = Suppliers[0].Id;
+        }
+    }
+
+    private async Task CreateFirstBranchAsync()
+    {
+        var branch = await Api.CreateBranchAsync(new CreateBranchRequest
+        {
+            Name = "Principal",
+            IsDefault = true,
+        });
+
+        Message = branch is null ? "No se pudo crear la sucursal." : $"Sucursal «{branch.Name}» creada.";
+        Error = branch is null;
+        await LoadAsync();
+    }
+
+    private async Task RegisterAsync()
+    {
+        Message = null;
+        Error = false;
+
+        if (SupplierId == Guid.Empty || BranchId == Guid.Empty || ProductId == Guid.Empty)
+        {
+            Message = "Elige proveedor, sucursal y producto.";
+            Error = true;
+            return;
+        }
+
+        if (SelectedProductTracksBatches && string.IsNullOrWhiteSpace(LotCode))
+        {
+            Message = "Este producto lleva lote: escribe el código.";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+
+        try
+        {
+            DateTime? expires = null;
+            if (DateTime.TryParse(ExpiresAt, out var parsed))
+            {
+                expires = parsed;
+            }
+
+            var request = new CreatePurchaseRequest
+            {
+                SupplierId = SupplierId,
+                BranchId = BranchId,
+                ReceiveNow = ReceiveNow,
+                SupplierInvoiceNumber = string.IsNullOrWhiteSpace(InvoiceNumber) ? null : InvoiceNumber.Trim(),
+                Lines =
+                [
+                    new PurchaseLineRequest
+                    {
+                        ProductId = ProductId,
+                        Quantity = Quantity,
+                        UnitCost = UnitCost,
+                        CostIncludesTax = true,
+                        LotCode = string.IsNullOrWhiteSpace(LotCode) ? null : LotCode.Trim(),
+                        ExpiresAt = expires,
+                    },
+                ],
+            };
+
+            var created = await Api.CreatePurchaseAsync(request);
+
+            if (created is null)
+            {
+                Message = "No se pudo registrar la compra. Revisa la cantidad y el costo.";
+                Error = true;
+                return;
+            }
+
+            Message = created.Status == 2
+                ? $"Compra recibida: {created.Total:C}. El stock ya entró."
+                : $"Compra guardada en borrador: {created.Total:C}.";
+
+            LotCode = string.Empty;
+            ExpiresAt = string.Empty;
+            await LoadAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private string SupplierName(Guid id)
+        => Suppliers.FirstOrDefault(s => s.Id == id)?.Name ?? "—";
+
+    private string BranchName(Guid? id)
+        => id is null ? "—" : Branches.FirstOrDefault(b => b.Id == id.Value)?.Name ?? "—";
+
+    private static string StatusLabel(short status) => status switch
+    {
+        1 => "Borrador",
+        2 => "Recibida",
+        3 => "Anulada",
+        _ => status.ToString(),
+    };
+}

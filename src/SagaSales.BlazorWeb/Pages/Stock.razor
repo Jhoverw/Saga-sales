@@ -1,0 +1,162 @@
+@page "/stock"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<div class="page-head">
+    <div>
+        <h1>Existencias</h1>
+        <div class="page-head__sub">Cuánto hay en cada sucursal, dónde está y qué caduca pronto</div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel__body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label">Producto</label>
+                <select class="form-select" @bind="ProductId">
+                    <option value="@Guid.Empty">— elige —</option>
+                    @foreach (var p in Products)
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-outline-secondary w-100" @onclick="LoadStockAsync">Ver existencias</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Selected is not null)
+{
+    <div class="panel mt-3">
+        <div class="panel__head">
+            @Selected.Name · costo @(Selected.Cost?.ToString("C") ?? "desconocido") · margen @(Selected.MarginPercent?.ToString("0.#") ?? "—") %
+        </div>
+        <div class="panel__body p-0">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Sucursal</th>
+                        <th class="text-end">Unidades</th>
+                        <th>Piso</th>
+                        <th>Pasillo</th>
+                        <th>Estantería</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in StockRows)
+                    {
+                        <tr>
+                            <td>
+                                @row.BranchName
+                                @if (row.IsDefault)
+                                {
+                                    <span class="chip chip--ok">principal</span>
+                                }
+                            </td>
+                            <td class="text-end">@row.Quantity</td>
+                            <td><input class="form-control form-control-sm" @bind="row.Floor" /></td>
+                            <td><input class="form-control form-control-sm" @bind="row.Aisle" /></td>
+                            <td><input class="form-control form-control-sm" @bind="row.Shelf" /></td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-primary" @onclick="() => SaveLocationAsync(row)">Guardar</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (StockRows.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center py-3">Este producto todavía no tiene existencias.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<div class="panel mt-3">
+    <div class="panel__head">Próximos a vencer</div>
+    <div class="panel__body p-0">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Sucursal</th>
+                    <th>Lote</th>
+                    <th>Caduca</th>
+                    <th class="text-end">Días</th>
+                    <th class="text-end">Unidades</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var batch in Expiring)
+                {
+                    <tr>
+                        <td>@batch.ProductName</td>
+                        <td>@batch.BranchName</td>
+                        <td>@batch.LotCode</td>
+                        <td>@batch.ExpiresAt?.ToString("dd/MM/yyyy")</td>
+                        <td class="text-end">
+                            <span class="chip @(batch.DaysLeft is <= 5 ? "chip--danger" : "chip--warn")">
+                                @batch.DaysLeft
+                            </span>
+                        </td>
+                        <td class="text-end">@batch.Quantity</td>
+                    </tr>
+                }
+                @if (Expiring.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center py-3">Nada por vencer en el plazo configurado.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert alert-info mt-3">@Message</div>
+}
+
+@code {
+    private List<ProductDto> Products { get; set; } = [];
+    private List<StockByBranchDto> StockRows { get; set; } = [];
+    private List<ExpiringBatchDto> Expiring { get; set; } = [];
+
+    private Guid ProductId { get; set; } = Guid.Empty;
+    private string? Message { get; set; }
+
+    private ProductDto? Selected => Products.FirstOrDefault(p => p.Id == ProductId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Products = await Api.GetProductsAsync(1, 100) is { } page ? page.Items.ToList() : [];
+        Expiring = await Api.GetExpiringAsync() ?? [];
+    }
+
+    private async Task LoadStockAsync()
+    {
+        Message = null;
+        StockRows = ProductId == Guid.Empty
+            ? []
+            : await Api.GetStockByBranchAsync(ProductId) ?? [];
+    }
+
+    private async Task SaveLocationAsync(StockByBranchDto row)
+    {
+        var saved = await Api.SetLocationAsync(ProductId, new SetLocationRequest
+        {
+            BranchId = row.BranchId,
+            Floor = row.Floor,
+            Aisle = row.Aisle,
+            Shelf = row.Shelf,
+        });
+
+        Message = saved
+            ? $"Ubicación guardada en {row.BranchName}."
+            : "No se pudo guardar la ubicación.";
+    }
+}

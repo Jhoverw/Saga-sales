@@ -129,4 +129,58 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
         return request;
     }
+
+    // ── branches and settings (E-13) ────────────────────────────────────────
+    public Task<List<BranchDto>?> GetBranchesAsync() => GetAsync<List<BranchDto>>("api/branches");
+
+    public Task<BranchDto?> CreateBranchAsync(CreateBranchRequest request)
+        => PostAsync<BranchDto>("api/branches", request);
+
+    public Task<SettingsDto?> GetSettingsAsync() => GetAsync<SettingsDto>("api/settings");
+
+    public async Task<SettingsDto?> UpdateSettingsAsync(UpdateSettingsRequest request)
+    {
+        var response = await http.PutAsJsonAsync("api/settings", request);
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<SettingsDto>()
+            : null;
+    }
+
+    // ── suppliers and purchases (E-12) ──────────────────────────────────────
+    public Task<List<SupplierDto>?> GetSuppliersAsync() => GetAsync<List<SupplierDto>>("api/suppliers");
+
+    public Task<SupplierDto?> CreateSupplierAsync(CreateSupplierRequest request)
+        => PostAsync<SupplierDto>("api/suppliers", request);
+
+    public Task<PagedResult<PurchaseDto>?> GetPurchasesAsync(int pageNumber = 1, int pageSize = 20)
+        => GetAsync<PagedResult<PurchaseDto>>($"api/purchases?pageNumber={pageNumber}&pageSize={pageSize}");
+
+    public async Task<PurchaseDto?> CreatePurchaseAsync(CreatePurchaseRequest request)
+    {
+        var response = await http.PostAsJsonAsync("api/purchases", request);
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<PurchaseDto>()
+            : null;
+    }
+
+    public async Task<PurchaseDto?> ReceivePurchaseAsync(Guid id)
+    {
+        var response = await http.PostAsync($"api/purchases/{id}/receive", null);
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<PurchaseDto>()
+            : null;
+    }
+
+    // ── inventory (E-13) ────────────────────────────────────────────────────
+    public Task<List<StockByBranchDto>?> GetStockByBranchAsync(Guid productId)
+        => GetAsync<List<StockByBranchDto>>($"api/inventory/products/{productId}/branches");
+
+    public async Task<bool> SetLocationAsync(Guid productId, SetLocationRequest request)
+    {
+        var response = await http.PutAsJsonAsync($"api/inventory/products/{productId}/location", request);
+        return response.IsSuccessStatusCode;
+    }
+
+    public Task<List<ExpiringBatchDto>?> GetExpiringAsync(int maxRows = 50)
+        => GetAsync<List<ExpiringBatchDto>>($"api/inventory/expiring?maxRows={maxRows}");
 }
