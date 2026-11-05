@@ -52,6 +52,9 @@ public class PurchaseDto
 
     public string? SupplierName { get; set; }
 
+    /// <summary>The branch the goods land in. Null on drafts created before E-13.</summary>
+    public Guid? BranchId { get; set; }
+
     /// <summary>1 draft · 2 received · 3 cancelled.</summary>
     public short Status { get; set; }
 
@@ -92,6 +95,11 @@ public class PurchaseLineDto
     public decimal EffectiveUnitCost { get; set; }
 
     public decimal LineTotal { get; set; }
+
+    /// <summary>Lot the goods came in, when the product tracks batches.</summary>
+    public string? LotCode { get; set; }
+
+    public DateTime? ExpiresAt { get; set; }
 }
 
 /// <summary>
@@ -101,6 +109,15 @@ public class PurchaseLineDto
 public class CreatePurchaseRequest
 {
     public Guid SupplierId { get; set; }
+
+    /// <summary>Where the goods land. Null: the store's default branch.</summary>
+    public Guid? BranchId { get; set; }
+
+    /// <summary>
+    /// Receive in the same call. True by default: registering a purchase and entering the inventory
+    /// look like one action. Set it to false for a big order that arrives later.
+    /// </summary>
+    public bool ReceiveNow { get; set; } = true;
 
     public string? SupplierInvoiceNumber { get; set; }
 
@@ -125,6 +142,11 @@ public class PurchaseLineRequest
     public bool CostIncludesTax { get; set; } = true;
 
     public decimal? TaxRate { get; set; }
+
+    /// <summary>Required when the product tracks lots.</summary>
+    public string? LotCode { get; set; }
+
+    public DateTime? ExpiresAt { get; set; }
 }
 
 // ── kardex ──────────────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@ builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IPriceListRepository, PriceListRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IPurchaseRepository, PurchaseRepository>();
+builder.Services.AddScoped<IBranchRepository, BranchRepository>();
 
 // Catalog publishes product events; it consumes none of its own.
 builder.Services.AddSagaSalesMessageBus(builder.Configuration);

@@ -44,10 +44,10 @@ public interface IProductRepository
         bool descending,
         CancellationToken cancellationToken);
 
-    /// <summary>Reserves stock atomically; throws <c>INSUFFICIENT_STOCK</c> when short.</summary>
-    Task<StockReservation> ReserveStockAsync(Guid id, int quantity, CancellationToken cancellationToken);
+    /// <summary>Reserves stock atomically in a branch; throws <c>INSUFFICIENT_STOCK</c> when short.</summary>
+    Task<StockReservation> ReserveStockAsync(Guid id, int quantity, Guid? branchId, CancellationToken cancellationToken);
 
-    Task ReleaseStockAsync(Guid id, int quantity, CancellationToken cancellationToken);
+    Task ReleaseStockAsync(Guid id, int quantity, Guid? branchId, CancellationToken cancellationToken);
 }
 
 public sealed record ProductListResult(IReadOnlyList<Product> Items, int TotalCount);
@@ -165,11 +165,16 @@ public sealed class ProductRepository(
         return new ProductListResult(items, total);
     }
 
-    public async Task<StockReservation> ReserveStockAsync(Guid id, int quantity, CancellationToken cancellationToken)
+    public async Task<StockReservation> ReserveStockAsync(
+        Guid id,
+        int quantity,
+        Guid? branchId,
+        CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
             .With("product_id", id)
-            .With("quantity", quantity);
+            .With("quantity", quantity)
+            .With("branch_id", branchId);
 
         var reservation = await executor.QueryProcSingleAsync<StockReservation>(
             "dbo.sp_stock_reserve", arguments, cancellationToken: cancellationToken);
@@ -182,11 +187,12 @@ public sealed class ProductRepository(
         return reservation;
     }
 
-    public Task ReleaseStockAsync(Guid id, int quantity, CancellationToken cancellationToken)
+    public Task ReleaseStockAsync(Guid id, int quantity, Guid? branchId, CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
             .With("product_id", id)
-            .With("quantity", quantity);
+            .With("quantity", quantity)
+            .With("branch_id", branchId);
 
         return executor.ExecuteProcAsync("dbo.sp_stock_release", arguments, cancellationToken: cancellationToken);
     }

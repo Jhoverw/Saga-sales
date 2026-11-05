@@ -4,12 +4,14 @@ using SagaSales.Catalog.Data;
 using SagaSales.Shared.DTOs;
 
 /// <summary>
-/// Records a purchase from a supplier. The product name is resolved here so the line keeps a
-/// snapshot: if the product is renamed later, the purchase still shows what was bought.
+/// Records a purchase from a supplier and, by default, receives it in the same transaction:
+/// the goods and the stock either both land or neither does (decision D13).
 /// </summary>
 public record CreatePurchaseCommand(
     Guid SupplierId,
     IReadOnlyList<PurchaseLineRequest> Lines,
+    Guid? BranchId = null,
+    bool ReceiveNow = true,
     string? SupplierInvoiceNumber = null,
     DateTime? PurchasedAt = null,
     string? Notes = null) : ICommand<PurchaseDto>;
@@ -41,7 +43,9 @@ public sealed class CreatePurchaseCommandHandler(
                 line.Quantity,
                 line.UnitCost,
                 line.CostIncludesTax,
-                line.TaxRate));
+                line.TaxRate,
+                string.IsNullOrWhiteSpace(line.LotCode) ? null : line.LotCode.Trim(),
+                line.ExpiresAt));
         }
 
         var purchase = await purchases.CreateAsync(
@@ -51,17 +55,16 @@ public sealed class CreatePurchaseCommandHandler(
             request.Notes,
             currentUser.UserId ?? Guid.Empty,
             drafts,
+            request.BranchId,
+            request.ReceiveNow,
             cancellationToken);
 
         return Result<PurchaseDto>.Success(purchase);
     }
 }
 
-/// <summary>
-/// Receives a purchase: brings the stock in, recalculates the weighted average cost and writes the
-/// kardex. Receiving twice returns 409 (decision D13).
-/// </summary>
-public record ReceivePurchaseCommand(Guid PurchaseId) : ICommand<PurchaseDto>;
+/// <summary>Receives a purchase that was left as a draft. Receiving twice returns 409.</summary>
+public record ReceivePurchaseCommand(Guid PurchaseId, Guid? BranchId = null) : ICommand<PurchaseDto>;
 
 public sealed class ReceivePurchaseCommandHandler(
     IPurchaseRepository purchases,
@@ -71,7 +74,9 @@ public sealed class ReceivePurchaseCommandHandler(
     {
         Guard.AgainstEmptyGuid(request.PurchaseId, nameof(request.PurchaseId));
 
-        var purchase = await purchases.ReceiveAsync(request.PurchaseId, currentUser.UserId, cancellationToken);
+        var purchase = await purchases.ReceiveAsync(
+            request.PurchaseId, request.BranchId, currentUser.UserId, cancellationToken);
+
         return Result<PurchaseDto>.Success(purchase);
     }
 }

@@ -1,10 +1,12 @@
 namespace SagaSales.Catalog.Commands;
 
 /// <summary>
-/// Atomically reserves stock for an order line. The whole operation is one conditional
-/// transaction inside <c>sp_stock_reserve</c>, so concurrent orders cannot oversell (FR-011).
+/// Atomically reserves stock in one branch (E-13, D16). When the branch is not given, the store's
+/// default branch is used. For products that track lots, the oldest expiry is consumed first (FEFO)
+/// and an expired lot is never sold (D18).
 /// </summary>
-public record ReserveStockCommand(Guid ProductId, int Quantity) : ICommand<ProductDto>;
+public record ReserveStockCommand(Guid ProductId, int Quantity, Guid? BranchId = null)
+    : ICommand<ProductDto>;
 
 public sealed class ReserveStockCommandHandler(
     IProductRepository repository,
@@ -17,7 +19,8 @@ public sealed class ReserveStockCommandHandler(
         Guard.AgainstNegativeOrZero(request.Quantity, nameof(request.Quantity));
 
         // NOT_FOUND and INSUFFICIENT_STOCK come from the procedure and map to 404 / 409.
-        var reservation = await repository.ReserveStockAsync(request.ProductId, request.Quantity, cancellationToken);
+        var reservation = await repository.ReserveStockAsync(
+            request.ProductId, request.Quantity, request.BranchId, cancellationToken);
 
         await eventBus.PublishAsync(
             new CatalogProductUpdatedEvent(

@@ -17,10 +17,12 @@ public interface IPurchaseRepository
         string? notes,
         Guid createdBy,
         IReadOnlyList<PurchaseLineDraft> lines,
+        Guid? branchId,
+        bool receiveNow,
         CancellationToken cancellationToken);
 
     /// <summary>Receives the purchase: stock in, weighted cost and kardex.</summary>
-    Task<PurchaseDto> ReceiveAsync(Guid purchaseId, Guid? receivedBy, CancellationToken cancellationToken);
+    Task<PurchaseDto> ReceiveAsync(Guid purchaseId, Guid? branchId, Guid? receivedBy, CancellationToken cancellationToken);
 
     Task<PurchaseDto?> GetAsync(Guid purchaseId, CancellationToken cancellationToken);
 
@@ -38,7 +40,9 @@ public sealed record PurchaseLineDraft(
     int Quantity,
     decimal UnitCost,
     bool CostIncludesTax,
-    decimal? TaxRate);
+    decimal? TaxRate,
+    string? LotCode = null,
+    DateTime? ExpiresAt = null);
 
 public sealed record PurchaseListResult(IReadOnlyList<PurchaseDto> Items, int TotalCount);
 
@@ -55,6 +59,8 @@ public sealed class PurchaseRepository(
         string? notes,
         Guid createdBy,
         IReadOnlyList<PurchaseLineDraft> lines,
+        Guid? branchId,
+        bool receiveNow,
         CancellationToken cancellationToken)
     {
         var payload = JsonSerializer.Serialize(
@@ -66,6 +72,8 @@ public sealed class PurchaseRepository(
                 unitCost = l.UnitCost,
                 costIncludesTax = l.CostIncludesTax,
                 taxRate = l.TaxRate,
+                lotCode = l.LotCode,
+                expiresAt = l.ExpiresAt,
             }),
             Json);
 
@@ -75,7 +83,9 @@ public sealed class PurchaseRepository(
             .With("lines_json", payload)
             .With("supplier_invoice_number", supplierInvoiceNumber)
             .With("purchased_at", purchasedAt)
-            .With("notes", notes);
+            .With("notes", notes)
+            .With("branch_id", branchId)
+            .With("receive", receiveNow);
 
         var row = await executor.QueryProcSingleAsync<PurchaseRow>(
             "dbo.sp_purchase_create", arguments, cancellationToken: cancellationToken);
@@ -86,12 +96,14 @@ public sealed class PurchaseRepository(
 
     public async Task<PurchaseDto> ReceiveAsync(
         Guid purchaseId,
+        Guid? branchId,
         Guid? receivedBy,
         CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
             .With("purchase_id", purchaseId)
-            .With("received_by", receivedBy);
+            .With("received_by", receivedBy)
+            .With("branch_id", branchId);
 
         // INVALID_TRANSITION comes from the procedure and maps to 409 (already received).
         var row = await executor.QueryProcSingleAsync<PurchaseRow>(
@@ -166,6 +178,8 @@ public sealed class PurchaseRepository(
 
         public string? SupplierName { get; set; }
 
+        public Guid? BranchId { get; set; }
+
         public short Status { get; set; }
 
         public string? SupplierInvoiceNumber { get; set; }
@@ -189,6 +203,7 @@ public sealed class PurchaseRepository(
             Id = Id,
             SupplierId = SupplierId,
             SupplierName = SupplierName,
+            BranchId = BranchId,
             Status = Status,
             SupplierInvoiceNumber = SupplierInvoiceNumber,
             PurchasedAt = PurchasedAt,
@@ -210,6 +225,8 @@ public sealed class PurchaseRepository(
                 EffectiveUnitCost = l.CostIncludesTax || l.TaxRate is null
                     ? l.UnitCost
                     : Math.Round(l.UnitCost * (1 + (l.TaxRate.Value / 100m)), 4),
+                LotCode = l.LotCode,
+                ExpiresAt = l.ExpiresAt,
             }).ToList(),
         };
     }
@@ -232,6 +249,10 @@ public sealed class PurchaseRepository(
 
         public decimal LineTotal { get; set; }
 
+        public string? LotCode { get; set; }
+
+        public DateTime? ExpiresAt { get; set; }
+
         public PurchaseLineDto ToDto() => new()
         {
             ProductId = ProductId,
@@ -242,6 +263,8 @@ public sealed class PurchaseRepository(
             TaxRate = TaxRate,
             EffectiveUnitCost = EffectiveUnitCost,
             LineTotal = LineTotal,
+            LotCode = LotCode,
+            ExpiresAt = ExpiresAt,
         };
     }
 

@@ -121,7 +121,7 @@ public sealed class ProductsController(IMediator mediator) : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(
-            new Commands.ReserveStockCommand(id, request.Quantity),
+            new Commands.ReserveStockCommand(id, request.Quantity, request.BranchId),
             cancellationToken);
 
         return Ok(result.Value);
@@ -135,7 +135,7 @@ public sealed class ProductsController(IMediator mediator) : ControllerBase
         [FromBody] ReserveStockRequest request,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(new Commands.ReleaseStockCommand(id, request.Quantity), cancellationToken);
+        await mediator.Send(new Commands.ReleaseStockCommand(id, request.Quantity, request.BranchId), cancellationToken);
         return NoContent();
     }
 

@@ -62,11 +62,13 @@ public sealed class PurchasesController(IMediator mediator) : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new Commands.CreatePurchaseCommand(
-            request.SupplierId,
-            request.Lines.ToList(),
-            request.SupplierInvoiceNumber,
-            request.PurchasedAt,
-            request.Notes);
+            SupplierId: request.SupplierId,
+            Lines: request.Lines.ToList(),
+            BranchId: request.BranchId,
+            ReceiveNow: request.ReceiveNow,
+            SupplierInvoiceNumber: request.SupplierInvoiceNumber,
+            PurchasedAt: request.PurchasedAt,
+            Notes: request.Notes);
 
         var result = await mediator.Send(command, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
@@ -98,9 +100,12 @@ public sealed class PurchasesController(IMediator mediator) : ControllerBase
     /// </summary>
     [HttpPost("{id:guid}/receive")]
     [ProducesResponseType(typeof(PurchaseDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Receive(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Receive(
+        Guid id,
+        [FromQuery] Guid? branchId = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new Commands.ReceivePurchaseCommand(id), cancellationToken);
+        var result = await mediator.Send(new Commands.ReceivePurchaseCommand(id, branchId), cancellationToken);
         return Ok(result.Value);
     }
 }
