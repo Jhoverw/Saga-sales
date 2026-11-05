@@ -75,7 +75,7 @@ BEGIN
     SELECT id           AS Id,
            slug         AS Slug,
            display_name AS DisplayName,
-           plan         AS Plan,
+           plan_name    AS PlanName,
            status       AS Status,
            custom_domain AS CustomDomain,
            created_at   AS CreatedAt
