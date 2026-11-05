@@ -4,7 +4,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!--
+      Documentation files are for packages; nothing here ships as one. Keeping it true made every
+      public member emit SA1600/CS1591, which buried real build errors in hundreds of lines of noise
+      inside the Docker logs.
+    -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <Version>1.0.0</Version>
     <Authors>Saga Family</Authors>
