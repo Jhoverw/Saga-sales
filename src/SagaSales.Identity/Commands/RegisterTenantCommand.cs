@@ -1,5 +1,9 @@
 namespace SagaSales.Identity.Commands;
 
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+
 /// <summary>
 /// Registers a store plus its first administrator. Uniqueness and the atomic creation of both
 /// records are enforced by <c>sp_tenant_create</c>, not by the handler.
@@ -24,7 +28,15 @@ public sealed class RegisterTenantCommandHandler(
         Guard.AgainstNullOrEmpty(request.AdminEmail, nameof(request.AdminEmail));
         Guard.AgainstNullOrEmpty(request.AdminPassword, nameof(request.AdminPassword));
 
-        var slug = request.Slug.Trim().ToLowerInvariant();
+        // The slug reaches a CHECK constraint that only accepts lowercase letters, digits and
+        // hyphens, so it is normalised here: the operator types a store name, not a URL fragment.
+        var slug = Slugify(request.Slug);
+
+        if (slug.Length < 2)
+        {
+            throw new ValidationException($"'{request.Slug}' cannot be turned into a valid identifier.");
+        }
+
         var email = request.AdminEmail.Trim().ToLowerInvariant();
 
         // A duplicate slug surfaces from the procedure as CONFLICT → 409.
@@ -42,5 +54,28 @@ public sealed class RegisterTenantCommandHandler(
             AdminEmail = registration.AdminEmail,
             Role = "admin",
         });
+    }
+
+    /// <summary>
+    /// "Mi Tienda Café" becomes "mi-tienda-cafe": accents are decomposed and dropped, anything that
+    /// is not a letter or digit becomes a hyphen, and the result fits the 50 character column.
+    /// </summary>
+    private static string Slugify(string value)
+    {
+        var decomposed = value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(decomposed.Length);
+
+        foreach (var character in decomposed)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+            {
+                builder.Append(character);
+            }
+        }
+
+        var slug = Regex.Replace(builder.ToString().Normalize(NormalizationForm.FormC), "[^a-z0-9]+", "-")
+            .Trim('-');
+
+        return slug.Length > 50 ? slug[..50].Trim('-') : slug;
     }
 }

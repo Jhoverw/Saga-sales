@@ -34,12 +34,21 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
         return login;
     }
 
-    public async Task<RegisterTenantResponse?> RegisterTenantAsync(RegisterTenantRequest request)
+    /// <summary>
+    /// Returns the created store, or the reason it failed. The reason matters: without it the panel
+    /// can only say "revisa los datos", which hides a 409 or a validation error.
+    /// </summary>
+    public async Task<(RegisterTenantResponse? Response, string? Error)> RegisterTenantAsync(RegisterTenantRequest request)
     {
         var response = await http.PostAsJsonAsync("api/auth/register-tenant", request);
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<RegisterTenantResponse>()
-            : null;
+
+        if (response.IsSuccessStatusCode)
+        {
+            return (await response.Content.ReadFromJsonAsync<RegisterTenantResponse>(), null);
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        return (null, $"{(int)response.StatusCode} · {body}");
     }
 
     // ── catalog ─────────────────────────────────────────────────────────────

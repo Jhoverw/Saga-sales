@@ -54,7 +54,7 @@
 
         try
         {
-            var response = await Api.RegisterTenantAsync(new RegisterTenantRequest
+            var (response, error) = await Api.RegisterTenantAsync(new RegisterTenantRequest
             {
                 Slug = Slug,
                 DisplayName = DisplayName,
@@ -63,8 +63,8 @@
             });
 
             Message = response is null
-                ? "No se pudo crear el tenant. Revisa los datos."
-                : $"Tenant creado. Ya puedes entrar con {response.AdminEmail}.";
+                ? $"No se pudo crear la tienda. {error}"
+                : $"Tienda creada. Ya puedes entrar con {response.AdminEmail}.";
         }
         finally
         {
