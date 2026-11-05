@@ -152,7 +152,7 @@ else
     private Guid ProductId { get; set; } = Guid.Empty;
     private string InvoiceNumber { get; set; } = string.Empty;
     private string LotCode { get; set; } = string.Empty;
-    private string ExpiresAt { get; set; } = string.Empty;
+    private DateTime? ExpiresAt { get; set; }
     private int Quantity { get; set; } = 1;
     private decimal UnitCost { get; set; }
     private bool ReceiveNow { get; set; } = true;
@@ -220,12 +220,6 @@ else
 
         try
         {
-            DateTime? expires = null;
-            if (DateTime.TryParse(ExpiresAt, out var parsed))
-            {
-                expires = parsed;
-            }
-
             var request = new CreatePurchaseRequest
             {
                 SupplierId = SupplierId,
@@ -241,7 +235,7 @@ else
                         UnitCost = UnitCost,
                         CostIncludesTax = true,
                         LotCode = string.IsNullOrWhiteSpace(LotCode) ? null : LotCode.Trim(),
-                        ExpiresAt = expires,
+                        ExpiresAt = ExpiresAt,
                     },
                 ],
             };
@@ -260,7 +254,7 @@ else
                 : $"Compra guardada en borrador: {created.Total:C}.";
 
             LotCode = string.Empty;
-            ExpiresAt = string.Empty;
+            ExpiresAt = null;
             await LoadAsync();
         }
         finally
