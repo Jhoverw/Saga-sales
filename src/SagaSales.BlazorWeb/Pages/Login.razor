@@ -1,6 +1,7 @@
 @page "/login"
 @attribute [AllowAnonymous]
 @inject ApiClient Api
+@inject JwtAuthenticationStateProvider AuthState
 @inject NavigationManager Navigation
 
 <div class="page-head">
@@ -55,6 +56,10 @@
                 Error = "Email o contraseña incorrectos.";
                 return;
             }
+
+            // The token is already in storage; the cascading authentication state has to be told,
+            // otherwise the next page still sees an anonymous user and bounces back here.
+            AuthState.NotifyChanged();
 
             Navigation.NavigateTo("/");
         }

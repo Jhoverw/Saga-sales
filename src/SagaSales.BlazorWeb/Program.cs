@@ -14,7 +14,11 @@ var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "http://localhost:5000/"
 
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<TokenStore>();
-builder.Services.AddScoped<AuthenticationStateProvider, JwtAuthenticationStateProvider>();
+
+// The concrete provider is also registered so pages can request it and announce a sign-in:
+// resolving only the abstraction would give them a different instance than the cascading state uses.
+builder.Services.AddScoped<JwtAuthenticationStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<JwtAuthenticationStateProvider>());
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
 builder.Services.AddScoped<ApiClient>();
 
