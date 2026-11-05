@@ -7,6 +7,9 @@ version: '3.8'
 x-app-env: &app-env
   ASPNETCORE_ENVIRONMENT: Development
   ASPNETCORE_URLS: "http://+:80"
+  # The aspnet:10.0 image sets ASPNETCORE_HTTP_PORTS=8080. Pinning it to 80 as well means
+  # whichever of the two wins, Kestrel listens on the port the compose file publishes.
+  ASPNETCORE_HTTP_PORTS: "80"
   Jwt__Issuer: "SagaSales.Identity"
   Jwt__Audience: "SagaSales.Api"
   # Every service needs the same signing key to validate the tokens the gateway accepts.
