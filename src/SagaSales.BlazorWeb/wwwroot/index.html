@@ -46,6 +46,25 @@
             text-transform: uppercase;
             opacity: 0.65;
         }
+        /* Boot diagnostics: if the app cannot start, the reason is shown here instead of
+           leaving the user staring at the spinner with nothing to report. */
+        #saga-boot-error {
+            display: none;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            max-height: 45vh;
+            overflow: auto;
+            margin: 0;
+            padding: 16px 20px;
+            background: #12050a;
+            border-top: 2px solid #f26d6d;
+            color: #ffd9d9;
+            font: 12px/1.5 ui-monospace, Consolas, monospace;
+            white-space: pre-wrap;
+            z-index: 9999;
+        }
     </style>
 </head>
 <body>
@@ -63,17 +82,43 @@
         <a href="" class="reload">Recargar</a>
     </div>
 
+    <pre id="saga-boot-error"></pre>
+
     <script>
-        // Small storage facade over localStorage.
-        // Calling "localStorage.getItem" straight from .NET marshals a host object whose `this`
-        // binding is not guaranteed; plain functions avoid that entirely.
-        window.sagaStorage = {
-            get: key => { try { return localStorage.getItem(key); } catch { return null; } },
-            set: (key, value) => { try { localStorage.setItem(key, value); return true; } catch { return false; } },
-            remove: key => { try { localStorage.removeItem(key); return true; } catch { return false; } }
-        };
+        // Storage facade over localStorage, and a visible diagnostics panel for the boot phase.
+        (function () {
+            var panel = null;
+
+            function show(prefix, message) {
+                panel = panel || document.getElementById('saga-boot-error');
+                if (!panel) { return; }
+                panel.style.display = 'block';
+                panel.textContent += prefix + ': ' + message + '\n';
+            }
+
+            window.sagaBootError = function (message) { show('ARRANQUE', message); };
+
+            window.addEventListener('error', function (event) {
+                // Script load failures arrive without a message, so name the target instead.
+                if (event.message) {
+                    show('ERROR', event.message + (event.filename ? '  @ ' + event.filename : ''));
+                }
+            });
+
+            window.addEventListener('unhandledrejection', function (event) {
+                var reason = event.reason;
+                show('PROMESA', (reason && (reason.message || reason)) || 'rechazo sin detalle');
+            });
+
+            window.sagaStorage = {
+                get: function (key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+                set: function (key, value) { try { localStorage.setItem(key, value); return true; } catch (e) { return false; } },
+                remove: function (key) { try { localStorage.removeItem(key); return true; } catch (e) { return false; } }
+            };
+        })();
     </script>
 
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_framework/blazor.webassembly.js"
+            onerror="window.sagaBootError('no se pudo cargar _framework/blazor.webassembly.js (404)')"></script>
 </body>
 </html>
