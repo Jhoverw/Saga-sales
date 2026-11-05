@@ -92,6 +92,7 @@ Perfil de operación declarado para el MVP:
 | **E-09** | Experiencia de compra (storefront) | Que el comprador pueda comprar sin ayuda del comercio | Should (v2) | BlazorWeb | US-003, US-006 |
 | **E-11** | Logística y entrega | Saber dónde está el pedido y quién lo lleva | *A confirmar* | nuevo | — |
 | **E-12** | Compras y costos | Saber cuánto te cuesta lo que vendes y que el stock entre por un documento | **Must (MVP)** | Catalog | US-021, US-022, US-023 |
+| **E-13** | Inventario real | Que el inventario diga dónde está cada cosa, cuándo caduca y qué se vende primero | **Must (MVP)** | Catalog | US-024, US-025, US-026 |
 
 > **E-10 (facturación electrónica / SRI) sale de este alcance**: se implementará como
 > **proyecto separado** y consumirá esta plataforma. Ver §11.
@@ -488,6 +489,103 @@ del proveedor), D15 (vive en Catalog, sin servicio nuevo).
 
 ---
 
+### E-13 · Inventario real: sucursales, lotes e imágenes
+
+**Objetivo**: que el inventario refleje la realidad física — **dónde** está cada cosa, **cuándo
+caduca** y **qué se vende primero** — en vez de un único número por producto.
+
+Hoy `products.stock_quantity` es un total por tienda. Con dos sucursales ese número no dice dónde
+está la mercancía, y con lotes perecederos no dice si lo que hay se puede vender el mes que viene.
+
+**Indicadores**
+- Ventas servidas con stock de **otra** sucursal sin registro: **0**.
+- Mercancía tirada por vencer existiendo demanda: **0** (FEFO).
+- Lotes vencidos vendidos: **0**.
+- Antigüedad máxima del inventario visible por sucursal y lote: **tiempo real**.
+
+**Alcance**
+
+*Sucursales*
+- Alta, edición y baja lógica: nombre, dirección, teléfono, y una marcada por defecto.
+- El stock pasa a ser **por sucursal**: `stock_quantity` deja de ser la verdad, el total se calcula.
+- Recibir una compra exige sucursal.
+- Vender consume stock **de una sucursal**: si no hay allí, se rechaza aunque otra tenga.
+
+*Ubicación física*
+- `piso`, `pasillo` y `estantería` como **texto libre, por producto y sucursal**.
+- Sirve para decir «gaseosas: piso 1, pasillo 3, estantería B».
+
+*Lotes y caducidad*
+- Un producto declara si lleva lote (`tracks_batches`). Los perecederos sí; una camiseta no.
+- Cada recepción puede traer lote y fecha de caducidad; el stock se guarda por lote.
+- Al vender se aplica **FEFO**: primero el lote que caduca antes. Un lote **vencido no se vende**.
+- **Aviso de próximo a vencer**: el umbral en días se configura en **Parámetros** de la tienda
+  (por defecto 30).
+
+*Imágenes*
+- Una imagen principal por producto, subida como archivo y servida por el servicio de catálogo.
+- Sin imagen, el catálogo muestra un marcador con la inicial del producto.
+
+*Kardex*
+- Cada movimiento gana **sucursal** y **lote**, para poder explicar el inventario por ubicación.
+
+**Fuera de alcance (MVP)**: transferencias entre sucursales, multi-almacén dentro de una sucursal,
+múltiples imágenes por producto, códigos de barras por lote, escáner.
+
+**Historias**
+
+| ID | Historia | Resultado de negocio |
+|---|---|---|
+| US-024 | Sucursales y existencias por sucursal | Sé qué tengo en cada local y no vendo lo que no está ahí |
+| US-025 | Lotes, caducidad y FEFO | Lo que caduca antes se vende antes, y lo vencido no sale |
+| US-026 | Imágenes y ubicación física | Encuentro el producto en el estante y lo reconocen en pantalla |
+
+**Criterios de aceptación**
+```gherkin
+Escenario: el stock es de una sucursal, no de la tienda
+  Dado un producto con 10 unidades en la sucursal Centro y 0 en la Norte
+  Cuando intento vender 2 desde la sucursal Norte
+  Entonces recibo 409 y el stock de Centro sigue en 10
+
+Escenario: recibir suma stock en la sucursal indicada
+  Dado un producto con 0 en la sucursal Norte
+  Cuando recibo una compra de 24 unidades en la sucursal Norte
+  Entonces el stock de Norte pasa a 24 y el de Centro no cambia
+
+Escenario: FEFO elige el lote que caduca antes
+  Dado un producto con lote A que vence el 2027-01-31 y lote B que vence el 2027-06-30
+  Cuando vendo 10 unidades
+  Entonces salen del lote A y queda registrado en el kardex con su lote
+
+Escenario: un lote vencido no se vende
+  Dado un lote que venció ayer y ningún otro
+  Cuando intento vender una unidad
+  Entonces recibo 409 y no se consume ningún lote
+
+Escenario: el aviso de vencimiento usa el umbral configurado
+  Dado que la tienda tiene configurado un aviso de 30 días
+  Y un lote que vence en 10 días
+  Cuando consulto los próximos a vencer
+  Entonces ese lote aparece en la lista
+
+Escenario: la ubicación es texto libre
+  Cuando guardo «piso 1, pasillo 3, estantería B» en un producto de una sucursal
+  Entonces esa ubicación se muestra al consultar el producto en esa sucursal
+
+Escenario: producto con imagen
+  Cuando subo una imagen a un producto
+  Entonces el catálogo devuelve la URL y la imagen se sirve desde el servicio de catálogo
+```
+
+**Riesgos**: migrar `products.stock_quantity` a stock por sucursal y lote (se hace ahora, con pocos
+datos); ventas concurrentes sobre el mismo lote (se resuelve con `UPDLOCK` igual que hoy); archivos
+de imagen huérfanos si se borra el producto (baja lógica y limpieza posterior).
+
+**Decisiones asociadas**: D16 (stock por sucursal), D17 (lotes sólo si `tracks_batches`),
+D18 (FEFO y no vender vencidos), D19 (ubicación libre y umbral de aviso en Parámetros).
+
+---
+
 ## 5. Épicas candidatas (pendientes de confirmar)
 
 ### E-11 · Logística y entrega
@@ -511,7 +609,7 @@ Así el día que se construya la facturación no hay que migrar pedidos históri
 
 | Release | Épicas | Criterio de salida |
 |---|---|---|
-| **MVP** | E-01, E-02, E-03, E-04a, **E-12**, E-08 | Un comercio registra su tienda, publica productos, **registra lo que compra y a qué costo**, recibe un pedido con stock correcto, registra el cobro a mano y se ve en `/health`. |
+| **MVP** | E-01, E-02, E-03, E-04a, **E-12**, **E-13**, E-08 | Un comercio registra su tienda, publica productos, **registra lo que compra y a qué costo**, **gestiona sucursales, lotes y caducidades**, recibe un pedido con stock correcto, registra el cobro a mano y se ve en `/health`. |
 | **v1** | E-04b, E-05, E-07 | Cobro online real con webhooks, devoluciones, clientes y confirmación automática por email. |
 | **v2** | E-06, E-09, (E-11) | El comercio exporta su reporte diario a CSV y el comprador compra solo por la web. |
 | **Proyecto aparte** | E-10 | Facturación electrónica (SRI), consumiendo los pedidos de esta plataforma. |
@@ -532,6 +630,7 @@ Así el día que se construya la facturación no hay que migrar pedidos históri
 | E-08 | — | FR-003, FR-007, FR-008, NFR-001…005 | P03, P04 |
 | E-09 | US-003, US-006 | — | P51–P57 |
 | E-12 | US-021, US-022, US-023 (nuevas) | FR-031…FR-038 (nuevos) | T114 en adelante |
+| E-13 | US-024, US-025, US-026 (nuevas) | FR-039…FR-050 (nuevos) | T140 en adelante |
 
 ---
 
@@ -619,6 +718,10 @@ Pendientes:
 | D13 | **Recibir una compra suma stock**; el borrador no lo toca | El stock nunca se edita a mano: entra por compra recibida o por ajuste registrado |
 | D14 | **La compra guarda la factura del proveedor** (número y fecha) | Las cuentas por pagar y los vencimientos quedan fuera del MVP |
 | D15 | **Compras vive dentro de Catalog**, sin servicio nuevo | El costo y el stock son del catálogo; además la constitución limita a 9 servicios y ya hay 8 |
+| D16 | **El stock es por sucursal** | `products.stock_quantity` deja de ser la verdad: el total se calcula sumando sucursales. Vender exige sucursal y no cruza stock entre locales |
+| D17 | **Lotes sólo para productos que lo declaran** (`tracks_batches`) | Perecederos sí, el resto no: obligar el lote en una camiseta sería fricción sin valor |
+| D18 | **FEFO al vender y un lote vencido no se vende** | Primero caduca, primero sale; lo vencido devuelve 409 y no se consume |
+| D19 | **Ubicación libre (`piso`/`pasillo`/`estantería`) y umbral de vencimiento en Parámetros** | Texto libre por producto y sucursal; los días de aviso se configuran por tienda (30 por defecto) |
 
 ---
 
