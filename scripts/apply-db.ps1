@@ -66,12 +66,12 @@ function Invoke-Sql {
 
     if ($useDocker) {
         $result = & docker exec $Container /opt/mssql-tools18/bin/sqlcmd `
-            -S localhost -U $User -P "$Password" -C -d $Database -b -h -1 -W -Q $Query 2>&1
+            -S localhost -U $User -P "$Password" -C -d $Database -b -I -h -1 -W -Q $Query 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($result -join [Environment]::NewLine) }
         return ($result -join "`n").Trim()
     }
 
-    $arguments = @('-S', $Server, '-U', $User, '-P', $Password, '-d', $Database, '-b', '-h', '-1', '-W', '-Q', $Query)
+    $arguments = @('-S', $Server, '-U', $User, '-P', $Password, '-d', $Database, '-b', '-I', '-h', '-1', '-W', '-Q', $Query)
     if ($TrustServerCertificate) { $arguments += @('-C') }
     $result = & sqlcmd @arguments 2>&1
     if ($LASTEXITCODE -ne 0) { throw ($result -join [Environment]::NewLine) }
@@ -84,12 +84,12 @@ function Invoke-SqlFile {
     if ($useDocker) {
         # Without -Q and -i, sqlcmd executes what it reads from stdin.
         Get-Content $Path -Raw | docker exec -i $Container /opt/mssql-tools18/bin/sqlcmd `
-            -S localhost -U $User -P "$Password" -C -d $Database -b
+            -S localhost -U $User -P "$Password" -C -d $Database -b -I
         if ($LASTEXITCODE -ne 0) { throw "Script failed: $Path" }
         return
     }
 
-    $arguments = @('-S', $Server, '-U', $User, '-P', $Password, '-d', $Database, '-b', '-i', $Path)
+    $arguments = @('-S', $Server, '-U', $User, '-P', $Password, '-d', $Database, '-b', '-I', '-i', $Path)
     if ($TrustServerCertificate) { $arguments += @('-C') }
     & sqlcmd @arguments
     if ($LASTEXITCODE -ne 0) { throw "Script failed: $Path" }

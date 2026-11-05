@@ -4,6 +4,11 @@
 -- purchase time: retiring a product must never rewrite history (FR-012).
 -- ============================================================================
 
+-- Filtered indexes and indexed views need these settings, and sqlcmd turns them OFF by default.
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 IF OBJECT_ID('dbo.schema_version') IS NULL
 CREATE TABLE dbo.schema_version
 (

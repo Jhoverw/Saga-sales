@@ -5,6 +5,10 @@
 -- the row lock guarantees that concurrent buyers cannot oversell.
 -- ============================================================================
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- ── sp_stock_reserve ────────────────────────────────────────────────────────
 CREATE OR ALTER PROCEDURE dbo.sp_stock_reserve
     @p_tenant_id uniqueidentifier,

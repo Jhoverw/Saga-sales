@@ -2,6 +2,10 @@
 -- V003__functions_pricing.sql — Catalog: price list per customer type (D5, R9)
 -- ============================================================================
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- ── sp_price_set ────────────────────────────────────────────────────────────
 -- Upsert of one price for one customer type. Absence of a row means "no specific
 -- price", so the base price applies.

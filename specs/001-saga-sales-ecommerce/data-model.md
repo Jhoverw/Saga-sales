@@ -71,7 +71,7 @@ CREATE TABLE dbo.schema_version (
 | id | uniqueidentifier PK | |
 | slug | nvarchar(50) | `UNIQUE`, `CHECK (slug NOT LIKE '%[^a-z0-9-]%')` |
 | display_name | nvarchar(200) | not null |
-| plan | nvarchar(30) | default `'trial'` |
+| plan_name | nvarchar(30) | default `'trial'` — named `plan_name` because `plan` is a reserved T-SQL keyword |
 | status | smallint | `CHECK (status IN (1,2,3,4))` — active, trial, suspended, cancelled |
 | custom_domain | nvarchar(255) | null; unique filtered index when present |
 | created_at | datetime2(3) | default `SYSUTCDATETIME()` |

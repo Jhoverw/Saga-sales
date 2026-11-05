@@ -5,6 +5,10 @@
 -- transaction without needing a table-valued parameter.
 -- ============================================================================
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- ── sp_order_create ─────────────────────────────────────────────────────────
 CREATE OR ALTER PROCEDURE dbo.sp_order_create
     @p_tenant_id      uniqueidentifier,

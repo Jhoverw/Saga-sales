@@ -3,6 +3,11 @@
 -- SQL Server 2022 / T-SQL. Applied by scripts/apply-db.ps1.
 -- ============================================================================
 
+-- Filtered indexes and indexed views need these settings, and sqlcmd turns them OFF by default.
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 IF OBJECT_ID('dbo.schema_version') IS NULL
 CREATE TABLE dbo.schema_version
 (
@@ -19,7 +24,8 @@ CREATE TABLE dbo.tenants
     id            uniqueidentifier NOT NULL CONSTRAINT pk_tenants PRIMARY KEY DEFAULT NEWID(),
     slug          nvarchar(50)     NOT NULL,
     display_name  nvarchar(200)    NOT NULL,
-    plan          nvarchar(30)     NOT NULL CONSTRAINT df_tenants_plan DEFAULT 'trial',
+    -- `plan` is a reserved T-SQL keyword, so the column is named plan_name.
+    plan_name     nvarchar(30)     NOT NULL CONSTRAINT df_tenants_plan DEFAULT 'trial',
     status        smallint         NOT NULL CONSTRAINT df_tenants_status DEFAULT 2,
     custom_domain nvarchar(255)    NULL,
     created_at    datetime2(3)     NOT NULL CONSTRAINT df_tenants_created DEFAULT SYSUTCDATETIME(),

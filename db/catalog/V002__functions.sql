@@ -5,6 +5,10 @@
 -- repository maps to the domain entity (Price, not base_price).
 -- ============================================================================
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- ── sp_product_create ───────────────────────────────────────────────────────
 CREATE OR ALTER PROCEDURE dbo.sp_product_create
     @p_tenant_id   uniqueidentifier,

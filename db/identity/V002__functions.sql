@@ -7,6 +7,10 @@
 -- prefix that the API maps to an HTTP status.
 -- ============================================================================
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- ── sp_tenant_create ────────────────────────────────────────────────────────
 -- Creates the store and its first administrator in ONE transaction.
 -- Not tenant-scoped: the tenant does not exist yet.
@@ -42,7 +46,7 @@ BEGIN
     DECLARE @tenant_id uniqueidentifier = NEWID();
     DECLARE @user_id   uniqueidentifier = NEWID();
 
-    INSERT INTO dbo.tenants (id, slug, display_name, plan, status, custom_domain)
+    INSERT INTO dbo.tenants (id, slug, display_name, plan_name, status, custom_domain)
     VALUES (@tenant_id, @slug, @display_name, 'trial', 2, @custom_domain);
 
     INSERT INTO dbo.users (id, tenant_id, email, password_hash, role, display_name, is_active)
