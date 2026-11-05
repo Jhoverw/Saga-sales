@@ -12,18 +12,17 @@
     <ProjectReference Include="..\SagaSales.Shared\SagaSales.Shared.csproj" />
   </ItemGroup>
 
-  <!--
-    No PackageReference to Microsoft.AspNetCore.Components.WebAssembly: the SDK already supplies
-    the runtime and the matching blazor.webassembly.js.
-
-    Pinning it to 8.0.4 was the cause of
-    "TypeError: Cannot read properties of undefined (reading 'getI32')": the v8 script was loaded
-    against the .NET 10 runtime, so the renderer's memory view did not exist.
-  -->
-
   <ItemGroup>
-    <!-- AuthorizeView / AddAuthorizationCore are not in the Blazor runtime pack. It ships only
-         managed code, so it must merely match the framework band (10.x). -->
+    <!--
+      These must stay in the same band as TargetFramework (10.x).
+
+      Pinned to 8.0.4 they made the app load a v8 blazor.webassembly.js against the .NET 10
+      runtime, which failed at render with:
+        TypeError: Cannot read properties of undefined (reading 'getI32')
+      The package carries the runtime script, so its version has to match the framework.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.0" />
   </ItemGroup>
 
