@@ -18,7 +18,8 @@ public sealed class ProductsController(IMediator mediator) : ControllerBase
             request.Price,
             request.Currency,
             request.StockQuantity,
-            request.CategoryId);
+            request.CategoryId,
+            request.TracksBatches);
 
         var result = await mediator.Send(command, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
@@ -65,7 +66,8 @@ public sealed class ProductsController(IMediator mediator) : ControllerBase
             request.Currency,
             request.StockQuantity,
             request.CategoryId,
-            ProductStatus.Active);
+            ProductStatus.Active,
+            request.TracksBatches);
 
         var result = await mediator.Send(command, cancellationToken);
         return Ok(result.Value);

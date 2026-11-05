@@ -37,6 +37,15 @@ public class ProductDto
         Cost.HasValue && BasePrice > 0
             ? Math.Round(((BasePrice - Cost.Value) / BasePrice) * 100m, 2)
             : null;
+
+    /// <summary>
+    /// True when the product carries lots with an expiry date. Receiving it then requires a lot
+    /// code, and selling consumes the oldest expiry first (E-13, D17/D18).
+    /// </summary>
+    public bool TracksBatches { get; set; }
+
+    /// <summary>Relative path of the product picture, or null when it has none.</summary>
+    public string? ImagePath { get; set; }
 }
 
 /// <summary>Resolved price for one product and one customer type (FR-007b).</summary>
@@ -70,6 +79,9 @@ public class CreateProductRequest
     public Guid? CategoryId { get; set; }
 
     public string Currency { get; set; } = "USD";
+
+    /// <summary>Mark it when the product expires and must be received with a lot code.</summary>
+    public bool TracksBatches { get; set; }
 }
 
 public class UpdateProductRequest : CreateProductRequest

@@ -18,6 +18,7 @@ public interface IProductRepository
         int stockQuantity,
         Guid? categoryId,
         Guid createdBy,
+        bool tracksBatches,
         CancellationToken cancellationToken);
 
     Task<Product> UpdateAsync(
@@ -29,6 +30,7 @@ public interface IProductRepository
         int stockQuantity,
         Guid? categoryId,
         ProductStatus status,
+        bool tracksBatches,
         CancellationToken cancellationToken);
 
     Task RetireAsync(Guid id, CancellationToken cancellationToken);
@@ -78,6 +80,7 @@ public sealed class ProductRepository(
         int stockQuantity,
         Guid? categoryId,
         Guid createdBy,
+        bool tracksBatches,
         CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
@@ -87,7 +90,8 @@ public sealed class ProductRepository(
             .With("currency", currency)
             .With("stock_quantity", stockQuantity)
             .With("category_id", categoryId)
-            .With("created_by", createdBy);
+            .With("created_by", createdBy)
+            .With("tracks_batches", tracksBatches);
 
         var row = await executor.QueryProcSingleAsync<ProductRow>(
             "dbo.sp_product_create", arguments, cancellationToken: cancellationToken);
@@ -105,6 +109,7 @@ public sealed class ProductRepository(
         int stockQuantity,
         Guid? categoryId,
         ProductStatus status,
+        bool tracksBatches,
         CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
@@ -115,7 +120,8 @@ public sealed class ProductRepository(
             .With("currency", currency)
             .With("stock_quantity", stockQuantity)
             .With("category_id", categoryId)
-            .With("status", (short)status);
+            .With("status", (short)status)
+            .With("tracks_batches", tracksBatches);
 
         var row = await executor.QueryProcSingleAsync<ProductRow>(
             "dbo.sp_product_update", arguments, cancellationToken: cancellationToken);
@@ -226,6 +232,10 @@ public sealed class ProductRepository(
         /// <summary>Weighted average cost; null until the first received purchase (E-12).</summary>
         public decimal? Cost { get; set; }
 
+        public bool TracksBatches { get; set; }
+
+        public string? ImagePath { get; set; }
+
         public int TotalCount { get; set; }
 
         public Product ToProduct() => new()
@@ -241,6 +251,8 @@ public sealed class ProductRepository(
             CreatedAt = CreatedAt,
             UpdatedAt = UpdatedAt,
             Cost = Cost,
+            TracksBatches = TracksBatches,
+            ImagePath = ImagePath,
         };
     }
 }

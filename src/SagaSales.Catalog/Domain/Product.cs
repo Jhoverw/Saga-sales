@@ -22,6 +22,12 @@ public class Product
     /// </summary>
     public decimal? Cost { get; set; }
 
+    /// <summary>True when the product carries lots with an expiry date (E-13).</summary>
+    public bool TracksBatches { get; set; }
+
+    /// <summary>Relative path of the picture, or null.</summary>
+    public string? ImagePath { get; set; }
+
     public Guid? CategoryId { get; set; }
 
     public ProductStatus Status { get; set; } = ProductStatus.Active;

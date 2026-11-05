@@ -10,7 +10,8 @@ public record CreateProductCommand(
     decimal Price,
     string Currency,
     int StockQuantity,
-    Guid? CategoryId = null) : ICommand<ProductDto>;
+    Guid? CategoryId = null,
+    bool TracksBatches = false) : ICommand<ProductDto>;
 
 public sealed class CreateProductCommandHandler(
     IProductRepository repository,
@@ -31,6 +32,7 @@ public sealed class CreateProductCommandHandler(
             request.StockQuantity,
             request.CategoryId,
             currentUser.UserId ?? Guid.Empty,
+            request.TracksBatches,
             cancellationToken);
 
         await eventBus.PublishAsync(

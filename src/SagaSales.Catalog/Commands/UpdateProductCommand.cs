@@ -9,7 +9,8 @@ public record UpdateProductCommand(
     string Currency,
     int StockQuantity,
     Guid? CategoryId,
-    ProductStatus Status) : ICommand<ProductDto>;
+    ProductStatus Status,
+    bool TracksBatches = false) : ICommand<ProductDto>;
 
 public sealed class UpdateProductCommandHandler(
     IProductRepository repository,
@@ -32,6 +33,7 @@ public sealed class UpdateProductCommandHandler(
             request.StockQuantity,
             request.CategoryId,
             request.Status,
+            request.TracksBatches,
             cancellationToken);
 
         await eventBus.PublishAsync(
