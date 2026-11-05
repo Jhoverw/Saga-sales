@@ -88,6 +88,15 @@ services:
     container_name: saga-sales-api-gateway
     environment:
       <<: *app-env
+      # appsettings.json points at http://localhost:5001/ for running the services on the host.
+      # Inside the compose network each service answers on its own container name, port 80.
+      ReverseProxy__Clusters__identity__Destinations__primary__Address: "http://identity:80/"
+      ReverseProxy__Clusters__catalog__Destinations__primary__Address: "http://catalog:80/"
+      ReverseProxy__Clusters__sales__Destinations__primary__Address: "http://sales:80/"
+      ReverseProxy__Clusters__payment__Destinations__primary__Address: "http://payment:80/"
+      ReverseProxy__Clusters__customer__Destinations__primary__Address: "http://customer:80/"
+      ReverseProxy__Clusters__analytics__Destinations__primary__Address: "http://analytics:80/"
+      ReverseProxy__Clusters__notification__Destinations__primary__Address: "http://notification:80/"
     ports:
       - "5000:80"
     depends_on:
