@@ -84,6 +84,32 @@ Reglas operativas aprendidas:
 
 ---
 
+## Lecciones operativas (costaron horas, no repetirlas)
+
+Cada una de estas falló de verdad en este proyecto. Están aquí porque no se deducen del código.
+
+| Síntoma | Causa real | Qué hacer |
+|---|---|---|
+| `Unhandled: Unable to find the required services ... AddControllers` | `app.MapControllers()` sin `builder.Services.AddControllers()` | Cualquier servicio nuevo necesita `AddControllers()`, no lo añade nada más |
+| `Incorrect syntax near the keyword 'plan'` | `plan` es palabra reservada en T-SQL | `plan_name`; cuidado con `key`, `date`, `order`, `lines`, `after` |
+| `Msg 1934 ... 'ANSI_NULLS'` en índices filtrados | `sqlcmd` pone `ANSI_NULLS`/`QUOTED_IDENTIFIER` en OFF | `SET ANSI_NULLS ON; SET QUOTED_IDENTIFIER ON;` al inicio de cada script **y** `-I` en sqlcmd |
+| `A compatible .NET SDK was not found` | `global.json` con `rollForward: latestFeature` no cruza de major | `rollForward: latestMajor` + `allowPrerelease: true` |
+| 502 del gateway hacia un servicio | YARP no re-resuelve DNS: el servicio cambió de IP al recrearse | Reiniciar el gateway después de recrear cualquier servicio |
+| 502 hacia **todos** los servicios | `appsettings` del gateway apuntaba a `http://localhost:5001` (dentro del contenedor no existe) | En compose: `ReverseProxy__Clusters__*__Destinations__primary__Address` con el nombre del contenedor |
+| Menú o pantalla viejos aunque "compiló bien" | Docker reutilizó capas; `up -d --build` no siempre invalida | Comparar `docker image inspect --format {{.Created}}` antes/después, y `--no-cache` si hay duda |
+| `Failed to load config file undefined` + `/0` | Artefactos mezclados: cargador v8 en `bin/obj` y runtime v10 | `dotnet clean` + borrar `bin` y `obj` del panel |
+| `Cannot read properties of undefined (reading 'getI32')` | Paquete Blazor 8.0.4 en proyecto `net10.0` | Los paquetes `Microsoft.AspNetCore.Components.*` deben ir en la banda del TFM |
+| Pantalla en blanco sin pistas | — | El panel tiene panel de diagnóstico: los errores de arranque salen **al pie de la página** |
+| `$var` "de sólo lectura o constante" en PowerShell | `$pid`, `$home`, `$host` son automáticas y PowerShell no distingue mayúsculas | Usar `$productId`, `$page`, `$cfg` |
+| `int + "texto"` falla en PowerShell | El operador `+` convierte el string a número | `"" + $valor + " texto"` |
+| Build cancelado con 9 imágenes | Paralelismo agota recursos de Docker Desktop | `$env:COMPOSE_PARALLEL_LIMIT="1"` |
+| `lookup mcr.microsoft.com: no such host` | DNS transitorio de Docker Desktop | Reintentar; con `--no-cache` Docker **necesita** red porque descarta las capas base |
+
+**Regla general:** un verificador que grita sin razón es peor que ninguno. Si un script reporta
+`FAIL` sobre algo que acabas de comprobar a mano, **corrige el script**, no el código.
+
+---
+
 ## Cómo continuar en una sesión nueva
 
 Prompt mínimo:
