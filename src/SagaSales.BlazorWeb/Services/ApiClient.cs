@@ -100,6 +100,38 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
         return response.IsSuccessStatusCode;
     }
 
+    public Task<OrderDto?> GetOrderAsync(Guid orderId) => GetAsync<OrderDto>($"api/orders/{orderId}");
+
+    /// <summary>Cancels the order and returns its stock to the branch it came from.</summary>
+    public async Task<bool> CancelOrderAsync(Guid orderId)
+    {
+        var request = await BuildAsync(HttpMethod.Post, $"api/orders/{orderId}/cancel", null);
+        var response = await http.SendAsync(request);
+        return response.IsSuccessStatusCode;
+    }
+
+    // ── payments ────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Records a charge received outside the platform. This is the real entry point: the Payment
+    /// service stores it and tells Sales, so the order reflects the money in one step.
+    /// </summary>
+    public Task<PaymentDto?> CreatePaymentAsync(ManualPaymentRequest request)
+        => PostAsync<PaymentDto>("api/payments", request);
+
+    public Task<IReadOnlyList<PaymentDto>?> GetPaymentsByOrderAsync(Guid orderId)
+        => GetAsync<IReadOnlyList<PaymentDto>>($"api/payments?orderId={orderId}");
+
+    public async Task<bool> RefundPaymentAsync(Guid paymentId, decimal amount)
+    {
+        var request = await BuildAsync(
+            HttpMethod.Post,
+            $"api/payments/{paymentId}/refund",
+            new RefundPaymentRequest { RefundAmount = amount });
+
+        var response = await http.SendAsync(request);
+        return response.IsSuccessStatusCode;
+    }
+
     // ── analytics ───────────────────────────────────────────────────────────
     public Task<SalesSummaryDto?> GetSalesSummaryAsync(DateOnly? from = null, DateOnly? to = null)
     {

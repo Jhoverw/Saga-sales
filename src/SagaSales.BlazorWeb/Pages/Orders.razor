@@ -5,133 +5,292 @@
 <div class="page-head">
     <div>
         <h1>Pedidos</h1>
-        <div class="page-head__sub">Estado y seguimiento</div>
+        <div class="page-head__sub">Registrar la venta, cobrarla y cancelarla devolviendo el stock</div>
     </div>
 </div>
 
-@if (Error is not null)
+@if (!string.IsNullOrWhiteSpace(Message))
 {
-    <div class="alert alert-danger">@Error</div>
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
 }
 
-<div class="card mb-4">
-    <div class="card-body">
-        <h5 class="card-title">Nuevo pedido</h5>
-        <div class="row g-2">
-            <div class="col-md-3">
-                <input class="form-control" placeholder="Id del cliente (GUID)" @bind="CustomerId" @bind:event="oninput" />
+<div class="panel">
+    <div class="panel__head">Nuevo pedido</div>
+    <div class="panel__body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Cliente</label>
+                <select class="form-select" @bind="CustomerId">
+                    <option value="@Guid.Empty">— elige —</option>
+                    @foreach (var customer in Customers)
+                    {
+                        <option value="@customer.Id">@customer.LastName, @customer.FirstName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Producto</label>
+                <select class="form-select" @bind="ProductId">
+                    <option value="@Guid.Empty">— elige —</option>
+                    @foreach (var product in Products)
+                    {
+                        <option value="@product.Id">@product.Name · @product.BasePrice.ToString("C") · stock @product.StockQuantity</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">Cant.</label>
+                <input class="form-control" type="number" min="1" @bind="Quantity" />
             </div>
             <div class="col-md-3">
-                <input class="form-control" placeholder="Id del producto (GUID)" @bind="ProductId" @bind:event="oninput" />
+                <label class="form-label">Dirección de envío</label>
+                <input class="form-control" @bind="ShippingAddress" @bind:event="oninput" placeholder="Calle, ciudad" />
             </div>
-            <div class="col-md-2">
-                <input class="form-control" type="number" min="1" placeholder="Cantidad" @bind="Quantity" />
-            </div>
-            <div class="col-md-2">
-                <input class="form-control" placeholder="Dirección de envío" @bind="ShippingAddress" @bind:event="oninput" />
-            </div>
-            <div class="col-md-2">
-                <button class="btn btn-primary w-100" @onclick="CreateAsync" disabled="@Busy">Crear</button>
-            </div>
+        </div>
+        <div class="mt-2">
+            <button class="btn btn-primary" @onclick="CreateAsync" disabled="@Busy">
+                @(Busy ? "Guardando..." : "Crear pedido")
+            </button>
         </div>
     </div>
 </div>
 
-@if (Result is null)
-{
-    <p>Cargando...</p>
-}
-else if (Result.Items.Count == 0)
-{
-    <p class="text-muted">Todavía no hay pedidos.</p>
-}
-else
-{
-    <table class="table table-striped align-middle">
-        <thead>
-            <tr>
-                <th>Pedido</th>
-                <th>Estado</th>
-                <th>Subtotal</th>
-                <th>Fecha</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var order in Result.Items)
-            {
+<div class="panel mt-3">
+    <div class="panel__head">Pedidos</div>
+    <div class="panel__body p-0">
+        <table class="table mb-0">
+            <thead>
                 <tr>
-                    <td><code>@order.Id</code></td>
-                    <td>
-                        <span class="chip @(order.Status switch { "Delivered" => "chip--ok", "Cancelled" => "chip--danger", "Refunded" => "chip--neutral", "Pending" => "chip--warn", _ => "chip--info" })">@order.Status</span>
-                    </td>
-                    <td>@order.Subtotal.ToString("C")</td>
-                    <td>@order.OrderDate.ToString("u")</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-success" @onclick="() => AdvanceAsync(order)">Avanzar</button>
-                    </td>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-end">Pagado</th>
+                    <th>Estado</th>
+                    <th></th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var order in OrderList)
+                {
+                    <tr class="@(Selected?.Id == order.Id ? "table-active" : "")">
+                        <td>@order.OrderDate.ToString("dd/MM HH:mm")</td>
+                        <td>@CustomerName(order.CustomerId)</td>
+                        <td class="text-end">@order.Subtotal.ToString("C")</td>
+                        <td class="text-end">@order.PaidAmount.ToString("C")</td>
+                        <td><span class="chip">@StatusLabel(order.Status)</span></td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => Select(order)">Abrir</button>
+                        </td>
+                    </tr>
+                }
+                @if (OrderList.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center py-3">Todavía no hay pedidos.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (Selected is not null)
+{
+    <div class="row g-3 mt-1">
+        <div class="col-lg-6">
+            <div class="panel">
+                <div class="panel__head">Pedido · @StatusLabel(Selected.Status)</div>
+                <div class="panel__body p-0">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio</th><th class="text-end">Total</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var line in Selected.Items)
+                            {
+                                <tr>
+                                    <td>@line.ProductName</td>
+                                    <td class="text-end">@line.Quantity</td>
+                                    <td class="text-end">@line.UnitPrice.ToString("C")</td>
+                                    <td class="text-end">@line.LineTotal.ToString("C")</td>
+                                </tr>
+                            }
+                            <tr>
+                                <td colspan="3" class="text-end"><strong>Total</strong></td>
+                                <td class="text-end"><strong>@Selected.Subtotal.ToString("C")</strong></td>
+                            </tr>
+                            <tr>
+                                <td colspan="3" class="text-end">Pagado</td>
+                                <td class="text-end">@Selected.PaidAmount.ToString("C")</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="panel">
+                <div class="panel__head">Cobro</div>
+                <div class="panel__body">
+                    @if (Pending > 0)
+                    {
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">Importe</label>
+                                <input class="form-control" type="number" step="0.01" min="0.01" @bind="Amount" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Medio</label>
+                                <select class="form-select" @bind="MethodId">
+                                    <option value="4">Transferencia</option>
+                                    <option value="5">Efectivo</option>
+                                    <option value="9">Depósito</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-primary w-100" @onclick="ChargeAsync" disabled="@Busy">Registrar cobro</button>
+                            </div>
+                        </div>
+                        <div class="page-head__sub mt-2 mb-0">Pendiente de cobro: @Pending.ToString("C")</div>
+                    }
+                    else
+                    {
+                        <p class="mb-0">Este pedido está cobrado por completo.</p>
+                    }
+
+                    @if (Selected.Status is "Pending" or "Confirmed" or "Processing")
+                    {
+                        <hr class="divider" />
+                        <button class="btn btn-outline-danger" @onclick="CancelAsync" disabled="@Busy">
+                            Cancelar pedido y devolver stock
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="panel mt-3">
+                <div class="panel__head">Pagos registrados</div>
+                <div class="panel__body p-0">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr><th>Fecha</th><th class="text-end">Importe</th><th class="text-end">Devuelto</th><th>Estado</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var payment in PaymentList)
+                            {
+                                <tr>
+                                    <td>@payment.CreatedAt.ToString("dd/MM HH:mm")</td>
+                                    <td class="text-end">@payment.Amount.ToString("C")</td>
+                                    <td class="text-end">@payment.RefundedAmount.ToString("C")</td>
+                                    <td><span class="chip">@PaymentStatusLabel(payment.Status)</span></td>
+                                    <td class="text-end">
+                                        @if (payment.RefundableAmount > 0)
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => RefundAsync(payment)">Reembolsar</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            @if (PaymentList.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-center py-3">Sin pagos.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
-    private PagedResult<OrderDto>? Result { get; set; }
+    private List<OrderDto> OrderList { get; set; } = [];
+    private List<CustomerDto> Customers { get; set; } = [];
+    private List<ProductDto> Products { get; set; } = [];
 
-    private string ProductId { get; set; } = string.Empty;
-    private string CustomerId { get; set; } = string.Empty;
+    private OrderDto? Selected { get; set; }
+    private List<PaymentDto> PaymentList { get; set; } = [];
+
+    private Guid CustomerId { get; set; } = Guid.Empty;
+    private Guid ProductId { get; set; } = Guid.Empty;
     private int Quantity { get; set; } = 1;
     private string ShippingAddress { get; set; } = string.Empty;
 
-    private string? Error { get; set; }
+    private decimal Amount { get; set; }
+    private int MethodId { get; set; } = 4;
+
+    private string? Message { get; set; }
+    private bool Error { get; set; }
     private bool Busy { get; set; }
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private decimal Pending => Selected is null ? 0 : Math.Max(0, Selected.Subtotal - Selected.PaidAmount);
 
-    private async Task LoadAsync()
+    protected override async Task OnInitializedAsync()
     {
-        Result = await Api.GetOrdersAsync(1, 20);
+        Customers = await Api.GetCustomersAsync(1, 100) is { } customers ? customers.Items.ToList() : [];
+        Products = await Api.GetProductsAsync(1, 100) is { } products ? products.Items.ToList() : [];
+        await LoadOrdersAsync();
+    }
+
+    private async Task LoadOrdersAsync()
+    {
+        OrderList = await Api.GetOrdersAsync(1, 50) is { } page ? page.Items.ToList() : [];
+
+        if (Selected is not null)
+        {
+            Selected = await Api.GetOrderAsync(Selected.Id) ?? Selected;
+            PaymentList = (await Api.GetPaymentsByOrderAsync(Selected.Id))?.ToList() ?? [];
+            Amount = Pending;
+        }
+    }
+
+    private async Task Select(OrderDto order)
+    {
+        Selected = await Api.GetOrderAsync(order.Id) ?? order;
+        PaymentList = (await Api.GetPaymentsByOrderAsync(order.Id))?.ToList() ?? [];
+        Amount = Math.Max(0, Selected.Subtotal - Selected.PaidAmount);
+        Message = null;
+        Error = false;
     }
 
     private async Task CreateAsync()
     {
+        Message = null;
+        Error = false;
+
+        if (CustomerId == Guid.Empty || ProductId == Guid.Empty)
+        {
+            Message = "Elige cliente y producto.";
+            Error = true;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(ShippingAddress))
+        {
+            Message = "La dirección de envío es obligatoria.";
+            Error = true;
+            return;
+        }
+
         Busy = true;
-        Error = null;
 
         try
         {
-            if (!Guid.TryParse(ProductId, out var productId))
+            var order = await Api.CreateOrderAsync(new CreateOrderRequest
             {
-                Error = "El id del producto debe ser un GUID válido.";
-                return;
+                CustomerId = CustomerId,
+                ShippingAddress = ShippingAddress.Trim(),
+                Items = [new OrderItemRequest { ProductId = ProductId, Quantity = Quantity }],
+            });
+
+            Message = order is null
+                ? "No se pudo crear el pedido. Revisa el stock del producto."
+                : $"Pedido creado por {order.Subtotal:C}.";
+            Error = order is null;
+
+            if (order is not null)
+            {
+                await LoadOrdersAsync();
             }
-
-            if (!Guid.TryParse(CustomerId, out var customerId))
-            {
-                Error = "El id del cliente debe ser un GUID válido.";
-                return;
-            }
-
-            var request = new CreateOrderRequest
-            {
-                CustomerId = customerId,
-                ShippingAddress = ShippingAddress,
-                Items = [new OrderItemRequest { ProductId = productId, Quantity = Quantity }],
-            };
-
-            var created = await Api.CreateOrderAsync(request);
-
-            if (created is null)
-            {
-                Error = "No se pudo crear el pedido (revisa el stock y el id del producto).";
-                return;
-            }
-
-            ProductId = string.Empty;
-            CustomerId = string.Empty;
-            Quantity = 1;
-            await LoadAsync();
         }
         finally
         {
@@ -139,23 +298,90 @@ else
         }
     }
 
-    private async Task AdvanceAsync(OrderDto order)
+    private async Task ChargeAsync()
     {
-        var next = order.Status switch
-        {
-            "Pending" => OrderStatus.Confirmed,
-            "Confirmed" => OrderStatus.Processing,
-            "Processing" => OrderStatus.Shipped,
-            "Shipped" => OrderStatus.Delivered,
-            _ => (OrderStatus?)null,
-        };
+        if (Selected is null) { return; }
 
-        if (next is null)
+        Busy = true;
+
+        try
         {
-            return;
+            var payment = await Api.CreatePaymentAsync(new ManualPaymentRequest
+            {
+                OrderId = Selected.Id,
+                Amount = Amount,
+                Method = (ManualPaymentMethod)MethodId,
+            });
+
+            Message = payment is null
+                ? "No se pudo registrar el cobro."
+                : $"Cobro de {payment.Amount:C} registrado.";
+            Error = payment is null;
+
+            await LoadOrdersAsync();
         }
-
-        await Api.UpdateOrderStatusAsync(order.Id, next.Value);
-        await LoadAsync();
+        finally
+        {
+            Busy = false;
+        }
     }
+
+    private async Task CancelAsync()
+    {
+        if (Selected is null) { return; }
+
+        Busy = true;
+
+        try
+        {
+            var ok = await Api.CancelOrderAsync(Selected.Id);
+            Message = ok ? "Pedido cancelado y stock devuelto." : "No se pudo cancelar el pedido.";
+            Error = !ok;
+
+            await LoadOrdersAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task RefundAsync(PaymentDto payment)
+    {
+        var ok = await Api.RefundPaymentAsync(payment.Id, payment.RefundableAmount);
+        Message = ok ? $"Reembolsado {payment.RefundableAmount:C}." : "No se pudo reembolsar.";
+        Error = !ok;
+
+        await LoadOrdersAsync();
+    }
+
+    private string CustomerName(Guid id)
+    {
+        var customer = Customers.FirstOrDefault(c => c.Id == id);
+        return customer is null ? id.ToString()[..8] : $"{customer.LastName}, {customer.FirstName}";
+    }
+
+    // The order DTO carries the state as text (it is what the API returns), so the labels map names.
+    private static string StatusLabel(string status) => status switch
+    {
+        "Pending" => "Pendiente",
+        "Confirmed" => "Confirmado",
+        "Processing" => "En proceso",
+        "Shipped" => "Enviado",
+        "Delivered" => "Entregado",
+        "Cancelled" => "Cancelado",
+        "Refunded" => "Reembolsado",
+        _ => status,
+    };
+
+    private static string PaymentStatusLabel(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending => "Pendiente",
+        PaymentStatus.Authorized => "Autorizado",
+        PaymentStatus.Captured => "Cobrado",
+        PaymentStatus.Failed => "Fallido",
+        PaymentStatus.Refunded => "Reembolsado",
+        PaymentStatus.PartiallyRefunded => "Parcial",
+        _ => status.ToString(),
+    };
 }
