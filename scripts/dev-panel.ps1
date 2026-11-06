@@ -70,7 +70,9 @@ $env:ASPNETCORE_URLS = "http://localhost:$Port"
 
 Push-Location (Join-Path $repoRoot 'src\SagaSales.BlazorWeb')
 try {
-    & dotnet run --no-build --project $project
+    # No --no-build: serving a half-built output is what made this confusing. The dev server builds
+    # what it serves, and prints the address it listens on.
+    & dotnet run --project $project --urls "http://localhost:$Port"
 }
 finally {
     Pop-Location
