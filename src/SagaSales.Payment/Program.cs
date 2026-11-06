@@ -11,14 +11,19 @@ builder.AddSagaSalesLogging(SagaSalesConstants.ApplicationName);
 builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Payment");
 
-builder.Services.AddDbContext<PaymentDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Persistence: stored procedures only (constitution §VIII).
+builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 
-// The stub gateway authorizes without moving money. Phase 2 swaps in a real provider.
-builder.Services.AddScoped<IPaymentGateway, StubPaymentGateway>();
+// Sales owns orders; Payment asks it to reflect the money received.
+builder.Services.AddTransient<ForwardIdentityHandler>();
+builder.Services
+    .AddHttpClient<IOrderingClient, OrderingClient>(http =>
+        http.BaseAddress = new Uri(builder.Configuration["Services:Sales"] ?? "http://localhost:5003"))
+    .AddHttpMessageHandler<ForwardIdentityHandler>();
 
-builder.Services.AddSagaSalesMessageBus(builder.Configuration, bus =>
-    bus.AddConsumer<OrderPlacedConsumer>());
+builder.Services.AddSagaSalesMessageBus(
+    builder.Configuration,
+    bus => bus.AddConsumer<OrderPlacedConsumer>());
 
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreatePaymentCommandHandler).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(CreatePaymentCommandHandler).Assembly);

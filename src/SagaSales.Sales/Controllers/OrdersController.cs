@@ -58,4 +58,31 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(command, cancellationToken);
         return Ok(result.Value);
     }
+
+    /// <summary>
+    /// Records money received for this order. Called by the Payment service after a charge exists,
+    /// so the order's paid amount and status follow the money.
+    /// </summary>
+    [HttpPost("{id:guid}/payments")]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RegisterPayment(
+        Guid id,
+        [FromBody] RegisterOrderPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new Commands.RegisterOrderPaymentCommand(id, request.Amount),
+            cancellationToken);
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>Cancels the order and returns its stock to the branch it came from.</summary>
+    [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Commands.CancelOrderCommand(id), cancellationToken);
+        return Ok(result.Value);
+    }
 }

@@ -1,34 +1,3 @@
-namespace SagaSales.Payment.Commands;
-
-public record CapturePaymentCommand(string TransactionReference) : ICommand;
-
-public sealed class CapturePaymentCommandHandler(
-    PaymentDbContext dbContext,
-    IEventBus eventBus) : ICommandHandler<CapturePaymentCommand>
-{
-    public async Task<Result> Handle(CapturePaymentCommand request, CancellationToken cancellationToken)
-    {
-        Guard.AgainstNullOrEmpty(request.TransactionReference, nameof(request.TransactionReference));
-
-        var payment = await dbContext.Payments
-            .FirstOrDefaultAsync(p => p.TransactionReference == request.TransactionReference, cancellationToken);
-
-        if (payment is null)
-        {
-            throw new NotFoundException("Payment", request.TransactionReference);
-        }
-
-        payment.MarkCaptured();
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        await eventBus.PublishAsync(
-            new PaymentCapturedEvent(
-                payment.Id,
-                payment.OrderId,
-                payment.TenantId,
-                payment.CapturedAt ?? DateTime.UtcNow),
-            cancellationToken);
-
-        return Result.Success();
-    }
-}
+// RETIRED — online capture (E-04b, v1) belongs to the gateway slice and needs a real provider.
+// The MVP records manual charges through CreatePaymentCommand. This file is kept as a tombstone so
+// the endpoint does not reappear half-implemented; T102 removes it with the rest of the v1 stubs.

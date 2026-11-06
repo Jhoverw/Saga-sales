@@ -1,32 +1,28 @@
 namespace SagaSales.Payment.EventHandlers;
 
+using MassTransit;
+using SagaSales.Payment.Data;
+using SagaSales.Shared.Events;
+
 /// <summary>
-/// Keeps the Payment-owned order read model in sync, so payments never query the Sales DB.
+/// Keeps a read model of the orders this service can be paid for, so Payment never reads the Sales
+/// database (R4). Idempotent: the upsert can run twice for the same event.
 /// </summary>
-public sealed class OrderPlacedConsumer(PaymentDbContext dbContext, ILogger<OrderPlacedConsumer> logger)
-    : IntegrationEventHandler<OrderPlacedEvent>
+public sealed class OrderPlacedConsumer(
+    IPaymentRepository repository,
+    ILogger<OrderPlacedConsumer> logger) : IConsumer<OrderPlacedEvent>
 {
-    public override async Task Handle(OrderPlacedEvent @event, CancellationToken cancellationToken)
+    public async Task Consume(ConsumeContext<OrderPlacedEvent> context)
     {
-        var exists = await dbContext.OrderReferences
-            .AnyAsync(o => o.OrderId == @event.OrderId, cancellationToken);
+        var message = context.Message;
 
-        if (exists)
-        {
-            return;
-        }
+        await repository.UpsertOrderReferenceAsync(
+            message.OrderId,
+            message.CustomerId,
+            message.TotalAmount,
+            message.OrderDate,
+            context.CancellationToken);
 
-        dbContext.OrderReferences.Add(new Domain.OrderReference
-        {
-            OrderId = @event.OrderId,
-            TenantId = @event.TenantId,
-            CustomerId = @event.CustomerId,
-            Subtotal = @event.TotalAmount,
-            Currency = "USD",
-            PlacedAt = @event.OrderDate,
-        });
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Order reference stored for {OrderId}", @event.OrderId);
+        logger.LogInformation("Order {OrderId} registered for payments", message.OrderId);
     }
 }

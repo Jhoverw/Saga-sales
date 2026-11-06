@@ -165,6 +165,8 @@ services:
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_payment;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
       Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
       Payments__Provider: Stub
+      # Payment asks Sales to reflect the money received (the order owns paid_amount and status).
+      Services__Sales: "http://sales:80"
       Stripe__SecretKey: "${STRIPE_SECRET_KEY}"
       Stripe__PublishableKey: "${STRIPE_PUBLISHABLE_KEY}"
       Stripe__WebhookSecret: "${STRIPE_WEBHOOK_SECRET}"
