@@ -5,129 +5,291 @@
 <div class="page-head">
     <div>
         <h1>Clientes</h1>
-        <div class="page-head__sub">Compradores y datos de contacto</div>
+        <div class="page-head__sub">Quién compra, cómo contactarlo y a qué dirección se envía</div>
     </div>
 </div>
 
-@if (Error is not null)
+@if (!string.IsNullOrWhiteSpace(Message))
 {
-    <div class="alert alert-danger">@Error</div>
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
 }
 
-<div class="card mb-4">
-    <div class="card-body">
-        <h5 class="card-title">Nuevo cliente</h5>
-        <div class="row g-2">
-            <div class="col-md-2">
-                <input class="form-control" placeholder="Nombre" @bind="FirstName" @bind:event="oninput" />
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="panel">
+            <div class="panel__head">
+                <span>Listado</span>
+                <input class="form-control form-control-sm" style="max-width:240px;"
+                       placeholder="Nombre, email o teléfono"
+                       @bind="Search" @bind:event="oninput" @bind:after="SearchAsync" />
             </div>
-            <div class="col-md-2">
-                <input class="form-control" placeholder="Apellido" @bind="LastName" @bind:event="oninput" />
+            <div class="panel__body p-0">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Contacto</th>
+                            <th>Tipo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var customer in CustomerList)
+                        {
+                            <tr class="@(customer.Status == CustomerStatus.Inactive ? "opacity-50" : "")">
+                                <td>
+                                    @customer.LastName, @customer.FirstName
+                                    @if (customer.Status == CustomerStatus.Inactive)
+                                    {
+                                        <span class="chip">inactivo</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div>@customer.Email</div>
+                                    @if (!string.IsNullOrWhiteSpace(customer.Phone))
+                                    {
+                                        <div class="page-head__sub mb-0">@customer.Phone</div>
+                                    }
+                                </td>
+                                <td>@TypeLabel(customer.CustomerType)</td>
+                                <td class="text-end text-nowrap">
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(customer)">Editar</button>
+                                    @if (customer.Status == CustomerStatus.Active)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeactivateAsync(customer)">Desactivar</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (CustomerList.Count == 0)
+                        {
+                            <tr><td colspan="4" class="text-center py-3">No hay clientes que coincidan.</td></tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-            <div class="col-md-3">
-                <input class="form-control" type="email" placeholder="Email" @bind="Email" @bind:event="oninput" />
-            </div>
-            <div class="col-md-2">
-                <input class="form-control" placeholder="Teléfono" @bind="Phone" @bind:event="oninput" />
-            </div>
-            <div class="col-md-2">
-                <button class="btn btn-primary w-100" @onclick="CreateAsync" disabled="@Busy">Añadir</button>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="panel">
+            <div class="panel__head">@(EditingId is null ? "Nuevo cliente" : "Editando cliente")</div>
+            <div class="panel__body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Nombre *</label>
+                        <input class="form-control" @bind="FirstName" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Apellido *</label>
+                        <input class="form-control" @bind="LastName" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="mb-3 mt-2">
+                    <label class="form-label">Email *</label>
+                    <input class="form-control" type="email" @bind="Email" @bind:event="oninput"
+                           disabled="@(EditingId is not null)" />
+                    @if (EditingId is not null)
+                    {
+                        <div class="page-head__sub mb-0">El email identifica al cliente y no se cambia aquí.</div>
+                    }
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Teléfono</label>
+                        <input class="form-control" @bind="Phone" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Tipo</label>
+                        <select class="form-select" @bind="CustomerTypeId">
+                            <option value="1">Minorista</option>
+                            <option value="2">Mayorista</option>
+                        </select>
+                    </div>
+                </div>
+
+                @if (EditingId is null)
+                {
+                    <hr class="divider" />
+                    <div class="page-head__sub mb-2">Dirección de envío (obligatoria para poder entregar)</div>
+                    <div class="mb-2">
+                        <input class="form-control" @bind="Line1" @bind:event="oninput" placeholder="Calle y número" />
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <input class="form-control" @bind="City" @bind:event="oninput" placeholder="Ciudad" />
+                        </div>
+                        <div class="col-md-6">
+                            <input class="form-control" @bind="StateProvince" @bind:event="oninput" placeholder="Provincia" />
+                        </div>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-4">
+                            <input class="form-control" @bind="PostalCode" @bind:event="oninput" placeholder="C.P." />
+                        </div>
+                        <div class="col-md-8">
+                            <input class="form-control" @bind="Country" @bind:event="oninput" placeholder="País" />
+                        </div>
+                    </div>
+                }
+
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@Busy">
+                        @(Busy ? "Guardando..." : (EditingId is null ? "Crear cliente" : "Guardar cambios"))
+                    </button>
+                    @if (EditingId is not null)
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="ClearForm">Cancelar</button>
+                    }
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="d-flex gap-2 mb-3">
-    <input class="form-control" style="max-width:320px;" placeholder="Buscar por email, teléfono o nombre..." @bind="Search" @bind:event="oninput" />
-    <button class="btn btn-outline-secondary" @onclick="SearchAsync">Buscar</button>
-</div>
-
-@if (Result is null)
-{
-    <p>Cargando...</p>
-}
-else if (Result.Items.Count == 0)
-{
-    <p class="text-muted">No hay clientes que coincidan.</p>
-}
-else
-{
-    <table class="table table-striped align-middle">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Email</th>
-                <th>Teléfono</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var customer in Result.Items)
-            {
-                <tr>
-                    <td>@customer.FirstName @customer.LastName</td>
-                    <td>@customer.Email</td>
-                    <td>@customer.Phone</td>
-                    <td>
-                        <span class="chip @(customer.Status switch { CustomerStatus.Active => "chip--ok", CustomerStatus.Suspended => "chip--danger", CustomerStatus.Deleted => "chip--neutral", _ => "chip--info" })">@customer.Status</span>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-
 @code {
-    private PagedResult<CustomerDto>? Result { get; set; }
+    private List<CustomerDto> CustomerList { get; set; } = [];
 
+    private Guid? EditingId { get; set; }
     private string FirstName { get; set; } = string.Empty;
     private string LastName { get; set; } = string.Empty;
     private string Email { get; set; } = string.Empty;
     private string Phone { get; set; } = string.Empty;
+    private int CustomerTypeId { get; set; } = 1;
+    private string Line1 { get; set; } = string.Empty;
+    private string City { get; set; } = string.Empty;
+    private string StateProvince { get; set; } = string.Empty;
+    private string PostalCode { get; set; } = string.Empty;
+    private string Country { get; set; } = "Ecuador";
     private string Search { get; set; } = string.Empty;
 
-    private string? Error { get; set; }
+    private string? Message { get; set; }
+    private bool Error { get; set; }
     private bool Busy { get; set; }
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync() => await SearchAsync();
 
-    private async Task LoadAsync()
+    private async Task SearchAsync()
     {
-        Result = await Api.GetCustomersAsync(1, 20, Search);
+        var page = await Api.GetCustomersAsync(1, 100, string.IsNullOrWhiteSpace(Search) ? null : Search.Trim());
+        CustomerList = page?.Items.ToList() ?? [];
     }
 
-    private async Task SearchAsync() => await LoadAsync();
-
-    private async Task CreateAsync()
+    private void Edit(CustomerDto customer)
     {
+        EditingId = customer.Id;
+        FirstName = customer.FirstName;
+        LastName = customer.LastName;
+        Email = customer.Email;
+        Phone = customer.Phone ?? string.Empty;
+        CustomerTypeId = (int)customer.CustomerType;
+        Message = null;
+        Error = false;
+    }
+
+    private void ClearForm()
+    {
+        EditingId = null;
+        FirstName = LastName = Email = Phone = string.Empty;
+        Line1 = City = StateProvince = PostalCode = string.Empty;
+        CustomerTypeId = 1;
+        Message = null;
+        Error = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        Message = null;
+        Error = false;
+
+        if (string.IsNullOrWhiteSpace(FirstName) || string.IsNullOrWhiteSpace(LastName))
+        {
+            Message = "Nombre y apellido son obligatorios.";
+            Error = true;
+            return;
+        }
+
+        if (EditingId is null && string.IsNullOrWhiteSpace(Email))
+        {
+            Message = "El email es obligatorio.";
+            Error = true;
+            return;
+        }
+
         Busy = true;
-        Error = null;
 
         try
         {
-            var created = await Api.CreateCustomerAsync(new CreateCustomerRequest
+            if (EditingId is null)
             {
-                FirstName = FirstName,
-                LastName = LastName,
-                Email = Email,
-                Phone = string.IsNullOrWhiteSpace(Phone) ? null : Phone,
-            });
+                if (string.IsNullOrWhiteSpace(Line1))
+                {
+                    Message = "La dirección de envío es obligatoria.";
+                    Error = true;
+                    return;
+                }
 
-            if (created is null)
+                var created = await Api.CreateCustomerAsync(new CreateCustomerRequest
+                {
+                    FirstName = FirstName.Trim(),
+                    LastName = LastName.Trim(),
+                    Email = Email.Trim().ToLowerInvariant(),
+                    Phone = Blank(Phone),
+                    CustomerType = (CustomerType)CustomerTypeId,
+                    Address = new AddressDto
+                    {
+                        Line1 = Line1.Trim(),
+                        City = City.Trim(),
+                        StateProvince = StateProvince.Trim(),
+                        PostalCode = PostalCode.Trim(),
+                        Country = string.IsNullOrWhiteSpace(Country) ? "Ecuador" : Country.Trim(),
+                    },
+                });
+
+                Message = created is null
+                    ? "No se pudo crear. ¿Ese email ya existe en esta tienda?"
+                    : $"Cliente «{created.FirstName} {created.LastName}» creado.";
+                Error = created is null;
+            }
+            else
             {
-                Error = "No se pudo crear el cliente. Revisa los datos.";
-                return;
+                var updated = await Api.UpdateCustomerAsync(EditingId.Value, new UpdateCustomerRequest
+                {
+                    FirstName = FirstName.Trim(),
+                    LastName = LastName.Trim(),
+                    Phone = Blank(Phone),
+                    CustomerType = (CustomerType)CustomerTypeId,
+                    Status = CustomerStatus.Active,
+                });
+
+                Message = updated is null ? "No se pudo guardar." : "Cambios guardados.";
+                Error = updated is null;
             }
 
-            FirstName = string.Empty;
-            LastName = string.Empty;
-            Email = string.Empty;
-            Phone = string.Empty;
-            await LoadAsync();
+            if (!Error)
+            {
+                ClearForm();
+                await SearchAsync();
+            }
         }
         finally
         {
             Busy = false;
         }
     }
+
+    private async Task DeactivateAsync(CustomerDto customer)
+    {
+        var ok = await Api.DeactivateCustomerAsync(customer.Id);
+        Message = ok
+            ? $"«{customer.FirstName} {customer.LastName}» desactivado. Sus pedidos anteriores se conservan."
+            : "No se pudo desactivar.";
+        Error = !ok;
+        await SearchAsync();
+    }
+
+    private static string TypeLabel(CustomerType type)
+        => type == CustomerType.Wholesale ? "Mayorista" : "Minorista";
+
+    private static string? Blank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

@@ -1,16 +1,21 @@
 namespace SagaSales.Customer.Commands;
 
+using SagaSales.Customer.Data;
+
+/// <summary>
+/// Registers a buyer. The first address comes with the customer: an order always needs a shipping
+/// address (D7), so asking for it later would leave orders that cannot be shipped.
+/// </summary>
 public record CreateCustomerCommand(
     string FirstName,
     string LastName,
     string Email,
-    string? Phone,
-    AddressDto? Address) : ICommand<CustomerDto>;
+    string? Phone = null,
+    CustomerType CustomerType = CustomerType.Retail,
+    AddressDto? Address = null) : ICommand<CustomerDto>;
 
-public sealed class CreateCustomerCommandHandler(
-    CustomerDbContext dbContext,
-    IEventBus eventBus,
-    ICurrentUser currentUser) : ICommandHandler<CreateCustomerCommand, CustomerDto>
+public sealed class CreateCustomerCommandHandler(ICustomerRepository repository)
+    : ICommandHandler<CreateCustomerCommand, CustomerDto>
 {
     public async Task<Result<CustomerDto>> Handle(CreateCustomerCommand request, CancellationToken cancellationToken)
     {
@@ -18,52 +23,16 @@ public sealed class CreateCustomerCommandHandler(
         Guard.AgainstNullOrEmpty(request.LastName, nameof(request.LastName));
         Guard.AgainstNullOrEmpty(request.Email, nameof(request.Email));
 
-        var tenantId = currentUser.RequireTenantId();
-        var email = request.Email.Trim().ToLowerInvariant();
-
-        var duplicate = await dbContext.Customers
-            .AnyAsync(c => c.TenantId == tenantId && c.Email == email, cancellationToken);
-
-        if (duplicate)
-        {
-            throw new ConflictException($"Customer with email '{email}' already exists for this tenant.");
-        }
-
-        var customer = new Domain.Customer
-        {
-            TenantId = tenantId,
-            FirstName = request.FirstName.Trim(),
-            LastName = request.LastName.Trim(),
-            Email = email,
-            Phone = request.Phone,
-            Status = CustomerStatus.Active,
-        };
-
-        if (request.Address is { } address)
-        {
-            customer.Addresses.Add(new Domain.Address
-            {
-                CustomerId = customer.Id,
-                Line1 = address.Line1,
-                City = address.City,
-                StateProvince = address.StateProvince,
-                PostalCode = address.PostalCode,
-                Country = address.Country,
-            });
-        }
-
-        dbContext.Customers.Add(customer);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        await eventBus.PublishAsync(
-            new CustomerCreatedEvent(
-                customer.Id,
-                customer.TenantId,
-                customer.Email,
-                customer.FirstName,
-                customer.LastName),
+        // A duplicate email surfaces from the procedure as CONFLICT → 409.
+        var customer = await repository.CreateAsync(
+            request.FirstName.Trim(),
+            request.LastName.Trim(),
+            request.Email.Trim().ToLowerInvariant(),
+            request.Phone,
+            request.CustomerType,
+            request.Address,
             cancellationToken);
 
-        return Result<CustomerDto>.Success(customer.ToDto());
+        return Result<CustomerDto>.Success(customer);
     }
 }

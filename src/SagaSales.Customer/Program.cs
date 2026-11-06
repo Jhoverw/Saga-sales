@@ -9,8 +9,8 @@ builder.AddSagaSalesLogging(SagaSalesConstants.ApplicationName);
 builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Customer");
 
-builder.Services.AddDbContext<CustomerDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Persistence: stored procedures only (constitution §VIII).
+builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 
 builder.Services.AddSagaSalesMessageBus(builder.Configuration);
 

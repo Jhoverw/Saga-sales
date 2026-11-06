@@ -65,10 +65,26 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     // ── customers ───────────────────────────────────────────────────────────
     public Task<PagedResult<CustomerDto>?> GetCustomersAsync(int pageNumber, int pageSize, string? search = null)
         => GetAsync<PagedResult<CustomerDto>>(
-            $"api/customers?pageNumber={pageNumber}&pageSize={pageSize}&search={Uri.EscapeDataString(search ?? string.Empty)}");
+            $"api/customers?pageNumber={pageNumber}&pageSize={pageSize}&includeInactive=true&search={Uri.EscapeDataString(search ?? string.Empty)}");
+
+    public Task<CustomerDto?> GetCustomerAsync(Guid id) => GetAsync<CustomerDto>($"api/customers/{id}");
 
     public Task<CustomerDto?> CreateCustomerAsync(CreateCustomerRequest request)
         => PostAsync<CustomerDto>("api/customers", request);
+
+    public async Task<CustomerDto?> UpdateCustomerAsync(Guid id, UpdateCustomerRequest request)
+    {
+        var response = await http.PutAsJsonAsync($"api/customers/{id}", request);
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<CustomerDto>()
+            : null;
+    }
+
+    public async Task<bool> DeactivateCustomerAsync(Guid id)
+    {
+        var response = await http.DeleteAsync($"api/customers/{id}");
+        return response.IsSuccessStatusCode;
+    }
 
     // ── orders ──────────────────────────────────────────────────────────────
     public Task<PagedResult<OrderDto>?> GetOrdersAsync(int pageNumber, int pageSize)

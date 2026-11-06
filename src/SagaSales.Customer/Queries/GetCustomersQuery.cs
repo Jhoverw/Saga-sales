@@ -1,58 +1,35 @@
 namespace SagaSales.Customer.Queries;
 
+using SagaSales.Customer.Data;
+
 /// <summary>
-/// Lists customers, optionally searching by email or phone (US-012).
+/// Paged customer search. The search covers name, email and phone because at the counter the
+/// operator has whichever of the three the buyer gives them.
 /// </summary>
 public record GetCustomersQuery(
     int PageNumber = 1,
     int PageSize = 20,
-    string? Search = null) : IQuery<PagedResult<CustomerDto>>;
+    string? Search = null,
+    bool IncludeInactive = false) : IQuery<PagedResult<CustomerDto>>;
 
-public sealed class GetCustomersQueryHandler(
-    CustomerDbContext dbContext,
-    ICurrentUser currentUser) : IQueryHandler<GetCustomersQuery, PagedResult<CustomerDto>>
+public sealed class GetCustomersQueryHandler(ICustomerRepository repository)
+    : IQueryHandler<GetCustomersQuery, PagedResult<CustomerDto>>
 {
-    private const int MaxPageSize = 100;
-
     public async Task<Result<PagedResult<CustomerDto>>> Handle(
         GetCustomersQuery request,
         CancellationToken cancellationToken)
     {
-        var tenantId = currentUser.RequireTenantId();
-
         var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
-        var pageSize = request.PageSize is < 1 or > MaxPageSize ? 20 : request.PageSize;
+        var pageSize = request.PageSize is < 1 or > 100 ? 20 : request.PageSize;
 
-        var query = dbContext.Customers
-            .AsNoTracking()
-            .Where(c => c.TenantId == tenantId && c.Status != CustomerStatus.Deleted);
-
-        if (!string.IsNullOrWhiteSpace(request.Search))
-        {
-            var term = request.Search.Trim().ToLowerInvariant();
-            query = query.Where(c =>
-                EF.Functions.Like(c.Email.ToLower(), $"%{term}%") ||
-                (c.Phone != null && EF.Functions.Like(c.Phone.ToLower(), $"%{term}%")) ||
-                EF.Functions.Like(c.FirstName.ToLower(), $"%{term}%") ||
-                EF.Functions.Like(c.LastName.ToLower(), $"%{term}%"));
-        }
-
-        var totalCount = await query.CountAsync(cancellationToken);
-
-        var customers = await query
-            .Include(c => c.Addresses)
-            .OrderBy(c => c.LastName)
-            .ThenBy(c => c.FirstName)
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
-
-        var result = new PagedResult<CustomerDto>(
-            customers.Select(c => c.ToDto()).ToList(),
+        var result = await repository.ListAsync(
             pageNumber,
             pageSize,
-            totalCount);
+            string.IsNullOrWhiteSpace(request.Search) ? null : request.Search.Trim(),
+            request.IncludeInactive,
+            cancellationToken);
 
-        return Result<PagedResult<CustomerDto>>.Success(result);
+        var page = new PagedResult<CustomerDto>(result.Items, pageNumber, pageSize, result.TotalCount);
+        return Result<PagedResult<CustomerDto>>.Success(page);
     }
 }

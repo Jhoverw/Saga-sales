@@ -1,29 +1,21 @@
 namespace SagaSales.Customer.Commands;
 
+using SagaSales.Customer.Data;
+
+/// <summary>
+/// Deactivates a buyer (soft delete): the orders that point at it must keep resolving, so the row
+/// is never removed. It also stops appearing when placing a new order.
+/// </summary>
 public record DeleteCustomerCommand(Guid Id) : ICommand;
 
-public sealed class DeleteCustomerCommandHandler(
-    CustomerDbContext dbContext,
-    ICurrentUser currentUser) : ICommandHandler<DeleteCustomerCommand>
+public sealed class DeleteCustomerCommandHandler(ICustomerRepository repository)
+    : ICommandHandler<DeleteCustomerCommand>
 {
     public async Task<Result> Handle(DeleteCustomerCommand request, CancellationToken cancellationToken)
     {
         Guard.AgainstEmptyGuid(request.Id, nameof(request.Id));
 
-        var tenantId = currentUser.RequireTenantId();
-
-        var customer = await dbContext.Customers
-            .FirstOrDefaultAsync(c => c.Id == request.Id && c.TenantId == tenantId, cancellationToken);
-
-        if (customer is null)
-        {
-            throw new NotFoundException("Customer", request.Id);
-        }
-
-        // Soft delete keeps order history intact.
-        customer.Status = CustomerStatus.Deleted;
-        await dbContext.SaveChangesAsync(cancellationToken);
-
+        await repository.DeactivateAsync(request.Id, cancellationToken);
         return Result.Success();
     }
 }

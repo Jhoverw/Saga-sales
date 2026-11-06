@@ -2,6 +2,8 @@ namespace SagaSales.Customer.Controllers;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SagaSales.Shared.DTOs;
+using SagaSales.Shared.Enums;
 
 [ApiController]
 [Authorize]
@@ -19,6 +21,7 @@ public sealed class CustomersController(IMediator mediator) : ControllerBase
             request.LastName,
             request.Email,
             request.Phone,
+            request.CustomerType,
             request.Address);
 
         var result = await mediator.Send(command, cancellationToken);
@@ -31,9 +34,13 @@ public sealed class CustomersController(IMediator mediator) : ControllerBase
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
+        [FromQuery] bool includeInactive = false,
         CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new Queries.GetCustomersQuery(pageNumber, pageSize, search), cancellationToken);
+        var result = await mediator.Send(
+            new Queries.GetCustomersQuery(pageNumber, pageSize, search, includeInactive),
+            cancellationToken);
+
         return Ok(result.Value);
     }
 
@@ -57,7 +64,8 @@ public sealed class CustomersController(IMediator mediator) : ControllerBase
             request.FirstName,
             request.LastName,
             request.Phone,
-            request.Status);
+            request.Status,
+            request.CustomerType);
 
         var result = await mediator.Send(command, cancellationToken);
         return Ok(result.Value);
@@ -65,9 +73,23 @@ public sealed class CustomersController(IMediator mediator) : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
     {
         await mediator.Send(new Commands.DeleteCustomerCommand(id), cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>Adds another shipping address to an existing customer.</summary>
+    [HttpPost("{id:guid}/addresses")]
+    [ProducesResponseType(typeof(AddressDto), StatusCodes.Status201Created)]
+    public async Task<IActionResult> AddAddress(
+        Guid id,
+        [FromBody] AddressDto address,
+        [FromQuery] bool isDefault = false,
+        CancellationToken cancellationToken = default)
+    {
+        var repository = HttpContext.RequestServices.GetRequiredService<Data.ICustomerRepository>();
+        var created = await repository.AddAddressAsync(id, address, isDefault, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id }, created);
     }
 }
