@@ -1,48 +1,43 @@
 <#
 .SYNOPSIS
-    Tells whether the panel is actually working — not just "listening".
+    Tells whether the panel is actually serving and able to talk to the API.
 
 .DESCRIPTION
-    Every failure that cost hours in this project had a signature, and all of them are checkable
-    over HTTP in a second:
+    Written after the failures that cost hours in this project, and corrected once it reported two
+    things that were simply not true:
 
-      1. No process serving the port          -> nothing at 5008
-      2. Old image served (Docker cache)      -> the app file has no new code inside
-      3. Mixed build artifacts (v8 loader     -> blazor.boot.json is missing, and the loader
-         + v10 runtime)                          dies with "Failed to load config file undefined"
-      4. Panel up but API down                -> the gateway does not answer
+      * blazor.boot.json returning 404 is NORMAL on the .NET 10 dev server. The runtime gets its
+        boot configuration another way, so checking that file produced a false alarm.
+      * Reading text out of the app .wasm is fragile: the file name and the encoding change between
+        builds, so a "marker not found" is not proof of a stale build.
 
-    Run it after any change. It prints PASS/FAIL per check plus the exact command that fixes the
-    failure, so there is no guessing and no need to re-read a conversation.
+    What is left are checks that mean something: something serves the port, the loader and the
+    runtime are both there, the app payload downloads, and the API answers.
+
+    Run it after any change. Each FAIL prints the command that fixes it.
 
 .PARAMETER Port
     Panel port. 5008 by default.
-
-.PARAMETER Marker
-    Text that must exist inside the compiled app. Proves the served build is current.
-
-.EXAMPLE
-    ./scripts/doctor-panel.ps1
 #>
 [CmdletBinding()]
 param(
-    [int]$Port = 5008,
-    [string]$Marker = 'Existencias'
+    [int]$Port = 5008
 )
 
 $ErrorActionPreference = 'Continue'
 
 $failures = New-Object System.Collections.Generic.List[string]
+$base = "http://localhost:$Port"
 
 function Check {
     param([string]$Name, [bool]$Ok, [string]$Detail, [string]$Fix)
 
     if ($Ok) {
-        Write-Host ("  PASS  {0,-38} {1}" -f $Name, $Detail) -ForegroundColor Green
+        Write-Host ("  PASS  {0,-36} {1}" -f $Name, $Detail) -ForegroundColor Green
         return
     }
 
-    Write-Host ("  FAIL  {0,-38} {1}" -f $Name, $Detail) -ForegroundColor Red
+    Write-Host ("  FAIL  {0,-36} {1}" -f $Name, $Detail) -ForegroundColor Red
     if ($Fix) { Write-Host ("        -> {0}" -f $Fix) -ForegroundColor Yellow }
     $script:failures.Add($Name)
 }
@@ -52,12 +47,15 @@ function Get-Status([string]$Url) {
     catch { if ($_.Exception.Response) { return [int]$_.Exception.Response.StatusCode } return 0 }
 }
 
-$base = "http://localhost:$Port"
+function Get-Length([string]$Url) {
+    try { return (Invoke-WebRequest $Url -UseBasicParsing -TimeoutSec 20).RawContentLength }
+    catch { return 0 }
+}
 
 Write-Host ''
 Write-Host "== Panel en $base" -ForegroundColor Cyan
 
-# ── 1. hay algo escuchando ──────────────────────────────────────────────────
+# ── 1. algo sirve el puerto ─────────────────────────────────────────────────
 $status = Get-Status "$base/"
 Check -Name 'el panel responde' -Ok ($status -eq 200) -Detail "HTTP $status" `
     -Fix 'Arrancalo: ./scripts/dev-panel.ps1   (o el contenedor: docker compose up -d blazor-web)'
@@ -71,29 +69,21 @@ if ($status -ne 200) {
 # ── 2. el index es el actual ────────────────────────────────────────────────
 $page = (Invoke-WebRequest "$base/" -UseBasicParsing -TimeoutSec 10).Content
 Check -Name 'index.html actual' -Ok ($page -match 'saga-splash') -Detail $(if ($page -match 'saga-splash') { 'splash propio' } else { 'index antiguo' }) `
-    -Fix 'Reconstruye sin cache: dotnet clean src\SagaSales.BlazorWeb; borra bin/obj; ./scripts/dev-panel.ps1'
+    -Fix 'La imagen o la build es vieja: dotnet clean src\SagaSales.BlazorWeb; borra bin y obj; vuelve a servir'
 
-# ── 3. EL chequeo que detecta el desajuste de versiones ────────────────────
-# Sin el manifiesto, el cargador muere con "Failed to load config file undefined".
-$boot = Get-Status "$base/_framework/blazor.boot.json"
-Check -Name 'manifiesto de arranque' -Ok ($boot -eq 200) -Detail "HTTP $boot" `
-    -Fix 'Artefactos mezclados (cargador v8 + runtime v10). Limpia: dotnet clean; borra bin y obj del panel; vuelve a compilar'
+# ── 3. cargador y runtime presentes y del mismo build ──────────────────────
+$loader = Get-Length "$base/_framework/blazor.webassembly.js"
+Check -Name 'cargador de Blazor' -Ok ($loader -gt 0) -Detail "$loader b" `
+    -Fix 'Artefactos incompletos: limpia bin y obj del panel y recompila'
 
-# ── 4. la app servida lleva tu codigo ──────────────────────────────────────
-$app = $null
-try { $app = (Invoke-WebRequest "$base/_framework/SagaSales.BlazorWeb.wasm" -UseBasicParsing -TimeoutSec 20).Content } catch { }
+$runtime = Get-Length "$base/_framework/dotnet.js"
+Check -Name 'runtime de .NET' -Ok ($runtime -gt 0) -Detail "$runtime b" `
+    -Fix 'El publish no genero el runtime: limpia bin y obj del panel y recompila'
 
-if ($null -eq $app) {
-    Check -Name 'app compilada servida' -Ok $false -Detail 'no se pudo descargar' `
-        -Fix 'Reconstruye el panel; si persiste, revisa que _framework se este sirviendo'
-}
-else {
-    $even = [Text.Encoding]::Unicode.GetString($app)
-    $odd = [Text.Encoding]::Unicode.GetString($app[1..($app.Length - 1)])
-    $hasMarker = $even.Contains($Marker) -or $odd.Contains($Marker)
-    Check -Name ("la app contiene '{0}'" -f $Marker) -Ok $hasMarker -Detail $(if ($hasMarker) { "$($app.Length) b" } else { 'build antiguo' }) `
-        -Fix 'La build servida no tiene los ultimos cambios: reconstruye sin cache'
-}
+# ── 4. el payload de la app se descarga ────────────────────────────────────
+$appBytes = Get-Length "$base/_framework/SagaSales.BlazorWeb.wasm"
+Check -Name 'app compilada' -Ok ($appBytes -gt 1000) -Detail "$appBytes b" `
+    -Fix 'Reconstruye el panel; si sigue vacio, revisa que _framework se este sirviendo'
 
 # ── 5. la API esta disponible ──────────────────────────────────────────────
 $api = Get-Status 'http://localhost:5000/health'
@@ -107,18 +97,18 @@ Check -Name 'identity responde' -Ok ($identity -eq 200) -Detail "HTTP $identity"
 # ── 6. el panel apunta a la API correcta ──────────────────────────────────
 try {
     $config = (Invoke-WebRequest "$base/appsettings.json" -UseBasicParsing -TimeoutSec 10).Content | ConvertFrom-Json
-    $url = $config.ApiBaseUrl
-    Check -Name 'el panel apunta al gateway' -Ok ($url -eq 'http://localhost:5000/') -Detail "$url" `
-        -Fix 'Corrige wwwroot\appsettings.json: ApiBaseUrl debe ser http://localhost:5000/'
+    Check -Name 'apunta al gateway' -Ok ($config.ApiBaseUrl -eq 'http://localhost:5000/') -Detail $config.ApiBaseUrl `
+        -Fix 'Corrige wwwroot\appsettings.json: ApiBaseUrl = http://localhost:5000/'
 }
 catch {
-    Check -Name 'el panel apunta al gateway' -Ok $false -Detail 'appsettings.json no legible' -Fix 'Revisa src\SagaSales.BlazorWeb\wwwroot\appsettings.json'
+    Check -Name 'apunta al gateway' -Ok $false -Detail 'appsettings.json no legible' `
+        -Fix 'Revisa src\SagaSales.BlazorWeb\wwwroot\appsettings.json'
 }
 
 Write-Host ''
 if ($failures.Count -eq 0) {
     Write-Host 'PANEL: OK — sirve la build actual y la API responde.' -ForegroundColor Green
-    Write-Host 'Abrelo en incognito si ya lo tenias abierto.' -ForegroundColor DarkGray
+    Write-Host 'Si el navegador no lo refleja, abre en incognito: es cache del navegador.' -ForegroundColor DarkGray
     exit 0
 }
 
