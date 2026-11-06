@@ -80,10 +80,10 @@ $runtime = Get-Length "$base/_framework/dotnet.js"
 Check -Name 'runtime de .NET' -Ok ($runtime -gt 0) -Detail "$runtime b" `
     -Fix 'El publish no genero el runtime: limpia bin y obj del panel y recompila'
 
-# ── 4. el payload de la app se descarga ────────────────────────────────────
-$appBytes = Get-Length "$base/_framework/SagaSales.BlazorWeb.wasm"
-Check -Name 'app compilada' -Ok ($appBytes -gt 1000) -Detail "$appBytes b" `
-    -Fix 'Reconstruye el panel; si sigue vacio, revisa que _framework se este sirviendo'
+# ── 4. (retirado) El nombre del archivo de la app cambia entre builds (huella webcil), asi que
+# comprobar "SagaSales.BlazorWeb.wasm" daba falsos negativos. Y el contenido del wasm no prueba que
+# el navegador lo ejecute: solo el navegador puede decirlo. Se deja la comprobacion del cargador y
+# del runtime, que si son estables.
 
 # ── 5. la API esta disponible ──────────────────────────────────────────────
 $api = Get-Status 'http://localhost:5000/health'
