@@ -147,10 +147,25 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     }
 
     // ── suppliers and purchases (E-12) ──────────────────────────────────────
-    public Task<List<SupplierDto>?> GetSuppliersAsync() => GetAsync<List<SupplierDto>>("api/suppliers");
+    public Task<List<SupplierDto>?> GetSuppliersAsync(bool includeInactive = false)
+        => GetAsync<List<SupplierDto>>($"api/suppliers?includeInactive={includeInactive.ToString().ToLowerInvariant()}");
 
     public Task<SupplierDto?> CreateSupplierAsync(CreateSupplierRequest request)
         => PostAsync<SupplierDto>("api/suppliers", request);
+
+    public async Task<SupplierDto?> UpdateSupplierAsync(Guid id, UpdateSupplierRequest request)
+    {
+        var response = await http.PutAsJsonAsync($"api/suppliers/{id}", request);
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<SupplierDto>()
+            : null;
+    }
+
+    public async Task<bool> DeactivateSupplierAsync(Guid id)
+    {
+        var response = await http.DeleteAsync($"api/suppliers/{id}");
+        return response.IsSuccessStatusCode;
+    }
 
     public Task<PagedResult<PurchaseDto>?> GetPurchasesAsync(int pageNumber = 1, int pageSize = 20)
         => GetAsync<PagedResult<PurchaseDto>>($"api/purchases?pageNumber={pageNumber}&pageSize={pageSize}");

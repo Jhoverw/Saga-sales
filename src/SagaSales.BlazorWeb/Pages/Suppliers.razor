@@ -1,0 +1,254 @@
+@page "/suppliers"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<div class="page-head">
+    <div>
+        <h1>Proveedores</h1>
+        <div class="page-head__sub">A quién le compras, con qué identificación y cómo contactarlo</div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="panel">
+            <div class="panel__head">
+                <span>Listado</span>
+                <input class="form-control form-control-sm" style="max-width:220px;"
+                       placeholder="Buscar por nombre o RUC"
+                       @bind="Search" @bind:event="oninput" />
+            </div>
+            <div class="panel__body p-0">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Identificación</th>
+                            <th>Contacto</th>
+                            <th>Teléfono</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var supplier in Filtered)
+                        {
+                            <tr class="@(supplier.Status == 2 ? "opacity-50" : "")">
+                                <td>
+                                    @supplier.Name
+                                    @if (supplier.Status == 2)
+                                    {
+                                        <span class="chip">inactivo</span>
+                                    }
+                                </td>
+                                <td>@(supplier.TaxId ?? "—")</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(supplier.ContactName))
+                                    {
+                                        <span>@supplier.ContactName</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(supplier.Email))
+                                    {
+                                        <div class="page-head__sub mb-0">@supplier.Email</div>
+                                    }
+                                    @if (string.IsNullOrWhiteSpace(supplier.ContactName) && string.IsNullOrWhiteSpace(supplier.Email))
+                                    {
+                                        <span>—</span>
+                                    }
+                                </td>
+                                <td>@(supplier.Phone ?? "—")</td>
+                                <td class="text-end text-nowrap">
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(supplier)">Editar</button>
+                                    @if (supplier.Status == 1)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeactivateAsync(supplier)">Desactivar</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (Filtered.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center py-3">Todavía no hay proveedores.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="panel">
+            <div class="panel__head">
+                @(EditingId is null ? "Nuevo proveedor" : "Editando proveedor")
+            </div>
+            <div class="panel__body">
+                <div class="mb-3">
+                    <label class="form-label">Nombre *</label>
+                    <input class="form-control" @bind="Name" @bind:event="oninput" placeholder="Distribuidora Andina" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Identificación (RUC / cédula)</label>
+                    <input class="form-control" @bind="TaxId" @bind:event="oninput" placeholder="1790000000001" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Persona de contacto</label>
+                    <input class="form-control" @bind="ContactName" @bind:event="oninput" />
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" type="email" @bind="Email" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Teléfono</label>
+                        <input class="form-control" @bind="Phone" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="mb-3 mt-2">
+                    <label class="form-label">Notas</label>
+                    <textarea class="form-control" rows="2" @bind="Notes" @bind:event="oninput"
+                              placeholder="Condiciones, días de entrega…"></textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@Busy">
+                        @(Busy ? "Guardando..." : (EditingId is null ? "Crear proveedor" : "Guardar cambios"))
+                    </button>
+                    @if (EditingId is not null)
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="ClearForm">Cancelar</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<SupplierDto> SupplierList { get; set; } = [];
+
+    private Guid? EditingId { get; set; }
+    private string Name { get; set; } = string.Empty;
+    private string TaxId { get; set; } = string.Empty;
+    private string ContactName { get; set; } = string.Empty;
+    private string Email { get; set; } = string.Empty;
+    private string Phone { get; set; } = string.Empty;
+    private string Notes { get; set; } = string.Empty;
+    private string Search { get; set; } = string.Empty;
+
+    private string? Message { get; set; }
+    private bool Error { get; set; }
+    private bool Busy { get; set; }
+
+    private List<SupplierDto> Filtered
+        => string.IsNullOrWhiteSpace(Search)
+            ? SupplierList
+            : SupplierList.Where(s =>
+                s.Name.Contains(Search, StringComparison.OrdinalIgnoreCase) ||
+                (s.TaxId?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+        => SupplierList = await Api.GetSuppliersAsync(includeInactive: true) ?? [];
+
+    private void Edit(SupplierDto supplier)
+    {
+        EditingId = supplier.Id;
+        Name = supplier.Name;
+        TaxId = supplier.TaxId ?? string.Empty;
+        ContactName = supplier.ContactName ?? string.Empty;
+        Email = supplier.Email ?? string.Empty;
+        Phone = supplier.Phone ?? string.Empty;
+        Notes = supplier.Notes ?? string.Empty;
+        Message = null;
+        Error = false;
+    }
+
+    private void ClearForm()
+    {
+        EditingId = null;
+        Name = string.Empty;
+        TaxId = string.Empty;
+        ContactName = string.Empty;
+        Email = string.Empty;
+        Phone = string.Empty;
+        Notes = string.Empty;
+        Message = null;
+        Error = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        Message = null;
+        Error = false;
+
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            Message = "El nombre es obligatorio.";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+
+        try
+        {
+            var request = new CreateSupplierRequest
+            {
+                Name = Name.Trim(),
+                TaxId = Blank(TaxId),
+                ContactName = Blank(ContactName),
+                Email = Blank(Email),
+                Phone = Blank(Phone),
+                Notes = Blank(Notes),
+            };
+
+            if (EditingId is null)
+            {
+                var created = await Api.CreateSupplierAsync(request);
+                Message = created is null ? "No se pudo crear el proveedor." : $"Proveedor «{created.Name}» creado.";
+                Error = created is null;
+            }
+            else
+            {
+                var updated = await Api.UpdateSupplierAsync(EditingId.Value, new UpdateSupplierRequest
+                {
+                    Name = request.Name,
+                    TaxId = request.TaxId,
+                    ContactName = request.ContactName,
+                    Email = request.Email,
+                    Phone = request.Phone,
+                    Notes = request.Notes,
+                });
+
+                Message = updated is null ? "No se pudo guardar. ¿Identificación duplicada?" : "Cambios guardados.";
+                Error = updated is null;
+            }
+
+            if (!Error)
+            {
+                ClearForm();
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task DeactivateAsync(SupplierDto supplier)
+    {
+        var ok = await Api.DeactivateSupplierAsync(supplier.Id);
+        Message = ok ? $"«{supplier.Name}» desactivado. Sus compras históricas se conservan." : "No se pudo desactivar.";
+        Error = !ok;
+        await LoadAsync();
+    }
+
+    private static string? Blank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
