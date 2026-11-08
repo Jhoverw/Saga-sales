@@ -82,6 +82,9 @@ public class CreateProductRequest
 
     /// <summary>Mark it when the product expires and must be received with a lot code.</summary>
     public bool TracksBatches { get; set; }
+
+    /// <summary>Mark if the product is subject to VAT/Tax.</summary>
+    public bool IsTaxable { get; set; } = true;
 }
 
 public class UpdateProductRequest : CreateProductRequest

@@ -67,6 +67,8 @@ Write-Host "  motor $engine" -ForegroundColor DarkGray
 
 # ── 2. contenedores ─────────────────────────────────────────────────────────
 Write-Step 'Construyendo y arrancando'
+# Build label shown in the panel (version + commit + dirty flag + UTC time).
+. (Join-Path $PSScriptRoot 'build-label.ps1')
 
 if ($Service) {
     Write-Host "  reconstruyo solo $Service y reinicio el gateway" -ForegroundColor Yellow

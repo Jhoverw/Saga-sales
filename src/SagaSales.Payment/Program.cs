@@ -23,7 +23,8 @@ builder.Services
 
 builder.Services.AddSagaSalesMessageBus(
     builder.Configuration,
-    bus => bus.AddConsumer<OrderPlacedConsumer>());
+    bus => bus.AddConsumer<OrderPlacedConsumer>()
+        .Endpoint(e => e.Name = "payment-order-placed"));
 
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreatePaymentCommandHandler).Assembly));
 builder.Services.AddSagaSalesValidation(typeof(CreatePaymentCommandHandler).Assembly);

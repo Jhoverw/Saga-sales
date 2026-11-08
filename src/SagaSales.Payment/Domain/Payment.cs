@@ -10,7 +10,13 @@ public class Payment
 
     public Guid CustomerId { get; set; }
 
-    public PaymentMethod Method { get; set; }
+    /// <summary>How the money was (or will be) received; required by <c>PaymentDto</c>.</summary>
+    public PaymentMethod Method { get; set; } = PaymentMethod.BankTransfer;
+
+    public string? CardLast4 { get; set; }
+    public decimal CashReceived { get; set; }
+    public decimal ChangeGiven { get; set; }
+
 
     public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
 

@@ -18,7 +18,11 @@ public interface IPaymentRepository
         ManualPaymentMethod method,
         string? reference,
         DateTime? paidAt,
+        decimal? cashReceived,
         CancellationToken cancellationToken);
+
+    /// <summary>Refuses an identical payment (same order, method and amount) recorded within 10 s (FR-016).</summary>
+    Task AssertNotDuplicateAsync(Guid orderId, ManualPaymentMethod method, decimal amount, CancellationToken cancellationToken);
 
     Task<PaymentDto> RefundAsync(Guid paymentId, decimal amount, CancellationToken cancellationToken);
 
@@ -43,6 +47,7 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
         ManualPaymentMethod method,
         string? reference,
         DateTime? paidAt,
+        decimal? cashReceived,
         CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
@@ -51,13 +56,30 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
             .With("amount", amount)
             .With("method", (short)method)
             .With("reference", string.IsNullOrWhiteSpace(reference) ? null : reference.Trim())
-            .With("paid_at", paidAt);
+            .With("paid_at", paidAt)
+            .With("cash_received", cashReceived);
 
         // A second live payment for the same order surfaces as PAYMENT_ALREADY_EXISTS → 409.
         var row = await executor.QueryProcSingleAsync<PaymentRow>(
             "dbo.sp_payment_create_manual", arguments, cancellationToken: cancellationToken);
 
         return row!.ToDto();
+    }
+
+    public async Task AssertNotDuplicateAsync(
+        Guid orderId,
+        ManualPaymentMethod method,
+        decimal amount,
+        CancellationToken cancellationToken)
+    {
+        var arguments = SqlArgs.New()
+            .With("order_id", orderId)
+            .With("method", (short)method)
+            .With("amount", amount);
+
+        // PAYMENT_DUPLICATE surfaces as 409 before the order is touched.
+        await executor.ExecuteProcAsync(
+            "dbo.sp_payment_assert_not_duplicate", arguments, cancellationToken: cancellationToken);
     }
 
     public async Task<PaymentDto> RefundAsync(Guid paymentId, decimal amount, CancellationToken cancellationToken)
@@ -138,6 +160,10 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
 
         public DateTime? RefundedAt { get; set; }
 
+        public decimal? CashReceived { get; set; }
+
+        public decimal? ChangeGiven { get; set; }
+
         public PaymentDto ToDto() => new()
         {
             Id = Id,
@@ -153,6 +179,8 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
             PaidAt = PaidAt,
             CapturedAt = CapturedAt,
             RefundedAt = RefundedAt,
+            CashReceived = CashReceived,
+            ChangeGiven = ChangeGiven,
         };
     }
 }

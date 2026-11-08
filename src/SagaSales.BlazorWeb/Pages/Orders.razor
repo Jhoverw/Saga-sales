@@ -28,41 +28,71 @@
                     }
                 </select>
             </div>
-            <div class="col-md-4">
-                <label class="form-label">Producto</label>
-                <select class="form-select" @bind="ProductId">
-                    <option value="@Guid.Empty">— elige —</option>
-                    @foreach (var product in Products)
-                    {
-                        <option value="@product.Id">@product.Name · @product.BasePrice.ToString("C") · stock @product.StockQuantity</option>
-                    }
-                </select>
-            </div>
-            <div class="col-md-1">
-                <label class="form-label">Cant.</label>
-                <input class="form-control" type="number" min="1" @bind="Quantity" />
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-8">
                 <label class="form-label">Dirección de envío</label>
                 <input class="form-control" @bind="ShippingAddress" @bind:event="oninput" placeholder="Calle, ciudad" />
             </div>
         </div>
-        <div class="mt-2">
+
+        <div class="mt-3">
+            <label class="form-label">Productos</label>
+            @foreach (var line in Lines)
+            {
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-md-6">
+                        <select class="form-select" @bind="line.ProductId">
+                            <option value="@Guid.Empty">— elige producto —</option>
+                            @foreach (var product in Products)
+                            {
+                                <option value="@product.Id">@product.Name · @product.BasePrice.ToString("C") · stock @product.StockQuantity</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input class="form-control" type="number" min="1" @bind="line.Quantity" placeholder="Cant." />
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <span class="page-head__sub">@LinePreview(line).ToString("C") sin IVA</span>
+                    </div>
+                    <div class="col-md-1 text-end">
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(line)" disabled="@(Lines.Count == 1)">×</button>
+                    </div>
+                </div>
+            }
+            <button class="btn btn-sm btn-outline-secondary" @onclick="AddLine">+ Agregar producto</button>
+        </div>
+
+        <div class="d-flex align-items-center gap-3 mt-3">
             <button class="btn btn-primary" @onclick="CreateAsync" disabled="@Busy">
                 @(Busy ? "Guardando..." : "Crear pedido")
             </button>
+            <span class="page-head__sub mb-0">El IVA vigente y el total se calculan al guardar.</span>
         </div>
     </div>
 </div>
 
 <div class="panel mt-3">
-    <div class="panel__head">Pedidos</div>
+    <div class="panel__head">
+        <span>Pedidos</span>
+        <select class="form-select form-select-sm ms-auto" style="max-width:220px;" @bind="FilterValue" @bind:event="onchange" @bind:after="LoadOrdersAsync">
+            <option value="">Todos los estados</option>
+            <option value="Pending">Pendiente</option>
+            <option value="Confirmed">Confirmado</option>
+            <option value="Processing">En proceso</option>
+            <option value="Shipped">Enviado</option>
+            <option value="Delivered">Entregado</option>
+            <option value="Cancelled">Cancelado</option>
+            <option value="Refunded">Reembolsado</option>
+        </select>
+    </div>
     <div class="panel__body p-0">
         <table class="table mb-0">
             <thead>
                 <tr>
                     <th>Fecha</th>
+                    <th>Número</th>
                     <th>Cliente</th>
+                    <th class="text-end">IVA</th>
                     <th class="text-end">Total</th>
                     <th class="text-end">Pagado</th>
                     <th>Estado</th>
@@ -74,8 +104,10 @@
                 {
                     <tr class="@(Selected?.Id == order.Id ? "table-active" : "")">
                         <td>@order.OrderDate.ToString("dd/MM HH:mm")</td>
+                        <td><code>@(string.IsNullOrEmpty(order.OrderNumber) ? "—" : order.OrderNumber)</code></td>
                         <td>@CustomerName(order.CustomerId)</td>
-                        <td class="text-end">@order.Subtotal.ToString("C")</td>
+                        <td class="text-end">@order.TaxAmount.ToString("C")</td>
+                        <td class="text-end">@order.Total.ToString("C")</td>
                         <td class="text-end">@order.PaidAmount.ToString("C")</td>
                         <td><span class="chip">@StatusLabel(order.Status)</span></td>
                         <td class="text-end text-nowrap">
@@ -85,7 +117,7 @@
                 }
                 @if (OrderList.Count == 0)
                 {
-                    <tr><td colspan="6" class="text-center py-3">Todavía no hay pedidos.</td></tr>
+                    <tr><td colspan="8" class="text-center py-3">Todavía no hay pedidos.</td></tr>
                 }
             </tbody>
         </table>
@@ -97,7 +129,10 @@
     <div class="row g-3 mt-1">
         <div class="col-lg-6">
             <div class="panel">
-                <div class="panel__head">Pedido · @StatusLabel(Selected.Status)</div>
+                <div class="panel__head d-flex align-items-center gap-2">
+                    <span>Pedido @Selected.OrderNumber · @StatusLabel(Selected.Status)</span>
+                    <a class="btn btn-sm btn-outline-secondary ms-auto" href="/receipt/@Selected.Id" target="_blank">Ver recibo</a>
+                </div>
                 <div class="panel__body p-0">
                     <table class="table mb-0">
                         <thead>
@@ -114,8 +149,16 @@
                                 </tr>
                             }
                             <tr>
+                                <td colspan="3" class="text-end">Subtotal</td>
+                                <td class="text-end">@Selected.Subtotal.ToString("C")</td>
+                            </tr>
+                            <tr>
+                                <td colspan="3" class="text-end">IVA</td>
+                                <td class="text-end">@Selected.TaxAmount.ToString("C")</td>
+                            </tr>
+                            <tr>
                                 <td colspan="3" class="text-end"><strong>Total</strong></td>
-                                <td class="text-end"><strong>@Selected.Subtotal.ToString("C")</strong></td>
+                                <td class="text-end"><strong>@Selected.Total.ToString("C")</strong></td>
                             </tr>
                             <tr>
                                 <td colspan="3" class="text-end">Pagado</td>
@@ -129,6 +172,25 @@
 
         <div class="col-lg-6">
             <div class="panel">
+                <div class="panel__head">Avanzar estado</div>
+                <div class="panel__body">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="chip chip--info">@StatusLabel(Selected.Status)</span>
+                        @if (NextTransition(Selected.Status) is { } next)
+                        {
+                            <button class="btn btn-sm btn-primary" @onclick="AdvanceAsync" disabled="@Busy">
+                                @NextTransitionLabel(Selected.Status)
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="page-head__sub mb-0">Estado final (o se cancela/desde cobro).</span>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel mt-3">
                 <div class="panel__head">Cobro</div>
                 <div class="panel__body">
                     @if (Pending > 0)
@@ -141,8 +203,9 @@
                             <div class="col-md-4">
                                 <label class="form-label">Medio</label>
                                 <select class="form-select" @bind="MethodId">
-                                    <option value="4">Transferencia</option>
                                     <option value="5">Efectivo</option>
+                                    <option value="1">Tarjeta</option>
+                                    <option value="4">Transferencia</option>
                                     <option value="9">Depósito</option>
                                 </select>
                             </div>
@@ -150,6 +213,30 @@
                                 <button class="btn btn-primary w-100" @onclick="ChargeAsync" disabled="@Busy">Registrar cobro</button>
                             </div>
                         </div>
+                        @if (MethodId == 5)
+                        {
+                            <div class="row g-2 align-items-end mt-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">Monto recibido</label>
+                                    <input class="form-control" type="number" step="0.01" min="0" @bind="CashReceived" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Vuelto</label>
+                                    <input class="form-control" readonly value="@ChangeDue.ToString("C")" />
+                                </div>
+                                @if (CashShort)
+                                {
+                                    <div class="col-md-4 text-danger small">El monto recibido es menor que el importe a cobrar.</div>
+                                }
+                            </div>
+                        }
+                        else if (MethodId is 1 or 4 or 9)
+                        {
+                            <div class="mt-2">
+                                <label class="form-label">@(MethodId == 1 ? "Últimos 4 dígitos (opcional)" : "Referencia (opcional)")</label>
+                                <input class="form-control" @bind="Reference" />
+                            </div>
+                        }
                         <div class="page-head__sub mt-2 mb-0">Pendiente de cobro: @Pending.ToString("C")</div>
                     }
                     else
@@ -211,18 +298,55 @@
     private List<PaymentDto> PaymentList { get; set; } = [];
 
     private Guid CustomerId { get; set; } = Guid.Empty;
-    private Guid ProductId { get; set; } = Guid.Empty;
-    private int Quantity { get; set; } = 1;
+    private List<LineDraft> Lines { get; set; } = [new()];
     private string ShippingAddress { get; set; } = string.Empty;
 
+    /// <summary>One product line of the order being typed. Quantity and product are edited in place.</summary>
+    private sealed class LineDraft
+    {
+        public Guid ProductId { get; set; } = Guid.Empty;
+
+        public int Quantity { get; set; } = 1;
+    }
+
+    private void AddLine() => Lines.Add(new LineDraft());
+
+    private void RemoveLine(LineDraft line)
+    {
+        if (Lines.Count > 1) { Lines.Remove(line); }
+    }
+
+    // Preview only: base price times quantity. The stored subtotal and the VAT come from the server.
+    private decimal LinePreview(LineDraft line)
+    {
+        var product = Products.FirstOrDefault(p => p.Id == line.ProductId);
+        return product is null ? 0m : product.BasePrice * Math.Max(1, line.Quantity);
+    }
+
     private decimal Amount { get; set; }
-    private int MethodId { get; set; } = 4;
+    private int MethodId { get; set; } = 5;
+
+    // Cash (H-09): amount handed over and change due. Card/transfer reference (H-10) is optional.
+    private decimal? CashReceived { get; set; }
+    private string Reference { get; set; } = string.Empty;
+
+    private decimal ChangeDue => MethodId == 5 && CashReceived is { } received ? Math.Max(0, received - Amount) : 0m;
+
+    private bool CashShort => MethodId == 5 && CashReceived is { } received && received < Amount;
+
+    private string FilterValue { get; set; } = string.Empty;
+
+    private OrderStatus? FilterStatus
+        => string.IsNullOrWhiteSpace(FilterValue) || !Enum.TryParse<OrderStatus>(FilterValue, out var status)
+            ? null
+            : status;
 
     private string? Message { get; set; }
     private bool Error { get; set; }
     private bool Busy { get; set; }
 
-    private decimal Pending => Selected is null ? 0 : Math.Max(0, Selected.Subtotal - Selected.PaidAmount);
+    // What the customer still owes includes VAT: the total, not the subtotal.
+    private decimal Pending => Selected is null ? 0 : Math.Max(0, Selected.Total - Selected.PaidAmount);
 
     protected override async Task OnInitializedAsync()
     {
@@ -233,7 +357,7 @@
 
     private async Task LoadOrdersAsync()
     {
-        OrderList = await Api.GetOrdersAsync(1, 50) is { } page ? page.Items.ToList() : [];
+        OrderList = await Api.GetOrdersAsync(1, 50, FilterStatus) is { } page ? page.Items.ToList() : [];
 
         if (Selected is not null)
         {
@@ -247,7 +371,7 @@
     {
         Selected = await Api.GetOrderAsync(order.Id) ?? order;
         PaymentList = (await Api.GetPaymentsByOrderAsync(order.Id))?.ToList() ?? [];
-        Amount = Math.Max(0, Selected.Subtotal - Selected.PaidAmount);
+        Amount = Math.Max(0, Selected.Total - Selected.PaidAmount);
         Message = null;
         Error = false;
     }
@@ -257,9 +381,23 @@
         Message = null;
         Error = false;
 
-        if (CustomerId == Guid.Empty || ProductId == Guid.Empty)
+        if (CustomerId == Guid.Empty)
         {
-            Message = "Elige cliente y producto.";
+            Message = "Elige el cliente.";
+            Error = true;
+            return;
+        }
+
+        if (Lines.Any(l => l.ProductId == Guid.Empty))
+        {
+            Message = "Cada línea necesita un producto. Quita las líneas vacías o elige producto.";
+            Error = true;
+            return;
+        }
+
+        if (Lines.Any(l => l.Quantity < 1))
+        {
+            Message = "La cantidad de cada línea debe ser al menos 1.";
             Error = true;
             return;
         }
@@ -279,16 +417,17 @@
             {
                 CustomerId = CustomerId,
                 ShippingAddress = ShippingAddress.Trim(),
-                Items = [new OrderItemRequest { ProductId = ProductId, Quantity = Quantity }],
+                Items = Lines.Select(l => new OrderItemRequest { ProductId = l.ProductId, Quantity = l.Quantity }).ToList(),
             });
 
             Message = order is null
-                ? "No se pudo crear el pedido. Revisa el stock del producto."
-                : $"Pedido creado por {order.Subtotal:C}.";
+                ? "No se pudo crear el pedido. Revisa el stock de los productos."
+                : $"Pedido {order.OrderNumber} creado por {order.Total:C} (IVA incluido).";
             Error = order is null;
 
             if (order is not null)
             {
+                Lines = [new LineDraft()];
                 await LoadOrdersAsync();
             }
         }
@@ -306,16 +445,36 @@
 
         try
         {
+            // H-09: cash must cover the amount; the change is computed here and recorded by the server.
+            if (MethodId == 5 && (CashReceived is null || CashShort))
+            {
+                Message = CashReceived is null
+                    ? "Indica el monto recibido en efectivo."
+                    : "El monto recibido es menor que el importe a cobrar.";
+                Error = true;
+                return;
+            }
+
             var payment = await Api.CreatePaymentAsync(new ManualPaymentRequest
             {
                 OrderId = Selected.Id,
                 Amount = Amount,
                 Method = (ManualPaymentMethod)MethodId,
+                Reference = string.IsNullOrWhiteSpace(Reference) ? null : Reference.Trim(),
+                CashReceived = MethodId == 5 ? CashReceived : null,
             });
 
             Message = payment is null
                 ? "No se pudo registrar el cobro."
-                : $"Cobro de {payment.Amount:C} registrado.";
+                : payment.ChangeGiven is { } change
+                    ? $"Cobro en efectivo de {payment.Amount:C} registrado. Vuelto: {change:C}."
+                    : $"Cobro de {payment.Amount:C} registrado.";
+
+            if (payment is not null)
+            {
+                CashReceived = null;
+                Reference = string.Empty;
+            }
             Error = payment is null;
 
             await LoadOrdersAsync();
@@ -345,6 +504,49 @@
             Busy = false;
         }
     }
+
+    private async Task AdvanceAsync()
+    {
+        if (Selected is null) { return; }
+
+        var next = NextTransition(Selected.Status);
+        if (next is null) { return; }
+
+        Busy = true;
+
+        try
+        {
+            var ok = await Api.UpdateOrderStatusAsync(Selected.Id, Enum.Parse<OrderStatus>(next));
+            Message = ok ? $"Pedido pasado a {StatusLabel(next)}." : "No se pudo cambiar el estado (transición no permitida).";
+            Error = !ok;
+
+            await LoadOrdersAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    // The order DTO carries the state as text, so the next allowed step is resolved by name and
+    // matches the transitions enforced by sp_order_change_status.
+    private static string? NextTransition(string status) => status switch
+    {
+        "Pending" => "Confirmed",
+        "Confirmed" => "Processing",
+        "Processing" => "Shipped",
+        "Shipped" => "Delivered",
+        _ => null,
+    };
+
+    private static string? NextTransitionLabel(string status) => status switch
+    {
+        "Pending" => "Confirmar",
+        "Confirmed" => "En proceso",
+        "Processing" => "Enviado",
+        "Shipped" => "Entregado",
+        _ => null,
+    };
 
     private async Task RefundAsync(PaymentDto payment)
     {

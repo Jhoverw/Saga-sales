@@ -99,9 +99,11 @@ public enum PriceSource
     List = 2,
 }
 
-/// <summary>How money was received when there is no online gateway (E-04a).</summary>
+/// <summary>How money was received when there is no online gateway (E-04a). Values are the stored method ids.</summary>
 public enum ManualPaymentMethod
 {
+    /// <summary>Card, recorded without a gateway (H-10). Stored as credit card (1).</summary>
+    Card = 1,
     Transfer = 4,
     Cash = 5,
     Deposit = 9,

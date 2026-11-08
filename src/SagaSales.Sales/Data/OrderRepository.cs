@@ -17,6 +17,7 @@ public interface IOrderRepository
         string? notes,
         Guid createdBy,
         IReadOnlyList<OrderItem> lines,
+        string? createdByName,
         CancellationToken cancellationToken);
 
     Task<Order?> GetAsync(Guid orderId, CancellationToken cancellationToken);
@@ -44,6 +45,7 @@ public sealed class OrderRepository(
         string? notes,
         Guid createdBy,
         IReadOnlyList<OrderItem> lines,
+        string? createdByName,
         CancellationToken cancellationToken)
     {
         // The lines travel as JSON so header and lines are inserted in one transaction.
@@ -64,6 +66,7 @@ public sealed class OrderRepository(
             .With("shipping_address", shippingAddress)
             .With("notes", notes)
             .With("created_by", createdBy)
+            .With("created_by_name", string.IsNullOrWhiteSpace(createdByName) ? null : createdByName.Trim())
             .With("lines_json", payload);
 
         var row = await executor.QueryProcSingleAsync<OrderRow>(
@@ -150,6 +153,11 @@ public sealed class OrderRepository(
 
         public decimal Subtotal { get; set; }
 
+        // Nullable on purpose: orders created before V-03 have no tax_amount (NULL in SQL).
+        public decimal? TaxAmount { get; set; }
+
+        public string? OrderNumber { get; set; }
+
         public decimal PaidAmount { get; set; }
 
         public string ShippingAddress { get; set; } = string.Empty;
@@ -162,6 +170,8 @@ public sealed class OrderRepository(
 
         public Guid CreatedBy { get; set; }
 
+        public string? CreatedByName { get; set; }
+
         public int TotalCount { get; set; }
 
         public Order ToOrder(List<OrderItem> items) => new()
@@ -171,12 +181,15 @@ public sealed class OrderRepository(
             CustomerId = CustomerId,
             Status = (OrderStatus)Status,
             Subtotal = Subtotal,
+            TaxAmount = TaxAmount ?? 0m,
+            OrderNumber = OrderNumber ?? string.Empty,
             PaidAmount = PaidAmount,
             ShippingAddress = ShippingAddress,
             Notes = Notes ?? string.Empty,
             OrderDate = OrderDate,
             PaidDate = PaidDate,
             CreatedBy = CreatedBy,
+            CreatedByName = CreatedByName ?? string.Empty,
             Items = items,
         };
     }

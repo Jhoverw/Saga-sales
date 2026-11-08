@@ -122,6 +122,9 @@ CREATE TABLE dbo.schema_version (
 | fiscal_note | nvarchar(255) | reserved for the separate invoicing project |
 | created_at / updated_at | datetime2(3) | |
 | created_by | uniqueidentifier | |
+| cost | decimal(18,4) | **V005/V007**. Weighted average cost from received purchases (D12). `NULL` = unknown cost (never received), so the margin is reported as unknown, not zero. `CHECK (cost IS NULL OR cost >= 0)` |
+| tracks_batches | bit | **V008**. `1` when the product carries lots with expiry (D17); receiving it then requires a lot code |
+| image_path | nvarchar(300) | **V008**. URL path of the main picture (`images/products/<id>.<ext>`), or `NULL` |
 
 Indexes: `(tenant_id, name)`, `(tenant_id, status)`, `(tenant_id, category_id)`.
 
@@ -140,55 +143,107 @@ price applies (R9).
 
 | Procedure | Rule |
 |---|---|
-| `sp_product_create` / `sp_product_update` | returns the row |
+| `sp_product_create` / `sp_product_update` | returns the row; accept and return `tracks_batches` and `image_path` (V012) |
 | `sp_product_retire` | status → discontinued, never deletes (FR-010) |
-| `sp_product_get` | |
-| `sp_product_list` | filters (category, search) **before** paging; returns rows plus `total_count` |
-| `sp_price_set` | upsert with `MERGE` |
-| `sp_price_resolve` | returns `price` and `source` (`base` \| `list`) — the fallback is explicit (FR-007b) |
-| `sp_stock_reserve` | `SELECT … WITH (UPDLOCK, ROWLOCK)`; raises `INSUFFICIENT_STOCK` |
-| `sp_stock_release` | compensation (FR-014) |
+| `sp_product_get` / `sp_product_list` | return `cost`, `tracks_batches` and `image_path`; list filters before paging |
+| `sp_price_set` / `sp_price_resolve` | upsert; resolution returns `price` and `source` (FR-007b) |
+| `sp_stock_reserve` / `sp_stock_release` | per branch, FEFO, no expired lot sold (V010/V015) |
 | `sp_category_create` / `sp_category_list` | unique name per tenant |
+| `sp_product_set_image` | V014: sets or clears `image_path` |
+| `sp_purchase_create` | V006/V010: one transaction over header, lines and (optionally) receipt |
+| `sp_purchase_receive` | V010: stock in, weighted cost and kardex in one transaction |
+| `sp_purchase_get` / `sp_purchase_lines` / `sp_purchase_list` | V016: return branch, lot and expiry |
+| `sp_branch_create/update/deactivate/list` | V009 |
+| `sp_settings_get` / `sp_settings_update` | V009: expiry threshold and default branch |
+| `sp_stock_by_branch` / `sp_location_set` | V009 |
+| `sp_expiring_batches` | V010: uses the threshold from Parámetros |
+| `sp_stock_movement_list` | V006: the kardex of one product |
 
-Example of the locking rule:
+### Example: per-branch reserve (V010, fixed by V015)
+
+The reserve is no longer a single number on `products`. It takes a branch, defaults to the store's
+default branch, refuses an expired lot and consumes lots FEFO:
 
 ```sql
-CREATE PROCEDURE dbo.sp_stock_reserve
+CREATE OR ALTER PROCEDURE dbo.sp_stock_reserve
     @p_tenant_id uniqueidentifier,
     @product_id  uniqueidentifier,
-    @quantity    int
+    @quantity    int,
+    @branch_id   uniqueidentifier = NULL
 AS
 BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-    BEGIN TRAN;
+    SET NOCOUNT ON; SET XACT_ABORT ON;
 
-    DECLARE @stock int, @name nvarchar(255);
-
-    SELECT @stock = stock_quantity, @name = name
+    DECLARE @tracks bit, @status smallint;
+    SELECT @tracks = tracks_batches, @status = status
     FROM dbo.products WITH (UPDLOCK, ROWLOCK)
-    WHERE id = @product_id AND tenant_id = @p_tenant_id AND status = 2;
-
-    IF @stock IS NULL
-    BEGIN
-        ROLLBACK;
-        THROW 50000, 'NOT_FOUND: product does not exist for this tenant', 1;
-    END
-
-    IF @stock < @quantity
-    BEGIN
-        ROLLBACK;
-        THROW 50000, 'INSUFFICIENT_STOCK: not enough units available', 1;
-    END
-
-    UPDATE dbo.products
-    SET stock_quantity = stock_quantity - @quantity,
-        updated_at = SYSUTCDATETIME()
     WHERE id = @product_id AND tenant_id = @p_tenant_id;
 
-    COMMIT;
+    SET @branch_id = ISNULL(@branch_id, dbo.fn_default_branch(@p_tenant_id));
+
+    -- V015: an empty branch is zero, not NULL, so this returns 409 instead of a 500.
+    DECLARE @in_branch int = ISNULL(
+        (SELECT quantity FROM dbo.product_stock
+         WHERE product_id = @product_id AND branch_id = @branch_id), 0);
+
+    IF @in_branch < @quantity
+    BEGIN
+        ;THROW 50000, 'INSUFFICIENT_STOCK: not enough units in that branch', 1;
+    END
+
+    -- lots: cursor over stock_batches ordered by expires_at (FEFO), skipping expired ones
 END
 ```
+
+### Purchases and kardex (V005/V016)
+
+#### dbo.suppliers
+`id`, `tenant_id`, `name nvarchar(200)` (length ≥ 2), `tax_id nvarchar(30)` (unique per store when
+present), `contact_name`, `email`, `phone`, `notes`, `status` (1 active · 2 inactive), timestamps.
+
+#### dbo.purchases
+`id`, `tenant_id`, `supplier_id` FK, `branch_id` (V010), `status` (1 draft · 2 received · 3 cancelled),
+`supplier_invoice_number`, `purchased_at`, `received_at`, `subtotal`, `tax_amount`, `total`,
+`notes`, `created_by`. Indexes: `(tenant_id, purchased_at DESC)`, `(tenant_id, supplier_id)`.
+
+#### dbo.purchase_lines
+`id`, `tenant_id`, `purchase_id` FK cascade, `product_id`, `product_name` (snapshot),
+`quantity > 0`, `unit_cost > 0`, `cost_includes_tax`, `tax_rate`, `effective_unit_cost`
+(always tax-included, `decimal(18,4)`), `line_total`, `lot_code` (V010), `expires_at` (V010).
+
+> A purchase may carry many lines, including the same product in different lots: that is how a big
+> delivery is grouped into one document (FR-032/FR-050).
+
+#### dbo.stock_movements (kardex)
+`id`, `tenant_id`, `product_id` FK, `kind` (1 purchase in · 2 sale out · 3 adjustment · 4 return in),
+`quantity` (signed, `<> 0`), `unit_cost`, `stock_after >= 0`, `reference_type`
+(`purchase`/`order`/`adjustment`), `reference_id`, `occurred_at`, `created_by`, `branch_id` (V008),
+`batch_id` (V008). Index: `(tenant_id, product_id, occurred_at DESC)`.
+
+### Inventory: branches, stock and lots (V008–V013)
+
+#### dbo.branches
+`id`, `tenant_id`, `name nvarchar(120)` (length ≥ 2, unique per store), `address`, `phone`,
+`is_default bit` (at most one per store via filtered unique index), `status` (1 active · 2 inactive),
+`created_at`.
+
+#### dbo.tenant_settings — the "Parámetros" screen
+`tenant_id PK`, `expiry_warning_days int` (`CHECK BETWEEN 1 AND 365`, default 30),
+`default_branch_id` FK → branches, `updated_at`.
+
+#### dbo.product_stock — stock per branch and physical location
+`(product_id, branch_id) PK`, `tenant_id`, `quantity int >= 0`, `floor`, `aisle`, `shelf`
+(free text, ≤ 30), `updated_at`. `products.stock_quantity` is kept as the **sum** of these rows so
+existing reads keep working; it is no longer the truth.
+
+#### dbo.stock_batches — lots
+`id`, `tenant_id`, `branch_id` FK, `product_id` FK cascade, `lot_code nvarchar(60)` (unique per
+store/branch/product), `expires_at date NULL`, `quantity int >= 0`, `unit_cost`, `received_at`.
+FEFO index: `(tenant_id, branch_id, product_id, expires_at) INCLUDE (quantity)`.
+
+> E-13 migrations: V011 absorbs any difference into the default branch; V013 writes a product's
+> opening stock into the default branch. V014 adds the picture write path. V015 fixes the empty-branch
+> reserve (409 instead of 500). V016 makes purchase reads return branch and lot.
 
 ---
 
@@ -315,12 +370,21 @@ Fed by `OrderPlacedEvent`, so Payment never reads the Sales database.
 `id`, `tenant_id`, `customer_id`, `event_type nvarchar(100)`, `occurred_at datetime2(3)`.
 Index `(tenant_id, occurred_at)`.
 
-### Procedures
+### Procedures (V002)
 
-`sp_report_daily_upsert`, `sp_product_sales_upsert`, `sp_activity_add`,
-`sp_sales_summary_get(@p_tenant_id, @from, @to)`, `sp_daily_series_get(@p_tenant_id, @from, @to)`.
+| Procedure | Rule |
+|---|---|
+| `sp_report_order_upsert` | an order adds revenue and one order to `(tenant, report_date)` |
+| `sp_report_payment_upsert` | a successful payment adds one to `payment_success_count` |
+| `sp_product_sales_upsert` | adds units and revenue per product/day |
+| `sp_activity_add` | appends one `customer_activity` row |
+| `sp_sales_summary_get` | totals (revenue, orders, payments) for a range |
+| `sp_top_products_get` | best sellers by revenue for a range (top 5) |
+| `sp_daily_series_get` | one row per day for the chart |
 
-The CSV export (FR-026) is built in the service, not in SQL; the queries above return the rows.
+The consumer writes happen outside an HTTP request, so the repository passes `p_tenant_id`
+explicitly from the event. The CSV export (FR-026) is still **pending**; when built it belongs in
+the service, not in SQL.
 
 ---
 
@@ -353,13 +417,20 @@ Indexes: `(tenant_id, status)`, `(tenant_id, customer_id)`.
 | Currency is USD | `CHECK (currency = 'USD')` |
 | Category name unique per tenant | unique index |
 | Customer email unique per tenant | unique index |
-| Stock never negative | `CHECK (stock_quantity >= 0)` |
+| Stock never negative | `CHECK (stock_quantity >= 0)` and `CHECK (product_stock.quantity >= 0)` |
 | Refund never exceeds refundable | `CHECK (refunded_amount <= amount)` + procedure guard |
 | Order status transitions | `sp_order_change_status` |
 | One live payment per order | `sp_payment_create_manual` |
 | Tenant always present | first parameter of every procedure |
 | Shipping address required | `orders.shipping_address NOT NULL` |
 | JSON columns are valid JSON | `CHECK (ISJSON(...) = 1)` |
+| Purchase line quantity > 0 and cost > 0 | `CHECK` constraints + procedure validation |
+| Supplier tax id unique per store when present | filtered unique index |
+| Branch name unique per store; at most one default | unique indexes (filtered on `is_default = 1`) |
+| Lot code required when `tracks_batches = 1` | `sp_purchase_receive` |
+| Lot quantity ≥ 0 and never sold expired | `CHECK` + `sp_stock_reserve` (FEFO) |
+| Expiry threshold between 1 and 365 days | `CHECK` + `sp_settings_update` |
+| A purchase is received at most once | `sp_purchase_receive` (status guard → `INVALID_TRANSITION`) |
 
 ---
 

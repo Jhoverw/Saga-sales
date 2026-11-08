@@ -14,7 +14,8 @@ public record CreatePaymentCommand(
     decimal Amount = 0,
     string? Reference = null,
     DateTime? PaidAt = null,
-    Guid CustomerId = default) : ICommand<PaymentDto>;
+    Guid CustomerId = default,
+    decimal? CashReceived = null) : ICommand<PaymentDto>;
 
 public sealed class CreatePaymentCommandHandler(
     IPaymentRepository repository,
@@ -28,6 +29,11 @@ public sealed class CreatePaymentCommandHandler(
 
         var method = ToManualMethod(request.Method);
 
+        // FR-016: Sales decides first. It refuses an amount above the balance (409) and then nothing is
+        // recorded here. Only an accepted amount becomes a payment.
+        await repository.AssertNotDuplicateAsync(request.OrderId, method, request.Amount, cancellationToken);
+        await ordering.RegisterPaymentAsync(request.OrderId, request.Amount, cancellationToken);
+
         var payment = await repository.CreateManualAsync(
             request.OrderId,
             request.CustomerId,
@@ -35,10 +41,8 @@ public sealed class CreatePaymentCommandHandler(
             method,
             request.Reference,
             request.PaidAt,
+            request.CashReceived,
             cancellationToken);
-
-        // Sales owns the order: it grows paid_amount and moves a fully paid order to processing.
-        await ordering.RegisterPaymentAsync(request.OrderId, request.Amount, cancellationToken);
 
         _ = currentUser;
         return Result<PaymentDto>.Success(payment);
@@ -47,6 +51,7 @@ public sealed class CreatePaymentCommandHandler(
     private static ManualPaymentMethod ToManualMethod(PaymentMethod method) => method switch
     {
         PaymentMethod.CashOnDelivery => ManualPaymentMethod.Cash,
+        PaymentMethod.CreditCard => ManualPaymentMethod.Card,
         _ => ManualPaymentMethod.Transfer,
     };
 }

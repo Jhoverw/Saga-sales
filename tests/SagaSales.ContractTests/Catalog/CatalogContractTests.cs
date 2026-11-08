@@ -182,6 +182,34 @@ internal sealed record SignedInStore(string Token, Guid TenantId)
         Assert.NotNull(session);
         Assert.NotNull(session!.User);
 
-        return new SignedInStore(session.AccessToken, session.User!.TenantId);
+        // A store without a branch cannot hold or sell stock; the real flow creates one first.
+        using var branch = new HttpRequestMessage(HttpMethod.Post, "api/branches")
+        {
+            Content = JsonContent.Create(new CreateBranchRequest { Name = "Principal", IsDefault = true }),
+        };
+        branch.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.AccessToken);
+        branch.Headers.TryAddWithoutValidation("X-Tenant-Id", session.User.TenantId.ToString());
+
+        using var branchResponse = await client.SendAsync(branch);
+        Assert.Equal(HttpStatusCode.Created, branchResponse.StatusCode);
+
+        // Orders need a VAT rate in force (V-03). A 15 % rate open since 2000 keeps every order date covered.
+        using var tax = new HttpRequestMessage(HttpMethod.Post, "api/taxes")
+        {
+            Content = JsonContent.Create(new CreateTaxRateRequest(
+                0.15m,
+                new DateOnly(2000, 1, 1),
+                null,
+                "IVA contrato")),
+        };
+        tax.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.AccessToken);
+        tax.Headers.TryAddWithoutValidation("X-Tenant-Id", session.User.TenantId.ToString());
+
+        using var taxResponse = await client.SendAsync(tax);
+        Assert.Equal(HttpStatusCode.OK, taxResponse.StatusCode);
+
+        return new SignedInStore(session.AccessToken, session.User.TenantId);
     }
 }

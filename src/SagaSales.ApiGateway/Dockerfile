@@ -17,6 +17,8 @@ RUN dotnet publish src/SagaSales.ApiGateway/SagaSales.ApiGateway.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app ./
+ARG SAGA_BUILD_LABEL=unlabeled
+ENV SAGA_BUILD_LABEL=$SAGA_BUILD_LABEL
 ENV ASPNETCORE_URLS=http://+:80
 EXPOSE 80
 ENTRYPOINT ["dotnet", "SagaSales.ApiGateway.dll"]

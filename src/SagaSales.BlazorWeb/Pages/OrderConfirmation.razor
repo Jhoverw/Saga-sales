@@ -1,0 +1,32 @@
+@page "/confirmation/{OrderId:guid}"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Pedido Confirmado</PageTitle>
+
+<div class="container mt-5 text-center">
+    <div class="card shadow-lg p-5">
+        <div class="mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="green" class="bi bi-check-circle-fill" viewBox="0 0 16 16">
+                <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.16.32l-3.53 3.53a.75.75 0 0 0 1.06 1.06l3.73-3.73a.75.75 0 0 0-.32-1.06z"/>
+            </svg>
+        </div>
+        <h1 class="display-4">¡Gracias por tu compra!</h1>
+        <p class="lead">Tu pedido ha sido procesado exitosamente.</p>
+        <div class="alert alert-secondary d-inline-block px-4">
+            <strong>Número de Pedido:</strong> @OrderId
+        </div>
+        <div class="mt-4">
+            <button class="btn btn-primary btn-lg" @onclick="GoHome">Volver a la tienda</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/store");
+    }
+}

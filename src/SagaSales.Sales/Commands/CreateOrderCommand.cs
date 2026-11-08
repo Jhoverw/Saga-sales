@@ -64,6 +64,7 @@ public sealed class CreateOrderCommandHandler(
                 request.Notes,
                 staffUserId,
                 lines,
+                currentUser.DisplayName,
                 cancellationToken);
 
             var snapshot = lines

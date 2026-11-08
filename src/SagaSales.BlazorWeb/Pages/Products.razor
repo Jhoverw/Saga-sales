@@ -1,6 +1,7 @@
 @page "/products"
 @attribute [Authorize]
 @inject ApiClient Api
+@using System.Globalization
 
 <div class="page-head">
     <div>
@@ -17,17 +18,40 @@
 <div class="card mb-4">
     <div class="card-body">
         <h5 class="card-title">Nuevo producto</h5>
-        <div class="row g-2">
-            <div class="col-md-4">
-                <input class="form-control" placeholder="Nombre" @bind="NewName" @bind:event="oninput" />
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted">Nombre del producto</label>
+                <input class="form-control" placeholder="Ej. Laptop Gamer" @bind="NewName" @bind:event="oninput" />
             </div>
             <div class="col-md-2">
-                <input class="form-control" type="number" step="0.01" placeholder="Precio" @bind="NewPrice" />
+                <label class="form-label small fw-bold text-muted">Precio (USD)</label>
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <InputText @bind-value="NewPriceString"
+                               class="form-control"
+                               placeholder="0.00"
+                               @onchange="OnPriceChanged" />
+                </div>
+                @if (!string.IsNullOrWhiteSpace(PriceError))
+                {
+                    <div class="invalid-feedback d-block">
+                        @PriceError
+                    </div>
+                }
             </div>
             <div class="col-md-2">
-                <input class="form-control" type="number" placeholder="Stock" @bind="NewStock" />
+                <label class="form-label small fw-bold text-muted">Stock inicial</label>
+                <input class="form-control" type="number" placeholder="0" @bind="NewStock" />
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3 d-flex align-items-center gap-2">
+                <div class="form-check mt-4">
+                    <input class="form-check-input" type="checkbox" id="isTaxable" @bind="NewIsTaxable">
+                    <label class="form-check-label small fw-bold text-muted" for="isTaxable">
+                        Aplica IVA
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
                 <button class="btn btn-primary w-100" @onclick="CreateAsync" disabled="@Busy">Añadir</button>
             </div>
         </div>
@@ -43,21 +67,36 @@ else
     <table class="table table-striped align-middle">
         <thead>
             <tr>
+                <th style="width:64px;">Foto</th>
                 <th>Nombre</th>
                 <th>Precio</th>
                 <th>Stock</th>
                 <th>Estado</th>
+                <th style="width:110px;"></th>
             </tr>
         </thead>
         <tbody>
             @foreach (var product in Result.Items)
             {
                 <tr>
+                    <td>
+                        @if (Api.ImageUrl(product.ImagePath) is { } imageUrl)
+                        {
+                            <img src="@imageUrl" alt="@product.Name" class="product-thumb" />
+                        }
+                        else
+                        {
+                            <span class="product-thumb product-thumb--placeholder">@Initial(product.Name)</span>
+                        }
+                    </td>
                     <td>@product.Name</td>
-                    <td>@product.BasePrice.ToString("C") @product.Currency</td>
+                    <td>@product.Currency @product.BasePrice.ToString("F2")</td>
                     <td>@product.StockQuantity</td>
                     <td>
                         <span class="chip @(product.Status switch { ProductStatus.Active => "chip--ok", ProductStatus.OutOfStock => "chip--danger", ProductStatus.Discontinued => "chip--neutral", ProductStatus.Draft => "chip--neutral", _ => "chip--info" })">@product.Status</span>
+                    </td>
+                    <td class="text-end">
+                        <InputFile class="form-control form-control-sm" OnChange="args => UploadImageAsync(product, args)" title="Subir imagen" />
                     </td>
                 </tr>
             }
@@ -77,8 +116,10 @@ else
     private const int PageSize = 10;
 
     private string NewName { get; set; } = string.Empty;
-    private decimal NewPrice { get; set; } = 9.99m;
+    private string NewPriceString { get; set; } = "0.00";
+    private string PriceError { get; set; } = string.Empty;
     private int NewStock { get; set; } = 10;
+    private bool NewIsTaxable { get; set; } = true;
 
     private string? Error { get; set; }
     private bool Busy { get; set; }
@@ -105,29 +146,108 @@ else
         await LoadAsync();
     }
 
+    private void OnPriceChanged(ChangeEventArgs e)
+    {
+        PriceError = string.Empty;
+        if (decimal.TryParse(e.Value?.ToString(),
+                             NumberStyles.AllowDecimalPoint,
+                             CultureInfo.InvariantCulture,
+                             out var price))
+        {
+            // Round to 4 decimal places for storage
+            price = Math.Round(price, 4);
+            // Store normalized string with invariant culture
+            NewPriceString = price.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            PriceError = "Introduzca un número válido (use punto o coma como separador decimal).";
+        }
+    }
+
     private async Task CreateAsync()
     {
         Busy = true;
         Error = null;
 
+        // Validate price string
+        if (!decimal.TryParse(NewPriceString,
+                              NumberStyles.AllowDecimalPoint,
+                              CultureInfo.InvariantCulture,
+                              out var price))
+        {
+            PriceError = "Precio no válido.";
+            Busy = false;
+            return;
+        }
+
+        // Round to 4 decimal places for storage
+        price = Math.Round(price, 4);
+
         try
         {
             var created = await Api.CreateProductAsync(new CreateProductRequest
             {
-                Name = NewName,
-                Price = NewPrice,
+                Name = NewName.Trim(),
+                Description = null, // Description not captured in UI yet; keep null or add field if needed
+                Price = price,
                 StockQuantity = NewStock,
                 Currency = "USD",
+                IsTaxable = NewIsTaxable,
             });
 
             if (created is null)
             {
                 Error = "No se pudo crear el producto. Revisa los datos.";
-                return;
+            }
+            else
+            {
+                // Reset form
+                NewName = string.Empty;
+                NewPriceString = "0.00";
+                PriceError = string.Empty;
+                NewStock = 10;
+                NewIsTaxable = true;
+                Page = 1;
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error inesperado: {ex.Message}";
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task UploadImageAsync(ProductDto product, InputFileChangeEventArgs args)
+    {
+        Error = null;
+
+        var file = args.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        Busy = true;
+
+        try
+        {
+            // 5 MB cap, matching the Catalog service.
+            var buffer = new byte[file.Size];
+            await using (var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024))
+            {
+                await stream.ReadExactlyAsync(buffer);
             }
 
-            NewName = string.Empty;
-            Page = 1;
+            var updated = await Api.UploadProductImageAsync(product.Id, buffer, file.Name, file.ContentType);
+            Error = updated is null
+                ? "No se pudo subir la imagen (usa JPEG, PNG, WebP o GIF, máx. 5 MB)."
+                : null;
+
             await LoadAsync();
         }
         finally
@@ -135,4 +255,7 @@ else
             Busy = false;
         }
     }
+
+    private static string Initial(string name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
 }

@@ -11,7 +11,8 @@ public record CreateProductCommand(
     string Currency,
     int StockQuantity,
     Guid? CategoryId = null,
-    bool TracksBatches = false) : ICommand<ProductDto>;
+    bool TracksBatches = false,
+    bool IsTaxable = true) : ICommand<ProductDto>;
 
 public sealed class CreateProductCommandHandler(
     IProductRepository repository,
@@ -33,6 +34,7 @@ public sealed class CreateProductCommandHandler(
             request.CategoryId,
             currentUser.UserId ?? Guid.Empty,
             request.TracksBatches,
+            request.IsTaxable,
             cancellationToken);
 
         await eventBus.PublishAsync(

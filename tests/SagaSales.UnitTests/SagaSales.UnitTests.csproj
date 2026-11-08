@@ -13,6 +13,7 @@
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Moq" Version="4.20.70" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +21,9 @@
     <ProjectReference Include="..\..\src\SagaSales.Sales\SagaSales.Sales.csproj" />
     <ProjectReference Include="..\..\src\SagaSales.Payment\SagaSales.Payment.csproj" />
     <ProjectReference Include="..\..\src\SagaSales.Identity\SagaSales.Identity.csproj" />
+    <ProjectReference Include="..\..\src\SagaSales.Catalog\SagaSales.Catalog.csproj" />
+    <ProjectReference Include="..\..\src\SagaSales.EcuadorInvoicing\SagaSales.EcuadorInvoicing.csproj" />
+    <ProjectReference Include="..\..\src\SagaSales.Notification\SagaSales.Notification.csproj" />
   </ItemGroup>
 
 </Project>

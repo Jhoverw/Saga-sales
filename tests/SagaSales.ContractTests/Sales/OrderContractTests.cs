@@ -40,6 +40,10 @@ public class OrderContractTests
         var order = await response.Content.ReadFromJsonAsync<OrderDto>();
         Assert.NotNull(order);
         Assert.Equal(50m, order!.Subtotal);
+        Assert.Equal(7.50m, order.TaxAmount);   // V-03: 15 % in force on the order date
+        Assert.Equal(57.50m, order.Total);
+        Assert.Matches(@"^PED-[0-9A-F]{6}-\d{6}$", order.OrderNumber);   // V021: receipt number
+        Assert.False(string.IsNullOrWhiteSpace(order.CreatedByName));     // H-06: seller on the receipt
         Assert.Equal(customerId, order.CustomerId);
         Assert.Single(order.Items);
         Assert.Equal(25m, order.Items[0].UnitPrice);
@@ -103,6 +107,100 @@ public class OrderContractTests
             }));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_order_can_be_paid_in_parts_but_not_beyond_its_total()
+    {
+        if (Gateway.TryAnnounceSkip(nameof(An_order_can_be_paid_in_parts_but_not_beyond_its_total)))
+        {
+            return;
+        }
+
+        using var client = Gateway.CreateClient();
+        var session = await SignedInStore.CreateAsync(client);
+        var product = await CreateProductAsync(client, session, "Split payment product", 25m);
+
+        // Total with 15 % VAT: 25 + 3.75 = 28.75 (H-08).
+        using var created = await client.SendAsync(
+            Authorized(HttpMethod.Post, "api/orders", session, new CreateOrderRequest
+            {
+                CustomerId = Guid.NewGuid(),
+                ShippingAddress = "Av. Amazonas 123, Quito",
+                Items = [new OrderItemRequest { ProductId = product.Id, Quantity = 1 }],
+            }));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var order = await created.Content.ReadFromJsonAsync<OrderDto>();
+        Assert.NotNull(order);
+        Assert.Equal(28.75m, order!.Total);
+
+        // First part in cash-equivalent transfer, then more than the balance is refused.
+        using var first = await client.SendAsync(
+            Authorized(HttpMethod.Post, "api/payments", session, new ManualPaymentRequest
+            {
+                OrderId = order.Id,
+                Amount = 10m,
+                Method = ManualPaymentMethod.Transfer,
+            }));
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        using var tooMuch = await client.SendAsync(
+            Authorized(HttpMethod.Post, "api/payments", session, new ManualPaymentRequest
+            {
+                OrderId = order.Id,
+                Amount = 30m,
+                Method = ManualPaymentMethod.Deposit,
+            }));
+        Assert.Equal(HttpStatusCode.Conflict, tooMuch.StatusCode);
+
+        // The rest of the balance closes the order.
+        using var rest = await client.SendAsync(
+            Authorized(HttpMethod.Post, "api/payments", session, new ManualPaymentRequest
+            {
+                OrderId = order.Id,
+                Amount = 18.75m,
+                Method = ManualPaymentMethod.Deposit,
+            }));
+        Assert.Equal(HttpStatusCode.Created, rest.StatusCode);
+
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, $"api/orders/{order.Id}");
+        getRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.Token);
+        getRequest.Headers.TryAddWithoutValidation("X-Tenant-Id", session.TenantId.ToString());
+        using var reread = await client.SendAsync(getRequest);
+        var paid = await reread.Content.ReadFromJsonAsync<OrderDto>();
+        Assert.NotNull(paid);
+        Assert.Equal(28.75m, paid!.PaidAmount);
+        Assert.Equal("Processing", paid.Status);
+    }
+
+    [Fact]
+    public async Task An_identical_payment_twice_in_a_row_is_refused_as_a_duplicate()
+    {
+        if (Gateway.TryAnnounceSkip(nameof(An_identical_payment_twice_in_a_row_is_refused_as_a_duplicate)))
+        {
+            return;
+        }
+
+        using var client = Gateway.CreateClient();
+        var session = await SignedInStore.CreateAsync(client);
+        var product = await CreateProductAsync(client, session, "Duplicate guard product", 25m);
+
+        using var created = await client.SendAsync(
+            Authorized(HttpMethod.Post, "api/orders", session, new CreateOrderRequest
+            {
+                CustomerId = Guid.NewGuid(),
+                ShippingAddress = "Av. Amazonas 123, Quito",
+                Items = [new OrderItemRequest { ProductId = product.Id, Quantity = 1 }],
+            }));
+        var order = await created.Content.ReadFromJsonAsync<OrderDto>();
+
+        var payment = new ManualPaymentRequest { OrderId = order!.Id, Amount = 5m, Method = ManualPaymentMethod.Transfer };
+
+        using var once = await client.SendAsync(Authorized(HttpMethod.Post, "api/payments", session, payment));
+        Assert.Equal(HttpStatusCode.Created, once.StatusCode);
+
+        using var twice = await client.SendAsync(Authorized(HttpMethod.Post, "api/payments", session, payment));
+        Assert.Equal(HttpStatusCode.Conflict, twice.StatusCode);
     }
 
     private static async Task<ProductDto> CreateProductAsync(

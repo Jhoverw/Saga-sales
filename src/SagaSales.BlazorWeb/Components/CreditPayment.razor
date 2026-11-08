@@ -1,0 +1,35 @@
+@using SagaSales.BlazorWeb.DTOs
+@inject ApiClient Api
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+    [Parameter] public Guid CustomerId { get; set; }
+    private decimal amount;
+    private string? message;
+    private bool isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        amount = 100m; // placeholder
+    }
+
+    private async Task Pay()
+    {
+        isSubmitting = true;
+        var req = new CreditPaymentDto { OrderId = OrderId, CustomerId = CustomerId, Amount = amount };
+        var resp = await Api.PayCreditAsync(req);
+        message = resp != null ? "Pago a crédito registrado." : "Error en el pago a crédito.";
+        isSubmitting = false;
+    }
+}
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert alert-info">@message</div>
+}
+
+<div class="mb-3">
+    <label class="form-label">Monto a cobrar a crédito</label>
+    <input type="number" class="form-control" @bind="amount" disabled />
+</div>
+<button class="btn btn-success" @onclick="Pay" disabled="@isSubmitting">Registrar pago a crédito</button>

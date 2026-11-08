@@ -180,7 +180,25 @@ implementation.
 
 ---
 
-## Resolved unknowns
+## D12–D19 — Decisions added with E-12 and E-13
+
+These close the purchases/costs and real-inventory work; the full rationale lives in
+[`epics.md`](./epics.md) §11.
+
+| # | Decision | Effect on this design |
+|---|---|---|
+| D12 | **Weighted average cost (CPP)** on receipt | `products.cost decimal(18,4)`; `sp_purchase_receive` recomputes it |
+| D13 | Receiving a purchase adds stock; the draft does not | `sp_purchase_create` receives in the same transaction by default |
+| D14 | The purchase keeps the supplier invoice | header fields, no accounts payable in the MVP |
+| D15 | Purchases live inside Catalog (no new service) | `db/catalog/` V005–V007, V016 |
+| D16 | **Stock is per branch** | `product_stock`; `products.stock_quantity` becomes the sum |
+| D17 | Lots only for products that declare `tracks_batches` | `stock_batches`, lot required on receipt |
+| D18 | **FEFO and no expired lot sold** | cursor over `stock_batches` ordered by `expires_at` |
+| D19 | Free-text location and the expiry threshold in Parámetros | `product_stock.floor/aisle/shelf`, `tenant_settings` |
+
+Consequence for R6: the reserve is no longer `stock_quantity` on the product; it locks the product
+row, resolves the branch, checks `product_stock` and, when the product tracks lots, consumes
+`stock_batches` FEFO. V015 fixed the empty-branch case (409 instead of 500).
 
 | Unknown from Technical Context | Resolution |
 |---|---|

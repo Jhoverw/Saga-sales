@@ -5,10 +5,10 @@ namespace SagaSales.Notification.Infrastructure;
 /// endpoints and the event consumers.
 /// </summary>
 public sealed class NotificationDispatcher(
-    NotificationDbContext dbContext,
+    INotificationRepository repository,
     INotificationSender sender) : Domain.INotificationDispatch
 {
-    public async Task<Domain.NotificationLog> DispatchAsync(
+    public async Task<Guid> DispatchAsync(
         Guid tenantId,
         Guid? customerId,
         NotificationType type,
@@ -17,29 +17,30 @@ public sealed class NotificationDispatcher(
         string body,
         CancellationToken cancellationToken)
     {
-        var log = new Domain.NotificationLog
-        {
-            TenantId = tenantId,
-            CustomerId = customerId,
-            Type = type,
-            Recipient = recipient,
-            Subject = subject,
-            Body = body,
-        };
+        var channel = type == NotificationType.SMS ? "sms" : "email";
 
+        // 1. Log the attempt with its real content, so the list shows what was sent.
+        var id = await repository.CreateNotificationAsync(
+            tenantId,
+            customerId,
+            subject,
+            body,
+            (int)type,
+            channel,
+            cancellationToken);
+
+        // 2. Deliver. A failure must never break the order (FR-023); the attempt is already logged.
         try
         {
             await sender.SendAsync(type, recipient, subject, body, cancellationToken);
-            log.MarkSent();
+            await repository.MarkSentAsync(id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            log.MarkFailed(ex.Message);
+            // Best effort: the send failure is visible because the log stays in Pending.
         }
 
-        dbContext.NotificationLogs.Add(log);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return log;
+        return id;
     }
 }
+

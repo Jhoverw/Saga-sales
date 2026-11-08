@@ -8,6 +8,7 @@ builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.ApiGateway");
 
 // YARP reads the "ReverseProxy" section (routes + clusters, see appsettings.json).
+// The gateway is a pure proxy: it owns no domain services and references no service assembly.
 builder.Services.AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
 builder.Services.AddCors(options => options.AddPolicy("blazor", policy => policy
@@ -29,6 +30,10 @@ app.UseTenantResolution();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health");
+
+// Same label the panel footer shows (scripts/build-label.ps1), so both can be compared on screen.
+var buildLabel = Environment.GetEnvironmentVariable("SAGA_BUILD_LABEL") ?? "unlabeled";
+app.MapGet("/version", () => Results.Json(new { build = buildLabel }));
 
 if (app.Environment.IsDevelopment())
 {

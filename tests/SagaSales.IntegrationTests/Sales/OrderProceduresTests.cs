@@ -37,6 +37,7 @@ public class OrderProceduresTests
         var order = await CreateOrderAsync(connection, tenantId, lines, "Calle 1, Quito");
 
         Assert.Equal(25.00m, order.Subtotal);   // 2 x 10.50 + 1 x 4.00
+        Assert.Equal(3.75m, order.TaxAmount);   // V-03: 15 % in force on the order date
         Assert.Equal(Pending, order.Status);
         Assert.Equal(0m, order.PaidAmount);
 
@@ -122,13 +123,14 @@ public class OrderProceduresTests
         var arguments = new DynamicParameters()
             .AddTenant(tenantId)
             .AddOrder(order.Id);
-        arguments.Add("amount", order.Subtotal);
+        // H-08 / V023: the balance is the total including VAT, so "fully paid" means paying the total.
+        arguments.Add("amount", order.Subtotal + order.TaxAmount);
 
         var paid = await connection.QuerySingleAsync<OrderRow>(
             "dbo.sp_order_register_payment", arguments, commandType: CommandType.StoredProcedure);
 
         Assert.Equal(Processing, paid.Status);
-        Assert.Equal(order.Subtotal, paid.PaidAmount);
+        Assert.Equal(order.Subtotal + order.TaxAmount, paid.PaidAmount);
         Assert.NotNull(paid.PaidDate);
     }
 
@@ -161,12 +163,48 @@ public class OrderProceduresTests
         new { productId = Guid.NewGuid(), productName = "Widget", quantity = 1, unitPrice = 5m, priceSource = 1, stockAtPurchase = 1 },
     });
 
+    [Fact]
+    public async Task Create_is_refused_when_no_vat_rate_is_in_force()
+    {
+        if (TestDatabase.TryAnnounceSkip(nameof(Create_is_refused_when_no_vat_rate_is_in_force)))
+        {
+            return;
+        }
+
+        // A store that never configured VAT: the order must be refused, not stored with a silent 0 %.
+        var tenantId = Guid.NewGuid();
+        await using var connection = new SqlConnection(TestDatabase.ForService("sales"));
+        await connection.OpenAsync();
+
+        var arguments = new DynamicParameters()
+            .AddTenant(tenantId)
+            .WithAddress("Calle 1, Quito");
+        arguments.Add("customer_id", Guid.NewGuid());
+        arguments.Add("created_by", Guid.NewGuid());
+        arguments.Add("lines_json", OneLine());
+        arguments.Add("notes", null);
+
+        var exception = await Assert.ThrowsAsync<SqlException>(() =>
+            connection.QuerySingleAsync<OrderRow>(
+                "dbo.sp_order_create", arguments, commandType: CommandType.StoredProcedure));
+
+        Assert.Contains("VALIDATION_ERROR", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("VAT", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<OrderRow> CreateOrderAsync(
         SqlConnection connection,
         Guid tenantId,
         string linesJson,
         string shippingAddress)
     {
+        // Every store has a 15 % VAT open since 2000 in these tests (V-03 needs a rate in force).
+        await connection.ExecuteAsync(
+            "IF NOT EXISTS (SELECT 1 FROM dbo.tax_rates WHERE tenant_id = @TenantId) " +
+            "INSERT INTO dbo.tax_rates (tenant_id, rate_percentage, start_date, end_date, description) " +
+            "VALUES (@TenantId, 0.15, '2000-01-01', NULL, 'IVA test');",
+            new { TenantId = tenantId });
+
         var arguments = new DynamicParameters()
             .AddTenant(tenantId)
             .WithAddress(shippingAddress);
@@ -190,6 +228,8 @@ public class OrderProceduresTests
         public short Status { get; set; }
 
         public decimal Subtotal { get; set; }
+
+        public decimal TaxAmount { get; set; }
 
         public decimal PaidAmount { get; set; }
 

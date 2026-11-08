@@ -1,0 +1,153 @@
+@page "/receipt/{OrderId:guid}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject IJSRuntime Js
+
+<PageTitle>Recibo</PageTitle>
+
+<style>
+    .receipt { max-width: 720px; margin: 1.5rem auto; background: #fff; color: #111; padding: 2rem; border-radius: 8px; }
+    .receipt__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; border-bottom: 2px solid #111; padding-bottom: .75rem; }
+    .receipt__title { font-size: 1.5rem; margin: 0; }
+    .receipt__meta { font-size: .8rem; color: #555; }
+    .receipt__qr { text-align: center; }
+    .receipt__number { font-family: monospace; font-size: .85rem; margin-top: .25rem; }
+    .receipt__info { width: 100%; margin: 1rem 0; font-size: .9rem; }
+    .receipt__info th { text-align: left; width: 110px; color: #555; font-weight: 600; }
+    .receipt__lines { width: 100%; font-size: .9rem; border-collapse: collapse; }
+    .receipt__lines th, .receipt__lines td { padding: .35rem .25rem; border-bottom: 1px solid #ddd; }
+    .receipt__lines tfoot td { border-bottom: none; }
+    .receipt__total td { border-top: 2px solid #111; font-size: 1.05rem; }
+    .receipt__section { font-size: 1rem; margin: 1.25rem 0 .5rem; }
+    .receipt__actions { margin-top: 1.5rem; display: flex; gap: .75rem; align-items: center; }
+    @@media print {
+        .receipt { box-shadow: none; margin: 0; padding: 0; }
+        .d-print-none { display: none !important; }
+    }
+</style>
+
+@if (Order is null)
+{
+    <div class="alert alert-info">Cargando recibo…</div>
+}
+else
+{
+    <div class="receipt">
+        <div class="receipt__head">
+            <div>
+                <h1 class="receipt__title">Recibo de venta</h1>
+                <div class="receipt__meta">Comprobante interno · no es factura electrónica</div>
+            </div>
+            <div class="receipt__qr">
+                @((MarkupString)(_qrHtml ?? string.Empty))
+                <div class="receipt__number">@Order.OrderNumber</div>
+            </div>
+        </div>
+
+        <table class="receipt__info">
+            <tr><th>Número</th><td>@Order.OrderNumber</td></tr>
+            <tr><th>Fecha</th><td>@LocalDate(Order.OrderDate)</td></tr>
+            <tr><th>Vendedor</th><td>@(string.IsNullOrWhiteSpace(Order.CreatedByName) ? "—" : Order.CreatedByName)</td></tr>
+            <tr><th>Cliente</th><td>@CustomerName(Order.CustomerId)</td></tr>
+            <tr><th>Envío</th><td>@Order.ShippingAddress</td></tr>
+        </table>
+
+        <table class="receipt__lines">
+            <thead>
+                <tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio</th><th class="text-end">Total</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Order.Items)
+                {
+                    <tr>
+                        <td>@line.ProductName</td>
+                        <td class="text-end">@line.Quantity</td>
+                        <td class="text-end">@line.UnitPrice.ToString("C")</td>
+                        <td class="text-end">@line.LineTotal.ToString("C")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td colspan="3" class="text-end">Subtotal</td><td class="text-end">@Order.Subtotal.ToString("C")</td></tr>
+                <tr><td colspan="3" class="text-end">IVA</td><td class="text-end">@Order.TaxAmount.ToString("C")</td></tr>
+                <tr class="receipt__total"><td colspan="3" class="text-end"><strong>Total</strong></td><td class="text-end"><strong>@Order.Total.ToString("C")</strong></td></tr>
+            </tfoot>
+        </table>
+
+        <h2 class="receipt__section">Pago</h2>
+        @if (Payments.Count == 0)
+        {
+            <p>Sin cobros registrados.</p>
+        }
+        else
+        {
+            <table class="receipt__lines">
+                <thead>
+                    <tr><th>Método</th><th class="text-end">Importe</th><th class="text-end">Recibido</th><th class="text-end">Vuelto</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var payment in Payments)
+                    {
+                        <tr>
+                            <td>@MethodLabel(payment.Method)</td>
+                            <td class="text-end">@payment.Amount.ToString("C")</td>
+                            <td class="text-end">@(payment.CashReceived is { } received ? received.ToString("C") : "—")</td>
+                            <td class="text-end">@(payment.ChangeGiven is { } change ? change.ToString("C") : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <div class="receipt__actions d-print-none">
+            <button class="btn btn-primary" @onclick="PrintAsync">Imprimir / guardar como PDF</button>
+            <span class="page-head__sub mb-0">El PDF se genera con la función de imprimir del navegador.</span>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid OrderId { get; set; }
+
+    private OrderDto? Order { get; set; }
+    private List<PaymentDto> Payments { get; set; } = [];
+    private List<CustomerDto> Customers { get; set; } = [];
+    private string? _qrHtml;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Order = await Api.GetOrderAsync(OrderId);
+        Payments = (await Api.GetPaymentsByOrderAsync(OrderId))?.ToList() ?? [];
+        Customers = await Api.GetCustomersAsync(1, 100) is { } customers ? customers.Items.ToList() : [];
+    }
+
+    // The QR carries only the order number (decision of 2026-11-08): no customer data, no amounts.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Order is null || _qrHtml is not null) { return; }
+
+        _qrHtml = await Js.InvokeAsync<string>("sagaQrHtml", Order.OrderNumber);
+        StateHasChanged();
+    }
+
+    private async Task PrintAsync() => await Js.InvokeVoidAsync("sagaPrint");
+
+    // Orders are stored in UTC; the team reads times in Ecuador (GMT-5).
+    private static string LocalDate(DateTime utc) => utc.AddHours(-5).ToString("dd/MM/yyyy HH:mm") + " GMT-5";
+
+    private string CustomerName(Guid id)
+    {
+        var customer = Customers.FirstOrDefault(c => c.Id == id);
+        return customer is null ? id.ToString()[..8] : $"{customer.LastName}, {customer.FirstName}";
+    }
+
+    private static string MethodLabel(PaymentMethod method) => method switch
+    {
+        PaymentMethod.CashOnDelivery => "Efectivo",
+        PaymentMethod.CreditCard => "Tarjeta",
+        PaymentMethod.DebitCard => "Tarjeta débito",
+        PaymentMethod.BankTransfer => "Transferencia / depósito",
+        _ => method.ToString(),
+    };
+}

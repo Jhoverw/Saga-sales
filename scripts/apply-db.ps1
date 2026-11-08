@@ -25,6 +25,7 @@ param(
     [string]$Password = $(if ($env:MSSQL_SA_PASSWORD) { $env:MSSQL_SA_PASSWORD } else { 'SagaSales_Dev_2026!' }),
     [string]$Service,
     [string]$DatabasePrefix = 'saga_',
+    [string]$DatabaseSuffix = '',
     [switch]$TrustServerCertificate = $true,
     [switch]$DryRun,
     # Run sqlcmd inside the SQL Server container, so no host sqlcmd is required.
@@ -107,7 +108,7 @@ foreach ($svc in $services) {
     $dir = Join-Path $dbRoot $svc
     if (-not (Test-Path $dir)) { throw "Unknown service '$svc' (no folder db/$svc)" }
 
-    $database = "$DatabasePrefix$svc"
+    $database = "$DatabasePrefix$svc$DatabaseSuffix"
     $scripts = Get-ChildItem $dir -Filter 'V*.sql' -File |
         Where-Object { $_.Name -match '^V(\d{3,})__' } |
         Sort-Object { [int]([regex]::Match($_.Name, '^V(\d{3,})__').Groups[1].Value) }

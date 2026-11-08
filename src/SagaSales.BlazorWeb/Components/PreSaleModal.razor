@@ -1,0 +1,53 @@
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using SagaSales.BlazorWeb.DTOs
+
+@code {
+    [Parameter] public Guid ProductId { get; set; }
+    [Parameter] public Guid CustomerId { get; set; }
+    private int qty = 1;
+    private DateTime expectedDate = DateTime.Today.AddDays(7);
+    private string? message;
+    private bool isSubmitting;
+
+    private async Task CreatePreSale()
+    {
+        isSubmitting = true;
+        var request = new CreatePreSaleRequest
+        {
+            ProductId = ProductId,
+            CustomerId = CustomerId,
+            Qty = qty,
+            ExpectedDate = expectedDate
+        };
+        var response = await Api.CreatePreSaleAsync(request);
+        if (response != null)
+        {
+            message = "Pre‑venta creada con éxito.";
+            // Optionally navigate to pre‑sale list
+            Nav.NavigateTo($"/presales/{response.Id}");
+        }
+        else
+        {
+            message = "Error al crear la pre‑venta.";
+        }
+        isSubmitting = false;
+    }
+}
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert alert-info">@message</div>
+}
+
+<div class="modal-body">
+    <div class="mb-3">
+        <label class="form-label">Cantidad</label>
+        <input type="number" class="form-control" @bind="qty" min="1" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Fecha estimada de reposición</label>
+        <input type="date" class="form-control" @bind="expectedDate" />
+    </div>
+    <button class="btn btn-primary" @onclick="CreatePreSale" disabled="@isSubmitting">Crear pre‑venta</button>
+</div>

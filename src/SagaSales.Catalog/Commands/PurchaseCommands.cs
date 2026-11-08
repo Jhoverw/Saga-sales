@@ -31,8 +31,13 @@ public sealed class CreatePurchaseCommandHandler(
         foreach (var line in request.Lines)
         {
             Guard.AgainstEmptyGuid(line.ProductId, nameof(line.ProductId));
-            Guard.AgainstNegativeOrZero(line.Quantity, $"Quantity for product {line.ProductId}");
-            Guard.AgainstNegativeOrZero(line.UnitCost, $"Cost for product {line.ProductId}");
+
+            // Invalid input is a client error (400), not a server failure.
+            if (line.Quantity <= 0 || line.UnitCost <= 0)
+            {
+                throw new SagaSales.Shared.Exceptions.ValidationException(
+                    $"La línea del producto {line.ProductId} necesita una cantidad y un costo mayores que cero.");
+            }
 
             var product = await products.GetAsync(line.ProductId, cancellationToken)
                           ?? throw new NotFoundException("Product", line.ProductId);

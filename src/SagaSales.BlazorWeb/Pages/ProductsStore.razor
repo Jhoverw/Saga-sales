@@ -1,0 +1,80 @@
+@page "/store"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Tienda Online</PageTitle>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Catálogo de Productos</h1>
+        <div class="d-flex gap-2">
+            <input type="text" class="form-control" placeholder="Buscar producto..." @bind="searchTerm" @bind:event="oninput" />
+            <button class="btn btn-primary" @onclick="Search">Buscar</button>
+        </div>
+    </div>
+
+    @if (products == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p>Cargando productos...</p>
+        </div>
+    }
+    else if (!products.Any())
+    {
+        <div class="alert alert-info">No se encontraron productos disponibles.</div>
+    }
+    else
+    {
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            @foreach (var product in products)
+            {
+                <div class="col">
+                    <div class="card h-100 shadow-sm">
+                        <img src="@(string.IsNullOrEmpty(product.ImagePath) ? "/images/placeholder.jpg" : $"/images/products/{product.ImagePath}")" class="card-img-top" alt="@product.Name" style="height: 200px; object-fit: cover;">
+                        <div class="card-body">
+                            <h5 class="card-title">@product.Name</h5>
+                            <p class="card-text text-muted">@product.Description</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="h4 text-primary">@product.Price.ToString("C")</span>
+                                <button class="btn btn-outline-primary" @onclick="() => AddToCart(product)">Agregar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ProductDto> products = new();
+    private string searchTerm = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+    }
+
+    private async Task Search()
+    {
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts()
+    {
+        var url = $"api/products?search={Uri.EscapeDataString(searchTerm)}";
+        var response = await Http.GetFromJsonAsync<PagedResult<ProductDto>>(url);
+        products = response?.Items?.ToList() ?? new();
+    }
+
+    private void AddToCart(ProductDto product)
+    {
+        // Simple logic to store in LocalStorage or a State Container
+        // For MVP, we'll redirect to checkout with product ID for demo
+        Navigation.NavigateTo($"/checkout/{product.Id}");
+    }
+
+    public record ProductDto(Guid Id, string Name, string Description, decimal Price, string Currency, string ImagePath);
+    public record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount);
+}

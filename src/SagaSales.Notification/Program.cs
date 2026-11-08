@@ -1,8 +1,8 @@
 using Serilog;
-using SagaSales.Notification.Commands;
 using SagaSales.Notification.Data;
 using SagaSales.Notification.EventHandlers;
 using SagaSales.Notification.Infrastructure;
+using SagaSales.Notification.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,21 +11,22 @@ builder.AddSagaSalesLogging(SagaSalesConstants.ApplicationName);
 builder.Services.AddSagaSalesInfrastructure(builder.Configuration);
 builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Notification");
 
-builder.Services.AddDbContext<NotificationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// No provider is configured yet: this sender logs instead of delivering (Phase 2: MailKit/Twilio).
+// Persistence: stored procedures only (constitution §VIII).
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddSingleton<INotificationSender, LoggingNotificationSender>();
 builder.Services.AddScoped<INotificationDispatch, NotificationDispatcher>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 builder.Services.AddSagaSalesMessageBus(builder.Configuration, bus =>
 {
-    bus.AddConsumer<OrderPlacedConsumer>();
+    // Dedicated queue: OrderPlaced must not compete with Analytics/Payment.
+    bus.AddConsumer<OrderConfirmationConsumer>()
+        .Endpoint(e => e.Name = "notification-order-placed");
     bus.AddConsumer<HighValueOrderAlertConsumer>();
 });
 
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(SendNotificationCommand).Assembly));
-builder.Services.AddSagaSalesValidation(typeof(SendNotificationCommand).Assembly);
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(NotificationService).Assembly));
+builder.Services.AddSagaSalesValidation(typeof(NotificationService).Assembly);
 
 builder.Services.AddControllers();
 

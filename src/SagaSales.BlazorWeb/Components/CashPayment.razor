@@ -1,0 +1,48 @@
+@using SagaSales.BlazorWeb.DTOs
+@inject ApiClient Api
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+    private decimal totalAmount;
+    private decimal amountReceived;
+    private string? message;
+    private bool isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // In a real page we'd fetch the order total. Here we assume it is passed or fetched elsewhere.
+        // For demo set a placeholder:
+        totalAmount = 100m; // TODO: replace with real amount
+    }
+
+    private async Task Pay()
+    {
+        isSubmitting = true;
+        var req = new CashPaymentDto { OrderId = OrderId, Amount = totalAmount, AmountReceived = amountReceived };
+        var resp = await Api.PayCashAsync(req);
+        if (resp != null)
+        {
+            message = $"Pago registrado. Vuelto: {resp.Amount - totalAmount:C}";
+        }
+        else
+        {
+            message = "Error en el pago en efectivo.";
+        }
+        isSubmitting = false;
+    }
+}
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert alert-info">@message</div>
+}
+
+<div class="mb-3">
+    <label class="form-label">Monto total a pagar</label>
+    <input type="number" class="form-control" @bind="totalAmount" disabled />
+</div>
+<div class="mb-3">
+    <label class="form-label">Monto recibido del cliente</label>
+    <input type="number" class="form-control" @bind="amountReceived" />
+</div>
+<button class="btn btn-success" @onclick="Pay" disabled="@isSubmitting">Registrar pago en efectivo</button>

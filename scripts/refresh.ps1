@@ -117,6 +117,8 @@ if (-not $targets -or $targets.Count -eq 0) {
 
 Write-Host ''
 Write-Host ("Reconstruyendo: " + ($targets -join ', ')) -ForegroundColor Cyan
+# Build label shown in the panel (version + commit + dirty flag + UTC time).
+. (Join-Path $PSScriptRoot 'build-label.ps1')
 
 & docker compose @composeArgs up -d --build @targets 2>&1 | Where-Object $dockerQuiet
 

@@ -1,0 +1,16 @@
+@inject IJSRuntime Js
+@code {
+    public EventCallback<string> OnScanned { get; set; }
+
+    private async Task StartScan()
+    {
+        // Calls a JS helper that uses BarcodeDetector or a fallback.
+        var result = await Js.InvokeAsync<string>("barcodeScanner.scan");
+        if (!string.IsNullOrEmpty(result))
+        {
+            await OnScanned.InvokeAsync(result);
+        }
+    }
+}
+
+<button class="btn btn-outline-primary" @onclick="StartScan">Escanear</button>

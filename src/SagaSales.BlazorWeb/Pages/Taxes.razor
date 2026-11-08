@@ -1,0 +1,113 @@
+@page "/taxes"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<div class="page-head">
+    <div>
+        <h1>Configuración Fiscal</h1>
+        <div class="page-head__sub">Gestión de tasas de impuesto (IVA) y periodos vigentes</div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Nuevo Periodo de Impuesto</h5>
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted">Porcentaje (%)</label>
+                <input class="form-control" type="number" step="0.01" placeholder="15.00" @bind="NewRate" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted">Fecha Inicio</label>
+                <input class="form-control" type="date" @bind="NewStart" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted">Fecha Fin (Opcional)</label>
+                <input class="form-control" type="date" @bind="NewEnd" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted">Descripción</label>
+                <input class="form-control" placeholder="Ej. IVA Estándar 2026" @bind="NewDescription" />
+            </div>
+            <div class="col-12 text-end">
+                <button class="btn btn-primary" @onclick="CreateAsync" disabled="@Busy">Guardar Tasa de Impuesto</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Rates == null)
+{
+    <p>Cargando configuraciones...</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Descripción</th>
+                <th>Tasa (%)</th>
+                <th>Desde</th>
+                <th>Hasta</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var rate in Rates)
+            {
+                <tr>
+                    <td>@rate.Description</td>
+                    <td>@rate.RatePercentage.ToString("P2")</td>
+                    <td>@rate.StartDate.ToString("yyyy-MM-dd")</td>
+                    <td>@(rate.EndDate?.ToString("yyyy-MM-dd") ?? "Vigente")</td>
+                    <td>
+                        @if (rate.EndDate == null || rate.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                        {
+                            <span class="chip chip--ok">Activo</span>
+                        }
+                        else
+                        {
+                            <span class="chip chip--neutral">Expirado</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<SagaSales.Shared.DTOs.TaxRateDto>? Rates { get; set; }
+    private decimal NewRate { get; set; } = 15.00m;
+    private DateOnly NewStart { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    private DateOnly? NewEnd { get; set; }
+    private string NewDescription { get; set; } = string.Empty;
+    private bool Busy { get; set; }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Rates = await Api.GetTaxRatesAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        Busy = true;
+        try
+        {
+            await Api.CreateTaxRateAsync(new SagaSales.Shared.DTOs.CreateTaxRateRequest(
+                NewRate / 100, 
+                NewStart, 
+                NewEnd, 
+                NewDescription));
+            
+            NewDescription = string.Empty;
+            await LoadAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+}

@@ -1,0 +1,27 @@
+@page "/ecuador-invoicing"
+@attribute [Authorize]
+
+<div class="page-head">
+    <div>
+        <h1>Facturación electrónica</h1>
+        <div class="page-head__sub">Comprobantes electrónicos del SRI · fase 2</div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel__body">
+        <p>
+            La emisión de comprobantes electrónicos (clave de acceso, firma XML y envío al SRI)
+            está planificada para la <strong>fase 2</strong> y se entregará como proyecto aparte
+            que consume los pedidos de esta plataforma.
+        </p>
+        <p>
+            La configuración de <strong>IVA</strong> ya está disponible y aislada por tienda en
+            <a href="/taxes">Configuración Fiscal</a>.
+        </p>
+        <p class="mb-0">
+            El esquema de referencia está en <code>docs/</code> y la decisión de alcance (E-10)
+            en <code>specs/001-saga-sales-ecommerce/epics.md</code>.
+        </p>
+    </div>
+</div>

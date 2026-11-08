@@ -21,12 +21,21 @@ public class OrderDto
 {
     public Guid Id { get; set; }
 
+    /// <summary>Human-readable number PED-&lt;store&gt;-&lt;sequence&gt;, unique per store. Also the receipt QR content.</summary>
+    public string OrderNumber { get; set; } = string.Empty;
+
     /// <summary>The customer being served, not the staff user who placed the order (D8).</summary>
     public Guid CustomerId { get; set; }
 
     public string Status { get; set; } = string.Empty;
 
     public decimal Subtotal { get; set; }
+
+    /// <summary>VAT applied on the order date (V-03). Stored with the order; later rate changes do not touch it.</summary>
+    public decimal TaxAmount { get; set; }
+
+    /// <summary>Subtotal + TaxAmount.</summary>
+    public decimal Total { get; set; }
 
     public decimal PaidAmount { get; set; }
 
@@ -40,6 +49,9 @@ public class OrderDto
 
     /// <summary>Staff user who created the order, kept for audit.</summary>
     public Guid CreatedBy { get; set; }
+
+    /// <summary>Seller's name as recorded when the order was created (H-06 receipt).</summary>
+    public string CreatedByName { get; set; } = string.Empty;
 }
 
 public class CreateOrderRequest

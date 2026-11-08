@@ -1,0 +1,426 @@
+@page "/caja"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject IJSRuntime Js
+
+<PageTitle>Caja</PageTitle>
+
+<style>
+    .caja { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: .75rem; }
+    .caja__search { position: relative; }
+    .caja__results { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; background: #111827; border: 1px solid #334155; border-radius: 6px; max-height: 260px; overflow-y: auto; }
+    .caja__results button { display: flex; width: 100%; justify-content: space-between; gap: .75rem; background: none; border: 0; color: #e5e7eb; padding: .45rem .7rem; text-align: left; }
+    .caja__results button:hover, .caja__results button.is-active { background: #1e3a8a; }
+    .caja__results small { color: #94a3b8; }
+    .caja__lines td, .caja__lines th { font-size: .92rem; vertical-align: middle; }
+    .caja__qty { width: 80px; }
+    .caja__total { background: #000; color: #22c55e; font-family: 'Consolas', monospace; border-radius: 6px; padding: .6rem .9rem; text-align: right; }
+    .caja__total-value { font-size: 2.6rem; line-height: 1.1; letter-spacing: .04em; }
+    .caja__total-label { font-size: .75rem; color: #86efac; text-transform: uppercase; }
+    .caja__change { font-family: 'Consolas', monospace; font-size: 1.35rem; }
+    .caja__hint { font-size: .75rem; color: #94a3b8; }
+    @@media (max-width: 1100px) { .caja { grid-template-columns: 1fr; } }
+</style>
+
+<div class="page-head">
+    <div>
+        <h1>Caja</h1>
+        <div class="page-head__sub">Venta de mostrador · precios con IVA incluido · F4 cobrar · Esc vaciar</div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+<div class="caja" @onkeydown="OnKeyDown">
+    <div>
+        <div class="panel">
+            <div class="panel__head">Venta</div>
+            <div class="panel__body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-8 caja__search">
+                        <label class="form-label">Producto (nombre, 3 letras o más) · Enter agrega</label>
+                        <input id="caja-search" class="form-control form-control-lg" autocomplete="off"
+                               @bind="SearchText" @bind:event="oninput" @bind:after="OnSearchChangedAsync" @onkeydown="SearchKeyDown"
+                               placeholder="Escribe para buscar…" />
+                        @if (Results.Count > 0)
+                        {
+                            <div class="caja__results">
+                                @for (var i = 0; i < Results.Count; i++)
+                                {
+                                    var product = Results[i];
+                                    var index = i;
+                                    <button type="button" class="@(index == ActiveResult ? "is-active" : "")"
+                                            @onclick="() => AddProduct(product)">
+                                        <span>@product.Name</span>
+                                        <small>
+                                            @GrossUnit(product.BasePrice).ToString("C") · stock @product.StockQuantity
+                                        </small>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cliente</label>
+                        <div class="form-control-plaintext">
+                            @(Customer is null ? "Cargando…" : $"{Customer.FirstName} {Customer.LastName}")
+                            <span class="caja__hint"> · por defecto (consumidor final)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel mt-3">
+            <div class="panel__head">Líneas</div>
+            <div class="panel__body p-0">
+                <table class="table mb-0 caja__lines">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th class="text-end">Precio c/IVA</th>
+                            <th class="text-center">Cant.</th>
+                            <th class="text-end">Total c/IVA</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in Cart)
+                        {
+                            <tr>
+                                <td>@line.Name</td>
+                                <td class="text-end">@GrossUnit(line.UnitNet).ToString("C")</td>
+                                <td class="text-center">
+                                    <input class="form-control form-control-sm caja__qty mx-auto" type="number" min="1"
+                                           value="@line.Quantity" @onchange="e => ChangeQuantity(line, e)" />
+                                </td>
+                                <td class="text-end"><strong>@GrossLine(line).ToString("C")</strong></td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(line)">×</button>
+                                </td>
+                            </tr>
+                        }
+                        @if (Cart.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center py-4">Busca un producto para empezar.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="caja__total">
+            <div class="caja__total-label">Total a pagar</div>
+            <div class="caja__total-value">@GrossTotal.ToString("C")</div>
+            <div class="caja__hint" style="color:#86efac">IVA incluido @TaxPercentLabel</div>
+        </div>
+
+        <div class="panel mt-3">
+            <div class="panel__head">Cobro</div>
+            <div class="panel__body">
+                <div class="mb-2">
+                    <label class="form-label">Forma de pago</label>
+                    <select class="form-select" @bind="MethodId">
+                        <option value="5">Efectivo</option>
+                        <option value="1">Tarjeta</option>
+                        <option value="4">Transferencia</option>
+                        <option value="9">Depósito</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Importe</label>
+                    <input class="form-control" type="number" step="0.01" min="0" @bind="Amount" />
+                </div>
+
+                @if (MethodId == 5)
+                {
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label">Entregado</label>
+                            <input class="form-control" type="number" step="0.01" min="0" @bind="Received" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">A devolver</label>
+                            <div class="form-control caja__change">@ChangeDue.ToString("C")</div>
+                        </div>
+                    </div>
+                    @if (ReceivedShort)
+                    {
+                        <div class="text-danger small mb-2">Lo entregado no cubre el importe.</div>
+                    }
+                }
+                else if (MethodId is 1 or 4 or 9)
+                {
+                    <div class="mb-2">
+                        <label class="form-label">@(MethodId == 1 ? "Últimos 4 dígitos (opcional)" : "Referencia (opcional)")</label>
+                        <input class="form-control" @bind="Reference" />
+                    </div>
+                }
+
+                <button class="btn btn-success btn-lg w-100" @onclick="ChargeAsync"
+                        disabled="@(Busy || Cart.Count == 0 || TaxRate is null)">
+                    @(Busy ? "Cobrando…" : "Cobrar (F4)")
+                </button>
+
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-outline-secondary w-50" @onclick="Clear" disabled="@Busy">Vaciar (Esc)</button>
+                    <button class="btn btn-outline-secondary w-50" disabled title="Pendiente: ventas en espera (siguiente paso)">En espera</button>
+                </div>
+                <button class="btn btn-outline-secondary w-100 mt-2" disabled title="Pendiente: crédito al cliente (V-06)">
+                    Crédito (pendiente de V-06)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private const string ConsumerEmail = "consumidor.final@caja.local";
+
+    private string SearchText { get; set; } = string.Empty;
+    private List<ProductDto> Results { get; set; } = [];
+    private int ActiveResult { get; set; } = 0;
+    private List<CartLine> Cart { get; set; } = [];
+    private CustomerDto? Customer { get; set; }
+    private TaxRateDto? TaxRate { get; set; }
+
+    private int MethodId { get; set; } = 5;
+    private decimal Amount { get; set; }
+    private decimal? Received { get; set; }
+    private string Reference { get; set; } = string.Empty;
+
+    private string? Message { get; set; }
+    private bool Error { get; set; }
+    private bool Busy { get; set; }
+
+    private sealed class CartLine
+    {
+        public Guid ProductId { get; init; }
+
+        public string Name { get; init; } = string.Empty;
+
+        public decimal UnitNet { get; init; }
+
+        public int Quantity { get; set; } = 1;
+    }
+
+    private decimal Rate => TaxRate?.RatePercentage ?? 0m;
+
+    private string TaxPercentLabel => TaxRate is null ? "(sin IVA vigente)" : $"({Rate * 100:0.##} %)";
+
+    // VAT per line, rounded to cents, exactly as sp_order_create (V024) does it on the server.
+    private decimal GrossUnit(decimal net) => net + Math.Round(net * Rate, 2, MidpointRounding.AwayFromZero);
+
+    private decimal GrossLine(CartLine line)
+    {
+        var net = line.UnitNet * line.Quantity;
+        return net + Math.Round(net * Rate, 2, MidpointRounding.AwayFromZero);
+    }
+
+    private decimal GrossTotal => Cart.Sum(GrossLine);
+
+    private decimal ChangeDue => MethodId == 5 && Received is { } r ? Math.Max(0, r - GrossTotal) : 0m;
+
+    private bool ReceivedShort => MethodId == 5 && Received is { } r && r < GrossTotal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        TaxRate = await Api.GetCurrentTaxAsync(DateTime.UtcNow);
+        if (TaxRate is null)
+        {
+            Message = "No hay IVA vigente para hoy. Configúralo en Configuración Fiscal antes de vender.";
+            Error = true;
+        }
+
+        Customer = await FindOrCreateConsumerAsync();
+        if (Customer is null)
+        {
+            Message = "No se pudo preparar el cliente 'consumidor final'.";
+            Error = true;
+        }
+    }
+
+    private async Task<CustomerDto?> FindOrCreateConsumerAsync()
+    {
+        var page = await Api.GetCustomersAsync(1, 100);
+        var existing = page?.Items.FirstOrDefault(c => string.Equals(c.Email, ConsumerEmail, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        return await Api.CreateCustomerAsync(new CreateCustomerRequest
+        {
+            FirstName = "Consumidor",
+            LastName = "Final",
+            Email = ConsumerEmail,
+        });
+    }
+
+    private async Task OnSearchChangedAsync()
+    {
+        if (SearchText.Trim().Length < 3)
+        {
+            Results = [];
+            return;
+        }
+
+        // Search is by name until the barcode lookup (V-01) is built.
+        var page = await Api.GetProductsAsync(1, 8, SearchText.Trim());
+        Results = page?.Items.ToList() ?? [];
+        ActiveResult = 0;
+    }
+
+    private async Task SearchKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Enter":
+                if (Results.Count > 0)
+                {
+                    AddProduct(Results[Math.Clamp(ActiveResult, 0, Results.Count - 1)]);
+                }
+
+                break;
+            case "ArrowDown":
+                ActiveResult = Math.Min(ActiveResult + 1, Math.Max(0, Results.Count - 1));
+                break;
+            case "ArrowUp":
+                ActiveResult = Math.Max(ActiveResult - 1, 0);
+                break;
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "F4" && !Busy)
+        {
+            await ChargeAsync();
+        }
+        else if (e.Key == "Escape" && !Busy)
+        {
+            await Clear();
+        }
+    }
+
+    private void AddProduct(ProductDto product)
+    {
+        var existing = Cart.FirstOrDefault(l => l.ProductId == product.Id);
+        if (existing is not null)
+        {
+            existing.Quantity++;
+        }
+        else
+        {
+            Cart.Add(new CartLine
+            {
+                ProductId = product.Id,
+                Name = product.Name,
+                UnitNet = product.BasePrice,
+            });
+        }
+
+        SearchText = string.Empty;
+        Results = [];
+        Amount = GrossTotal;
+        Message = null;
+        _ = Js.InvokeVoidAsync("sagaFocus", "caja-search");
+    }
+
+    private void ChangeQuantity(CartLine line, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var quantity) && quantity >= 1)
+        {
+            line.Quantity = quantity;
+        }
+
+        Amount = GrossTotal;
+    }
+
+    private void RemoveLine(CartLine line)
+    {
+        Cart.Remove(line);
+        Amount = GrossTotal;
+    }
+
+    private Task Clear()
+    {
+        Cart.Clear();
+        Received = null;
+        Reference = string.Empty;
+        Amount = 0;
+        Message = null;
+        Results = [];
+        SearchText = string.Empty;
+        return Js.InvokeVoidAsync("sagaFocus", "caja-search").AsTask();
+    }
+
+    private async Task ChargeAsync()
+    {
+        if (Cart.Count == 0 || Customer is null || TaxRate is null) { return; }
+
+        if (MethodId == 5 && (Received is null || ReceivedShort))
+        {
+            Message = Received is null ? "Indica lo que entregó el cliente." : "Lo entregado no cubre el importe.";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+
+        try
+        {
+            var order = await Api.CreateOrderAsync(new CreateOrderRequest
+            {
+                CustomerId = Customer.Id,
+                ShippingAddress = "Mostrador",
+                Items = Cart.Select(l => new OrderItemRequest { ProductId = l.ProductId, Quantity = l.Quantity }).ToList(),
+            });
+
+            if (order is null)
+            {
+                Message = "No se pudo crear la venta. Revisa el stock de los productos.";
+                Error = true;
+                return;
+            }
+
+            var toPay = Amount > 0 ? Amount : order.Total;
+            var payment = await Api.CreatePaymentAsync(new ManualPaymentRequest
+            {
+                OrderId = order.Id,
+                Amount = toPay,
+                Method = (ManualPaymentMethod)MethodId,
+                Reference = string.IsNullOrWhiteSpace(Reference) ? null : Reference.Trim(),
+                CashReceived = MethodId == 5 ? Received : null,
+            });
+
+            if (payment is null)
+            {
+                Message = $"La venta {order.OrderNumber} quedó creada, pero el cobro no se registró. Cóbrala desde Pedidos.";
+                Error = true;
+                return;
+            }
+
+            var change = payment.ChangeGiven is { } c && c > 0 ? $" Vuelto: {c:C}." : string.Empty;
+            var pending = order.Total - toPay;
+            var balance = pending > 0 ? $" Pendiente: {pending:C}." : string.Empty;
+            Message = $"Venta {order.OrderNumber} cobrada por {toPay:C}.{change}{balance}";
+            Error = false;
+
+            Cart.Clear();
+            Received = null;
+            Reference = string.Empty;
+            Amount = 0;
+            await Js.InvokeVoidAsync("sagaFocus", "caja-search");
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+}

@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using SagaSales.BlazorWeb.DTOs;
 
 namespace SagaSales.BlazorWeb.Services;
 
@@ -59,6 +60,28 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     public Task<ProductDto?> CreateProductAsync(CreateProductRequest request)
         => PostAsync<ProductDto>("api/products", request);
 
+    /// <summary>Uploads (or replaces) the product's picture and returns the updated product.</summary>
+    public async Task<ProductDto?> UploadProductImageAsync(Guid productId, byte[] bytes, string fileName, string contentType)
+    {
+        using var content = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(bytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        content.Add(fileContent, "file", fileName);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/products/{productId}/image");
+        await ApplyHeadersAsync(request);
+        request.Content = content;
+
+        var response = await http.SendAsync(request);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ProductDto>() : null;
+    }
+
+    /// <summary>Turns the stored relative path (e.g. <c>images/products/x.png</c>) into a full URL.</summary>
+    public string? ImageUrl(string? path)
+        => string.IsNullOrWhiteSpace(path)
+            ? null
+            : (http.BaseAddress is null ? path : new Uri(http.BaseAddress, path).ToString());
+
     public Task<CategoryDto?> CreateCategoryAsync(CreateCategoryRequest request)
         => PostAsync<CategoryDto>("api/categories", request);
 
@@ -87,8 +110,16 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     }
 
     // ── orders ──────────────────────────────────────────────────────────────
-    public Task<PagedResult<OrderDto>?> GetOrdersAsync(int pageNumber, int pageSize)
-        => GetAsync<PagedResult<OrderDto>>($"api/orders?pageNumber={pageNumber}&pageSize={pageSize}");
+    public Task<PagedResult<OrderDto>?> GetOrdersAsync(int pageNumber, int pageSize, OrderStatus? status = null)
+    {
+        var query = $"api/orders?pageNumber={pageNumber}&pageSize={pageSize}";
+        if (status is not null)
+        {
+            query += $"&status={(int)status.Value}";
+        }
+
+        return GetAsync<PagedResult<OrderDto>>(query);
+    }
 
     public Task<OrderDto?> CreateOrderAsync(CreateOrderRequest request)
         => PostAsync<OrderDto>("api/orders", request);
@@ -157,7 +188,18 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     private async Task<HttpRequestMessage> BuildAsync(HttpMethod method, string path, object? body)
     {
         var request = new HttpRequestMessage(method, path);
+        await ApplyHeadersAsync(request);
 
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body);
+        }
+
+        return request;
+    }
+
+    private async Task ApplyHeadersAsync(HttpRequestMessage request)
+    {
         var token = await store.GetTokenAsync();
         if (!string.IsNullOrWhiteSpace(token))
         {
@@ -169,20 +211,70 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
         {
             request.Headers.TryAddWithoutValidation(SagaSales.Shared.Constants.SagaSalesConstants.Headers.TenantId, tenantId);
         }
+    }
 
-        if (body is not null)
-        {
-            request.Content = JsonContent.Create(body);
-        }
+    // ── product lookup (V‑01) ────────────────────────────────────────────────
+    public Task<IReadOnlyList<ProductLookupDto>?> LookupProductsAsync(string term)
+        => GetAsync<IReadOnlyList<ProductLookupDto>>("api/catalog/products/lookup?term=" + Uri.EscapeDataString(term));
 
-        return request;
+    // ── pre‑sale (V‑02, V‑08) ────────────────────────────────────────────────
+    public Task<PreSaleDto?> CreatePreSaleAsync(CreatePreSaleRequest request)
+        => PostAsync<PreSaleDto>("api/sales/pre-sales", request);
+    public Task<PreSaleDto?> GetPreSaleAsync(Guid id)
+        => GetAsync<PreSaleDto>("api/sales/pre-sales/" + id);
+
+    // ── tax (V‑03) ────────────────────────────────────────────────────────
+    public Task<TaxRateDto?> GetCurrentTaxAsync(DateTime date)
+        => GetAsync<TaxRateDto>($"api/taxes/current?date={date:yyyy-MM-dd}");
+
+    // ── payments (V‑04, V‑05, V‑06) ────────────────────────────────────────
+    public Task<PaymentDto?> PayCashAsync(CashPaymentDto request)
+        => PostAsync<PaymentDto>("api/sales/payments/cash", request);
+    public Task<PaymentDto?> PayCardAsync(CardPaymentDto request)
+        => PostAsync<PaymentDto>("api/sales/payments/card", request);
+    public Task<PaymentDto?> PayCreditAsync(CreditPaymentDto request)
+        => PostAsync<PaymentDto>("api/sales/payments/credit", request);
+
+    public Task<InvoiceResponseDto?> GetInvoiceAsync(Guid id)
+        => GetAsync<InvoiceResponseDto>($"api/ecuador-invoicing/invoices/{id}");
+
+    // ── invoice creation (Ecuador) ───────────────────────────────────────────────
+    public Task<InvoiceResponseDto?> CreateInvoiceAsync(CreateInvoiceDto request)
+        => PostAsync<InvoiceResponseDto>("api/ecuador-invoicing/invoices", request);
+
+    // ── tax report (V‑09) ───────────────────────────────────────────────────────
+    public Task<IReadOnlyList<TaxPeriodReportDto>?> GetIvaReportAsync(DateTime from, DateTime to)
+        => GetAsync<IReadOnlyList<TaxPeriodReportDto>>( $"api/reports/iva?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}" );
+
+
+    public Task<List<TaxRateDto>?> GetTaxRatesAsync()
+        => GetAsync<List<TaxRateDto>>("api/taxes");
+
+    public async Task<int?> CreateTaxRateAsync(CreateTaxRateRequest request)
+    {
+        return await PostAsync<int>("api/taxes", request);
     }
 
     // ── branches and settings (E-13) ────────────────────────────────────────
-    public Task<List<BranchDto>?> GetBranchesAsync() => GetAsync<List<BranchDto>>("api/branches");
+    public Task<List<BranchDto>?> GetBranchesAsync(bool includeInactive = false)
+        => GetAsync<List<BranchDto>>($"api/branches?includeInactive={includeInactive.ToString().ToLowerInvariant()}");
 
     public Task<BranchDto?> CreateBranchAsync(CreateBranchRequest request)
         => PostAsync<BranchDto>("api/branches", request);
+
+    public async Task<BranchDto?> UpdateBranchAsync(Guid id, UpdateBranchRequest request)
+    {
+        var response = await http.PutAsJsonAsync($"api/branches/{id}", request);
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<BranchDto>()
+            : null;
+    }
+
+    public async Task<bool> DeactivateBranchAsync(Guid id)
+    {
+        var response = await http.DeleteAsync($"api/branches/{id}");
+        return response.IsSuccessStatusCode;
+    }
 
     public Task<SettingsDto?> GetSettingsAsync() => GetAsync<SettingsDto>("api/settings");
 
@@ -217,6 +309,9 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public Task<PagedResult<PurchaseDto>?> GetPurchasesAsync(int pageNumber = 1, int pageSize = 20)
         => GetAsync<PagedResult<PurchaseDto>>($"api/purchases?pageNumber={pageNumber}&pageSize={pageSize}");
+
+    /// <summary>One purchase with all its lines (the grouped records of the document).</summary>
+    public Task<PurchaseDto?> GetPurchaseAsync(Guid id) => GetAsync<PurchaseDto>($"api/purchases/{id}");
 
     public async Task<PurchaseDto?> CreatePurchaseAsync(CreatePurchaseRequest request)
     {

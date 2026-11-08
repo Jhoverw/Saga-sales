@@ -16,9 +16,10 @@ consequences through MassTransit/RabbitMQ, and a Blazor WebAssembly SPA that onl
 gateway. The tenant is the first parameter of every procedure, so isolation is enforced by the
 database rather than by handler discipline.
 
-**Scope of this plan**: MVP = E-01, E-02, E-03, E-04a, E-08. Online payments (E-04b), customers
-(E-05), notifications (E-07), analytics (E-06) and storefront (E-09) are planned here but are
-sequenced later; the schema and events already reserve what they need.
+**Scope of this plan**: MVP = E-01, E-02, E-03, E-04a, E-08, **E-12 (purchases and costs)** and
+**E-13 (real inventory: branches, lots, images)**. Online payments (E-04b), notifications (E-07),
+analytics (E-06) and storefront (E-09) are planned here but are sequenced later; the schema and
+events already reserve what they need.
 
 ## Technical Context
 
@@ -49,13 +50,13 @@ any payment gateway; 100 orders/day at peak; 10 stores; 50 products per store.
 concurrency; a tenant filter is mandatory on every query; no service opens another service's
 database; the buyer does not sign in during the MVP; CSV with `;` and decimal comma for reports.
 
-**Scale/Scope**: 8 services, ~34 functional requirements covering 10 user stories, 7 databases,
-~45 stored procedures, 1 SPA with 6 screens.
+**Scale/Scope**: 8 deployable services + SPA, ~50 functional requirements covering 16 user stories,
+7 databases, ~60 stored procedures, 1 SPA with 12 screens.
 
 ## Constitution Check
 
 *GATE: evaluated before Phase 0 and re-evaluated after Phase 1.*
-Constitution v2.0.0 — [`.specify/memory/constitution.md`](../../../.specify/memory/constitution.md).
+Constitution v2.2.0 — [`.specify/memory/constitution.md`](../../../.specify/memory/constitution.md).
 
 | Gate | Article | Status | Evidence |
 |---|---|---|---|

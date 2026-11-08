@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SagaSales.BuildingBlocks\SagaSales.BuildingBlocks.csproj" />
-    <ProjectReference Include="..\SagaSales.Shared\SagaSales.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

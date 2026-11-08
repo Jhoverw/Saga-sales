@@ -29,6 +29,22 @@ public class ProductDto
     public ProductStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    /// <summary>Weighted average cost from received purchases (E-12); null = unknown.</summary>
+    public decimal? Cost { get; set; }
+
+    /// <summary>Base price − cost, or null when the cost is unknown.</summary>
+    public decimal? Margin => Cost.HasValue ? BasePrice - Cost.Value : null;
+
+    public decimal? MarginPercent => Cost.HasValue && BasePrice > 0
+        ? Math.Round(((BasePrice - Cost.Value) / BasePrice) * 100m, 2)
+        : null;
+
+    /// <summary>True when the product carries lots; receiving it then requires a lot code.</summary>
+    public bool TracksBatches { get; set; }
+
+    /// <summary>Relative URL path of the picture ("images/products/&lt;id&gt;.&lt;ext&gt;"), or null.</summary>
+    public string? ImagePath { get; set; }
 }
 
 /// <summary>Resolved price for one product and one customer type.</summary>
@@ -56,6 +72,9 @@ public class CreateProductRequest
     public int StockQuantity { get; set; }
     public Guid? CategoryId { get; set; }
     public string Currency { get; set; } = "USD";
+
+    /// <summary>Mark it when the product expires and must be received with a lot code.</summary>
+    public bool TracksBatches { get; set; }
 }
 
 public class UpdateProductRequest : CreateProductRequest
@@ -78,6 +97,22 @@ public class CreateCategoryRequest
 public class StockMovementRequest
 {
     public int Quantity { get; set; }
+
+    /// <summary>Branch to reserve from; null uses the store's default branch (E-13).</summary>
+    public Guid? BranchId { get; set; }
+}
+
+/// <summary>One kardex row (E-12): purchase in, sale out, adjustment or return.</summary>
+public class StockMovementDto
+{
+    public Guid Id { get; set; }
+    public short Kind { get; set; }          // 1 purchase in · 2 sale out · 3 adjustment · 4 return in
+    public int Quantity { get; set; }        // signed
+    public decimal? UnitCost { get; set; }
+    public int StockAfter { get; set; }
+    public string? ReferenceType { get; set; }
+    public Guid? ReferenceId { get; set; }
+    public DateTime OccurredAt { get; set; }
 }
 
 // HTTP Endpoints — all require a bearer token and a resolvable tenant (FR-004).
@@ -93,7 +128,12 @@ public class StockMovementRequest
 // PUT    /api/products/{id}/prices/{customerType}   → 200 PriceQuoteDto (upsert, FR-007)
 // GET    /api/products/{id}/price?customerType=     → 200 PriceQuoteDto (fallback reported, FR-007b)
 // POST   /api/products/{id}/stock/reserve           → 200 ProductDto · 409 INSUFFICIENT_STOCK
+//        body: { quantity, branchId? } — per-branch, FEFO, expired lot refused (E-13).
 // POST   /api/products/{id}/stock/release           → 204 (compensation, FR-014)
+// GET    /api/products/{id}/movements?maxRows=       → 200 StockMovementDto[] (the kardex, E-12)
+// POST   /api/products/{id}/image                   → 200 ProductDto (multipart field `file`)
+//        JPEG/PNG/WebP/GIF, max 5 MB; stores the path and serves it under /images (E-13).
+// GET    /images/products/{file}                     → 200 (public static file, no bearer token)
 // GET    /api/categories                            → 200 CategoryDto[]
 // POST   /api/categories                            → 201 CategoryDto · 409 duplicate name
 //

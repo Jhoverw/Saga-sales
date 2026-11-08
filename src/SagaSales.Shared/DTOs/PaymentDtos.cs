@@ -29,6 +29,12 @@ public class PaymentDto
     public DateTime? CapturedAt { get; set; }
 
     public DateTime? RefundedAt { get; set; }
+
+    /// <summary>Cash only: what the customer handed over (H-09).</summary>
+    public decimal? CashReceived { get; set; }
+
+    /// <summary>Cash only: CashReceived − Amount (H-09).</summary>
+    public decimal? ChangeGiven { get; set; }
 }
 
 /// <summary>Online payment — v1 (E-04b). Not used in the MVP.</summary>
@@ -50,9 +56,13 @@ public class ManualPaymentRequest
 
     public Enums.ManualPaymentMethod Method { get; set; } = Enums.ManualPaymentMethod.Transfer;
 
+    /// <summary>Card last four digits, transfer or deposit reference (optional).</summary>
     public string? Reference { get; set; }
 
     public DateTime? PaidAt { get; set; }
+
+    /// <summary>Required for cash: the amount the customer handed over. Must be at least Amount (H-09).</summary>
+    public decimal? CashReceived { get; set; }
 }
 
 public class RefundPaymentRequest

@@ -1,0 +1,39 @@
+@using SagaSales.BlazorWeb.DTOs
+@inject ApiClient Api
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+    private decimal amount;
+    private string? last4;
+    private string? message;
+    private bool isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        amount = 100m; // placeholder – replace with actual order total
+    }
+
+    private async Task Pay()
+    {
+        isSubmitting = true;
+        var req = new CardPaymentDto { OrderId = OrderId, Amount = amount, CardLast4 = last4 };
+        var resp = await Api.PayCardAsync(req);
+        message = resp != null ? "Pago con tarjeta registrado." : "Error en el pago con tarjeta.";
+        isSubmitting = false;
+    }
+}
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert alert-info">@message</div>
+}
+
+<div class="mb-3">
+    <label class="form-label">Monto a pagar</label>
+    <input type="number" class="form-control" @bind="amount" disabled />
+</div>
+<div class="mb-3">
+    <label class="form-label">Últimos 4 dígitos (opcional)</label>
+    <input type="text" maxlength="4" class="form-control" @bind="last4" placeholder="XXXX" />
+</div>
+<button class="btn btn-success" @onclick="Pay" disabled="@isSubmitting">Registrar pago con tarjeta</button>

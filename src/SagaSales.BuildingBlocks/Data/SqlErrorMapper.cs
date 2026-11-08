@@ -19,6 +19,8 @@ public static class SqlErrorMapper
             ["INSUFFICIENT_STOCK"] = ("InsufficientStock", StatusCodes.Status409Conflict),
             ["INVALID_TRANSITION"] = ("InvalidTransition", StatusCodes.Status409Conflict),
             ["PAYMENT_ALREADY_EXISTS"] = ("PaymentAlreadyExists", StatusCodes.Status409Conflict),
+            ["PAYMENT_EXCEEDS_BALANCE"] = ("PaymentExceedsBalance", StatusCodes.Status409Conflict),
+            ["PAYMENT_DUPLICATE"] = ("PaymentDuplicate", StatusCodes.Status409Conflict),
             ["REFUND_EXCEEDS_REFUNDABLE"] = ("RefundExceedsRefundable", StatusCodes.Status409Conflict),
             ["VALIDATION_ERROR"] = ("ValidationError", StatusCodes.Status400BadRequest),
             ["UNAUTHORIZED"] = ("Unauthorized", StatusCodes.Status401Unauthorized),

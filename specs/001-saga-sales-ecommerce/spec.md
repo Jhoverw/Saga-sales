@@ -32,6 +32,32 @@ this document governs behaviour.
 - **Q**: How is an anonymous buyer identified when ordering through the storefront? → **A**: The checkout captures the buyer's email and phone. The platform creates the customer in that store when the email is new, or reuses the existing one, so an order always references a customer record and never free-text buyer data.
 - **Q**: Which roles may change prices or refund? → **A**: Only administrator and manager. The sales role places orders and records payments, and cannot touch prices, refunds or users.
 
+### Session 2026-11-05 (purchases and real inventory: E-12, E-13)
+
+- **Q**: How is a large delivery entered when it arrives with many products and several lots? → **A**: As **one purchase document with many lines**, each line carrying its product, quantity, cost, and its lot and expiry when the product is perishable. The same product may appear in more than one line for different lots, so the delivery is grouped instead of typed one line at a time.
+- **Q**: Where does the cost live? → **A**: In the purchase line. Receiving recalculates the product's weighted average cost; a product that was never received has an unknown cost (and its margin is shown as unknown, not zero).
+- **Q**: Is stock a single number per store? → **A**: No. Stock is per branch, and lots are stored inside a branch. Selling requires a branch, never borrows from another branch and consumes FEFO; an expired lot is never sold.
+- **Q**: What happens to the stock number the catalogue already showed? → **A**: It becomes the sum of the branches (kept for reads), so existing lists and reports keep working while the branch and lot tables hold the truth.
+
+### Session 2026-11-08 (order number and receipt, Ventas module)
+
+- Each order gets a **human-readable order number** `PED-<store code>-<sequence>` (e.g. `PED-DEMO-000123`), unique per store by a database constraint on (store, number).
+- The number is assigned by the creation procedure in the same transaction as the order. Cancelled orders keep their number; the sequence never goes back.
+- The internal identifier stays the GUID. The number is for people and for the receipt QR.
+- The receipt QR encodes **only the order number**: no customer data, no amounts. The separate fiscal project reads it from there.
+
+### Session 2026-11-08 (counter sales screen, "Caja")
+
+- **Prices shown with VAT included** on the counter screen and on the receipt. The stored price stays
+  net; the screen shows price × (1 + tax rate in force). Each line rounds its VAT to cents, and the
+  server total must equal the sum of those rounded lines (to be fixed in the spec before coding).
+- **No discount per line** in this phase.
+- **Held sales reserve stock**, released automatically after **30 minutes** without a payment
+  (configurable per store). A held sale that expires gives its stock back.
+- **Payment before delivery**, except **credit** for registered customers with a credit limit
+  (story V-06 moves from P3 to P2 for this flow). Who may grant credit, and how a debt is settled,
+  is still to be specified.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Open a store and sign in (Priority: P1) · E-01 · US-017
@@ -233,6 +259,243 @@ reach the confirmation page.
 
 ---
 
+### User Story 11 - Register a supplier (Priority: P1) · E-12 · US-021
+
+Store staff keep the list of who the store buys from, with identification, contact details and conditions, so a purchase always points at a real supplier.
+
+**Why this priority**: without suppliers a purchase has no origin and the cost of the goods cannot be traced back to an invoice.
+
+**Independent Test**: create a supplier with a tax id, list it, edit it and deactivate it; the historical purchases keep pointing at it.
+
+**Acceptance Scenarios**:
+
+1. **Given** a store with no suppliers, **When** staff creates one with a name and a tax id, **Then** the supplier exists and can be chosen when recording a purchase.
+2. **Given** two suppliers in the same store, **When** staff tries to create a second one with the same tax id, **Then** the creation is refused with a clear message.
+3. **Given** a supplier with historical purchases, **When** staff deactivates it, **Then** it stops appearing in the picker but its purchases keep their history.
+
+---
+
+### User Story 12 - Record a purchase with its lines and costs (Priority: P1) · E-12 · US-022
+
+A big delivery arrives: staff type one purchase document with many lines — each product, quantity and the cost the supplier quoted — and the lot and expiry of each line when the product is perishable. The same product may appear in several lines when it arrived in different lots.
+
+**Why this priority**: the selling price alone cannot tell margin; the real cost must live in a document, not in someone's memory, and a large order must be entered grouped instead of one line at a time.
+
+**Independent Test**: register one purchase with three lines (the same lot-tracked product twice, in two different lots) and read the document back with all its lines.
+
+**Acceptance Scenarios**:
+
+1. **Given** a supplier and several products, **When** staff registers one purchase with many lines, **Then** it is stored as a single document and all its lines are returned together.
+2. **Given** a lot-tracked product, **When** a line is saved without a lot code, **Then** the purchase is refused with a clear message.
+3. **Given** a purchase with a line whose cost is zero, **When** it is saved, **Then** it is refused and nothing is stored.
+4. **Given** a purchase saved without receiving it, **When** the stock is consulted, **Then** nothing moved: the document is a draft.
+
+---
+
+### User Story 13 - Receive a purchase (Priority: P1) · E-12 · US-023
+
+Receiving a purchase is the moment the stock enters, the weighted average cost is recalculated and the kardex records the movement with its document of origin.
+
+**Why this priority**: it is the only legitimate way stock grows, and it is what makes the cost and the margin trustworthy.
+
+**Independent Test**: receive a purchase for 100 units at 0.40 on a product holding 100 at 0.35; stock becomes 200 and cost 0.375, with one kardex entry.
+
+**Acceptance Scenarios**:
+
+1. **Given** a product with stock 100 and cost 0.35, **When** a purchase of 100 units at 0.40 is received, **Then** stock is 200 and the weighted average cost is 0.375.
+2. **Given** a purchase already received, **When** staff tries to receive it again, **Then** it is refused with 409 and the stock does not change.
+3. **Given** a received purchase, **When** the kardex of the product is consulted, **Then** it shows the entry with the quantity, the cost and the purchase it came from.
+
+---
+
+### User Story 14 - Manage branches and stock per branch (Priority: P1) · E-13 · US-024
+
+A store has one or more branches. The stock belongs to a branch, one branch is the default, and selling consumes stock only from the branch it is sold at.
+
+**Why this priority**: with two branches a single store-wide number cannot say where the goods are, and the store would sell units it does not physically have.
+
+**Independent Test**: hold 10 units in Centro and 0 in Norte; try to sell 2 from Norte and confirm it is refused while Centro keeps its 10.
+
+**Acceptance Scenarios**:
+
+1. **Given** stock only in the Centro branch, **When** an order is placed for the Norte branch, **Then** it is refused with 409 and Centro keeps its stock.
+2. **Given** a purchase received into the Norte branch, **When** the stock per branch is consulted, **Then** Norte grew and Centro did not change.
+3. **Given** a store with a default branch, **When** it is deactivated, **Then** the request is refused because it is the fallback for receipts.
+
+---
+
+### User Story 15 - Lots, expiry and FEFO (Priority: P1) · E-13 · US-025
+
+Perishable products are received with a lot code and an expiry date. Selling consumes the lot that expires first, an expired lot is never sold, and the store configures how many days ahead it wants the expiry warning.
+
+**Why this priority**: it prevents selling expired goods and throwing away stock that could have been sold first.
+
+**Independent Test**: receive lot A expiring in January and lot B expiring in June; sell 10 and verify they came from lot A.
+
+**Acceptance Scenarios**:
+
+1. **Given** lot A expiring 2027-01-31 and lot B expiring 2027-06-30, **When** staff sells 10 units, **Then** they leave from lot A and the kardex records the lot.
+2. **Given** a lot that expired yesterday and no other lot, **When** staff tries to sell one unit, **Then** it is refused with 409 and no lot is consumed.
+3. **Given** the store configured a 30-day warning, **When** a lot expires in 10 days, **Then** it appears in the "expiring soon" list with its quantity.
+
+---
+
+### User Story 16 - Product images and physical location (Priority: P1) · E-13 · US-026
+
+Each product may carry one picture, served by the catalogue service, and a free-text physical location per branch ("floor 1, aisle 3, shelf B") so staff can find it on the shelf.
+
+**Why this priority**: the picture is how the product is recognised on screen and the location is how it is found in the store.
+
+**Independent Test**: upload an image to a product and read it back through the service; save a location for a product in a branch and read it back.
+
+**Acceptance Scenarios**:
+
+1. **Given** a product with a picture, **When** the catalogue is consulted, **Then** it returns the picture URL and the service serves the image.
+2. **Given** a product without a picture, **When** the catalogue is shown, **Then** a marker with the product's initial is shown instead of a broken image.
+3. **Given** a product in a branch, **When** staff saves "floor 1, aisle 3, shelf B", **Then** the location is returned when the product is consulted in that branch.
+
+---
+
+## Módulo Ventas: historias V-01 a V-10 (backlog de punto de venta)
+
+Backlog incorporado en la auditoría del 2026-11-08. Agrupado en cuatro épicas. Prioridad:
+P1 = necesario para vender en mostrador; P2 = necesario para cobrar bien; P3 = reportes y documentos.
+Estado inicial (auditoría del 2026-11-08): ninguna historia está completa. Varias tienen stubs en
+memoria que deben reemplazarse por persistencia real (constitución §V y §VIII).
+
+| Épica | Historias | Comentario |
+|---|---|---|
+| **V1 · Búsqueda y visualización de productos** | V-01, V-07, V-08 | Localizar el artículo, ver su imagen y gestionar stock insuficiente. |
+| **V2 · Stock y pre-venta** | V-02, V-08 | Automatiza el manejo de productos sin stock sin perder la venta. |
+| **V3 · Impuestos y cálculos financieros** | V-03, V-04, V-05, V-06, V-09 | IVA por fecha, cobro en efectivo, tarjeta y crédito, reporte de IVA. |
+| **V4 · Comprobantes de venta** | V-10 | Comprobante para el cliente y para contabilidad, con imagen y datos de pago. |
+
+### Sales Story V-01 - Búsqueda rápida de productos por nombre o código de barras (Priority: P1) · V1
+
+El vendedor escribe los tres primeros caracteres del nombre o escanea el código de barras, y ve
+una lista con miniaturas.
+
+**Criterios de aceptación**:
+1. Al escribir ≥ 3 caracteres aparece un desplegable con ≤ 5 resultados.
+2. Cada resultado muestra la mini-imagen (≤ 50 × 50 px), el código de barras (texto) y el nombre completo.
+3. Si el dispositivo tiene cámara, "Escanear" abre el lector de códigos (JS + Web API BarcodeDetector).
+4. Si el producto no tiene stock, el resultado muestra la etiqueta "Sin stock – pre-venta disponible".
+
+**Tareas técnicas preliminares**: columna `Barcode` en `Product`; tabla `ProductImage` (Id, ProductId,
+Url, IsThumbnail); `GET /catalog/products/lookup?term=` con DTO `ProductLookupDto` (ThumbnailUrl);
+componente `BarcodeScanner.razor` con interop JS.
+
+### Sales Story V-02 - Pre-venta cuando el producto está sin stock (Priority: P2) · V2
+
+Sin unidades disponibles, el vendedor crea una pre-orden: el cliente se compromete a comprar cuando llegue el producto.
+
+**Criterios de aceptación**:
+1. Si el producto está sin stock, el botón "Agregar" se muestra como "Pre-venta".
+2. La pre-venta crea una fila en `PreSales` (ProductId, CustomerId, Qty, ExpectedDate, Status = Pendiente).
+3. Al reponerse el stock (evento `StockReplenished`), el cliente recibe una notificación (email simulado).
+
+**Tareas técnicas preliminares**: tabla `PreSales`; evento `StockReplenished` → `PreSaleProcessor` que
+pasa la pre-venta a Listo y genera la notificación; UI que permite confirmarla cuando haya stock.
+
+### Sales Story V-03 - Impuestos variables por fecha (Priority: P1) · V3
+
+El sistema aplica el IVA vigente según la fecha de la orden (cambios legislativos).
+
+**Criterios de aceptación**:
+1. La tabla de tasas (`tax_rates`) guarda el inicio y el fin de vigencia (`start_date`, `end_date`, `NULL` = abierta).
+2. Al crear una orden, `sp_order_create` busca la tasa vigente en la fecha de la orden y guarda el IVA en `orders.tax_amount` y la tasa en cada `order_lines.tax_rate`. Si no hay tasa vigente, la orden se rechaza (`VALIDATION_ERROR`); no se guarda con 0 % en silencio.
+3. Cambiar una tasa futura no altera órdenes ya creadas.
+4. `GET /api/taxes/current?date=YYYY-MM-DD` devuelve la tasa vigente, o 404 si ninguna la cubre.
+
+**Implementado (2026-11-08)**: migraciones `V019` (regla y cálculo en SQL) y `V020` (lecturas con `TaxAmount`).
+Desviación: la regla vive en SQL (§VIII), así que se prueba con pruebas de integración contra el
+procedimiento real, en lugar de pruebas unitarias del resolver en C#. El stub en memoria
+`TaxResolverService` se eliminó.
+Pendiente de V-03: incluir el IVA en `OrderPlacedEvent` y mostrarlo en la pantalla de Pedidos.
+
+### Sales Story V-04 - Cobro en efectivo y cálculo de vuelto (Priority: P2) · V3
+
+Cuando la venta se paga en efectivo, el cajero indica cuánto recibió el cliente y el sistema calcula el vuelto.
+
+**Criterios de aceptación**:
+1. Al elegir "Efectivo" aparecen Monto recibido y Vuelto (solo lectura).
+2. Vuelto = recibido − total, calculado en tiempo real.
+3. El registro guarda `CashReceived` y `ChangeGiven`.
+4. Si el monto recibido es menor que el total, se muestra error y no se puede confirmar.
+
+**Tareas técnicas preliminares**: columnas `CashReceived` y `ChangeGiven` en el pago; endpoint
+`POST /sales/payments/cash` con validación; componente `CashPayment.razor`.
+
+### Sales Story V-05 - Registro de pago con tarjeta, sin pasarela (Priority: P2) · V3
+
+Registrar que la orden se pagó con tarjeta, sin integración con un procesador de pagos.
+
+**Criterios de aceptación**:
+1. La pantalla de pago ofrece la opción "Tarjeta".
+2. Al confirmar se crea un pago con `Method = Card`, `CardLast4` opcional y `Status = Completed`.
+3. No se llama a ningún gateway; solo se guarda la información.
+
+**Tareas técnicas preliminares**: añadir `Card` al enum de método de pago; DTO `CardPaymentRequest`
+(Amount, Last4); componente `CardPayment.razor`.
+
+### Sales Story V-06 - Crédito al cliente (cuenta por cobrar) (Priority: P3) · V3
+
+El vendedor carga una orden a la cuenta del cliente; la orden queda "a crédito".
+
+**Criterios de aceptación**:
+1. Al elegir "Crédito" se muestra el crédito disponible del cliente (tabla `CustomerCredit`).
+2. La orden se crea con `PaymentMethod = Credit` y reduce el disponible.
+3. Si el importe supera el disponible, se muestra error y no se crea la orden.
+
+**Tareas técnicas preliminares**: tabla `CustomerCredit` (CustomerId, CreditLimit, Available);
+`CreditService` que valida y actualiza; `POST /sales/orders/credit`; componente `CreditOrder.razor`.
+
+### Sales Story V-07 - Mini-imagen y filtro en las líneas de la orden (Priority: P2) · V1
+
+Refinamiento de V-01 en la tabla de líneas de la orden.
+
+**Criterios de aceptación**:
+1. El filtro de la tabla acepta ≥ 3 caracteres y muestra coincidencias con mini-imagen en cada fila.
+2. Al pasar el ratón sobre el nombre aparece un tooltip con la imagen ampliada (100 × 100 px).
+
+**Tareas técnicas preliminares**: `ThumbnailUrl` en `OrderLineDto`; componente
+`ProductNameWithThumbnail.razor`; reutiliza la búsqueda de V-01.
+
+### Sales Story V-08 - Stock insuficiente ofrece pre-venta (Priority: P2) · V1, V2
+
+Si la cantidad solicitada supera el stock, el sistema ofrece crear la pre-venta sin buscarla a mano.
+
+**Criterios de aceptación**:
+1. Al superar el stock aparece un modal: "No hay stock suficiente. ¿Crear pre-venta?".
+2. Si el usuario acepta, se crea la pre-venta de V-02 automáticamente.
+
+**Tareas técnicas preliminares**: la UI detecta `InsufficientStockException` y abre el modal;
+llama a `PreSaleService.CreateFromOrder`.
+
+### Sales Story V-09 - Reporte de IVA por período (Priority: P3) · V3
+
+Contabilidad necesita cuánto IVA se aplicó en cada rango de fechas, por cambios de tasa.
+
+**Criterios de aceptación**:
+1. `GET /reports/iva?from=yyyy-MM-dd&to=yyyy-MM-dd`.
+2. Resultado: lista de `TaxRatePeriod { Rate, From, To, TotalTaxCollected }`.
+3. Exportable a CSV o Excel.
+
+**Tareas técnicas preliminares**: consulta agregada en `TaxReportService`; DTO `TaxPeriodReport`;
+endpoint de descarga o vista simple.
+
+### Sales Story V-10 - Comprobante de venta en PDF con mini-imagen (Priority: P3) · V4
+
+Cada orden finalizada genera un PDF con la mini-imagen del producto y los datos de pago.
+
+**Criterios de aceptación**:
+1. El PDF incluye tabla de líneas con miniatura, nombre, cantidad, precio y subtotal.
+2. La sección de pago indica el método y, si es efectivo, el vuelto.
+
+**Tareas técnicas preliminares**: librería PDF (QuestPDF); servicio `InvoiceGenerator` que toma
+`OrderId`; endpoint `GET /sales/orders/{id}/invoice`. Nota: esto es un comprobante interno, no el
+comprobante electrónico del SRI (E-10, proyecto aparte).
+
 ### Edge Cases
 
 - The last unit of a product is ordered by two buyers at the same instant: one succeeds, the other is told it is out of stock, and stock never goes below zero.
@@ -272,7 +535,7 @@ reach the confirmation page.
 - **FR-013**: An order MUST follow the states Pending, Confirmed, Processing, Shipped and Delivered, with Cancelled and Refunded as final states; any other transition MUST be refused.
 - **FR-014**: A checkout attempt that fails after reserving stock MUST release those reservations.
 - **FR-015**: Staff MUST be able to record a payment received outside the platform (amount, date, reference), which confirms the order.
-- **FR-016**: A payment MUST NOT be recorded twice for the same order.
+- **FR-016** (revised 2026-11-08, H-08): An order MAY be paid with several payments (for example cash and card), but the sum of its live payments MUST NOT exceed the order total (subtotal + VAT), and a payment MUST NOT be recorded twice: an identical payment (same order, method and amount) recorded within 10 seconds is refused as a duplicate. The order total, not the subtotal, decides when it is fully paid.
 - **FR-017**: Refunds MUST be allowed totally or partially and MUST NOT exceed the amount that remains refundable.
 - **FR-018**: Buyers MUST be able to pay online with the payment methods the store enables, recording the provider reference and its raw answer.
 - **FR-019**: Notifications received from the payment provider MUST only modify a payment when their authenticity can be established.
@@ -288,6 +551,32 @@ reach the confirmation page.
 - **FR-029**: Each service MUST expose a status endpoint that reports its own health and the health of its dependencies.
 - **FR-030**: The platform MUST keep serving reads when a messaging dependency is unavailable, reporting it as degraded.
 
+#### Purchases and costs (E-12)
+
+- **FR-031**: The platform MUST let staff create, edit and deactivate suppliers with a name, an optional tax id, contact details and notes; the tax id MUST be unique inside a store when present.
+- **FR-032**: A purchase MUST be one document with a header (supplier, date, supplier invoice, notes) and **one or more lines** (product, quantity, unit cost); the cost lives in the line, not in the product.
+- **FR-033**: A purchase MUST follow the states draft and received; only receiving it moves stock, and a draft MUST NOT change any stock.
+- **FR-034**: Receiving a purchase MUST recalculate the weighted average cost as `(previous_stock × previous_cost + quantity × new_cost) / (previous_stock + quantity)`; a product without cost keeps its margin unknown, never zero.
+- **FR-035**: Every stock movement MUST leave a kardex entry with the quantity, the cost and the document of origin (purchase, order or adjustment).
+- **FR-036**: The catalogue MUST show the cost, the selling price and the unit and percentage margin; the margin MUST be reported as unknown when the cost is unknown.
+- **FR-037**: Receiving the same purchase twice MUST be refused with 409 and MUST NOT move stock.
+- **FR-038**: Every purchase line MUST have a positive quantity and a positive unit cost.
+
+#### Real inventory (E-13)
+
+- **FR-039**: The platform MUST let staff create, edit and deactivate branches with a name, address and phone, marking at most one of them as the default.
+- **FR-040**: Stock MUST be tracked per branch; the product total is the sum of its branches, and selling MUST require a branch and MUST NOT borrow stock from another branch.
+- **FR-041**: Receiving a purchase MUST record the branch the goods land in; when none is given, the default branch applies.
+- **FR-042**: A product MUST declare whether it carries lots (`tracks_batches`); perishables do, and receiving them requires a lot code.
+- **FR-043**: Stock MUST be stored per lot, with its code and expiry date, so the remaining quantity of each lot is known.
+- **FR-044**: Selling a lot-tracked product MUST consume lots in FEFO order — the one that expires first leaves first.
+- **FR-045**: An expired lot MUST NOT be sold: the request is refused with 409 and no lot is consumed.
+- **FR-046**: The expiry-warning threshold (in days) MUST be configurable per store, defaulting to 30, and MUST drive the "expiring soon" list.
+- **FR-047**: Each product MAY have one main picture, uploaded as a file and served by the catalogue service; without a picture the catalogue MUST show a marker with the product's initial.
+- **FR-048**: The physical location (floor, aisle and shelf) MUST be free text per product and branch.
+- **FR-049**: The kardex MUST record the branch and the lot of every movement, so the inventory can be explained by location.
+- **FR-050**: A purchase MUST accept many lines — including the same product in different lots — so a large delivery is grouped into a single document instead of being entered line by line.
+
 ### Key Entities
 
 - **Store**: the tenant. Owns everything else; has a name, a public identifier, a plan, a state and an optional custom domain.
@@ -302,6 +591,14 @@ reach the confirmation page.
 - **Address**: a customer's delivery location.
 - **Daily sales summary**: per store and date, revenue, order count, successful payments and best-selling products.
 - **Notification record**: an attempt to inform someone. Type, recipient, subject, state, error and timestamps.
+- **Supplier**: who the store buys from. Name, optional tax id (unique per store), contact details, notes and state.
+- **Purchase**: a document that brings stock in. Belongs to a store, a supplier and a branch; header with invoice, dates, notes and totals, plus one or more lines.
+- **Purchase line**: one product inside a purchase, with the quantity, the quoted cost, whether it includes tax, the effective cost, its total and, when the product carries lots, the lot code and expiry.
+- **Branch**: a physical location of the store. Name, address, phone, one default flag and state; owns the per-branch stock and physical location.
+- **Stock by branch**: how much of a product sits in a branch, plus its free-text floor, aisle and shelf.
+- **Stock batch**: a lot of a product in a branch, with its code, expiry and remaining quantity.
+- **Stock movement (kardex)**: an immutable record of a stock change — purchase in, sale out, adjustment or return — with quantity, unit cost, resulting stock, branch, lot and document of origin.
+- **Store parameters**: per store, the expiry-warning threshold in days and the default branch.
 
 ## Success Criteria *(mandatory)*
 

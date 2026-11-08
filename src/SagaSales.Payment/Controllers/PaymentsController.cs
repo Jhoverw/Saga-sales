@@ -25,7 +25,8 @@ public sealed class PaymentsController(IMediator mediator) : ControllerBase
             MapMethod(request.Method),
             request.Amount,
             request.Reference,
-            request.PaidAt);
+            request.PaidAt,
+            CashReceived: request.CashReceived);
 
         var result = await mediator.Send(command, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
@@ -67,6 +68,7 @@ public sealed class PaymentsController(IMediator mediator) : ControllerBase
     // The manual methods map onto the general payment method, which the order and the reports use.
     private static PaymentMethod MapMethod(ManualPaymentMethod method) => method switch
     {
+        ManualPaymentMethod.Card => PaymentMethod.CreditCard,
         ManualPaymentMethod.Cash => PaymentMethod.CashOnDelivery,
         ManualPaymentMethod.Deposit => PaymentMethod.BankTransfer,
         _ => PaymentMethod.BankTransfer,

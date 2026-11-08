@@ -21,12 +21,22 @@ public sealed class OrderingClient(HttpClient http) : IOrderingClient
             new RegisterOrderPaymentRequest { Amount = amount },
             cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
+        if (response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new InvalidOperationException(
-                $"The payment was recorded but the order could not be updated ({(int)response.StatusCode}): {body}");
+            return;
         }
+
+        // Sales refused the money (balance exceeded, order cancelled...): nothing is recorded in Payment.
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var reason = string.IsNullOrWhiteSpace(body) ? "the order refused the payment" : body;
+
+        throw response.StatusCode switch
+        {
+            System.Net.HttpStatusCode.Conflict => new SagaSales.Shared.Exceptions.ConflictException(reason),
+            System.Net.HttpStatusCode.BadRequest => new SagaSales.Shared.Exceptions.ValidationException(reason),
+            System.Net.HttpStatusCode.NotFound => new SagaSales.Shared.Exceptions.NotFoundException("Order", orderId),
+            _ => new InvalidOperationException($"The order service failed ({(int)response.StatusCode}): {body}"),
+        };
     }
 }
 

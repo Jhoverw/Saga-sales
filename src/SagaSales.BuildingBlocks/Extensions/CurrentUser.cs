@@ -17,6 +17,9 @@ public interface ICurrentUser
 
     string? Email { get; }
 
+    /// <summary>Display name of the caller (the seller on a receipt). Null when the token has none.</summary>
+    string? DisplayName => null;
+
     /// <summary>Tenant of the caller, or throws when the request carries none.</summary>
     Guid RequireTenantId();
 
@@ -65,6 +68,8 @@ public sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
 
     public string? Email => accessor.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value
         ?? accessor.HttpContext?.User?.FindFirst(SagaSalesConstants.Claims.Email)?.Value;
+
+    public string? DisplayName => accessor.HttpContext?.User?.FindFirst(ClaimTypes.Name)?.Value;
 
     public Guid RequireTenantId() => TenantId
         ?? throw new SagaSales.Shared.Exceptions.TenantNotFoundException(Guid.Empty);

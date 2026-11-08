@@ -1,0 +1,133 @@
+@page "/settings"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<div class="page-head">
+    <div>
+        <h1>Parámetros</h1>
+        <div class="page-head__sub">Reglas de la tienda: aviso de vencimiento y sucursal por defecto</div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+@if (Current is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="panel">
+                <div class="panel__head">Vencimientos</div>
+                <div class="panel__body">
+                    <label class="form-label">Días de aviso antes de vencer</label>
+                    <input class="form-control" type="number" min="1" max="365" @bind="ExpiryWarningDays" />
+                    <div class="page-head__sub mt-2 mb-0">
+                        Los lotes que venzan dentro de este plazo aparecen en «próximos a vencer» (por defecto 30).
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="panel">
+                <div class="panel__head">Sucursal por defecto</div>
+                <div class="panel__body">
+                    <label class="form-label">Sucursal</label>
+                    <select class="form-select" @bind="DefaultBranchId">
+                        <option value="@Guid.Empty">— sin selección —</option>
+                        @foreach (var branch in BranchList)
+                        {
+                            <option value="@branch.Id">@branch.Name</option>
+                        }
+                    </select>
+                    <div class="page-head__sub mt-2 mb-0">
+                        Es la sucursal que recibe el stock cuando una compra no indica una.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <button class="btn btn-primary" @onclick="SaveAsync" disabled="@Busy">
+            @(Busy ? "Guardando..." : "Guardar parámetros")
+        </button>
+        @if (Current.UpdatedAt != default)
+        {
+            <span class="page-head__sub ms-2 mb-0">Última actualización: @Current.UpdatedAt.ToString("dd/MM yyyy HH:mm")</span>
+        }
+    </div>
+}
+
+@code {
+    private SettingsDto? Current { get; set; }
+    private List<BranchDto> BranchList { get; set; } = [];
+
+    private int ExpiryWarningDays { get; set; } = 30;
+    private Guid? DefaultBranchId { get; set; }
+
+    private string? Message { get; set; }
+    private bool Error { get; set; }
+    private bool Busy { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        BranchList = await Api.GetBranchesAsync() ?? [];
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Current = await Api.GetSettingsAsync();
+
+        if (Current is not null)
+        {
+            ExpiryWarningDays = Current.ExpiryWarningDays;
+            DefaultBranchId = Current.DefaultBranchId;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        Message = null;
+        Error = false;
+
+        if (ExpiryWarningDays is < 1 or > 365)
+        {
+            Message = "Los días de aviso deben estar entre 1 y 365.";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+
+        try
+        {
+            var updated = await Api.UpdateSettingsAsync(new UpdateSettingsRequest
+            {
+                ExpiryWarningDays = ExpiryWarningDays,
+                DefaultBranchId = DefaultBranchId,
+            });
+
+            Message = updated is null ? "No se pudieron guardar los parámetros." : "Parámetros guardados.";
+            Error = updated is null;
+
+            if (updated is not null)
+            {
+                Current = updated;
+                ExpiryWarningDays = updated.ExpiryWarningDays;
+                DefaultBranchId = updated.DefaultBranchId;
+            }
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+}

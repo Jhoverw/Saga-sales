@@ -85,6 +85,8 @@ services:
     build:
       context: ..
       dockerfile: src/SagaSales.ApiGateway/Dockerfile
+      args:
+        SAGA_BUILD_LABEL: ${SAGA_BUILD_LABEL:-unlabeled}
     container_name: saga-sales-api-gateway
     environment:
       <<: *app-env
@@ -130,8 +132,11 @@ services:
       <<: *app-env
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_catalog;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
       Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
+      Storage__ImageRoot: "/app/uploads"
     ports:
       - "5002:80"
+    volumes:
+      - catalog_images:/app/uploads
     depends_on: *app-depends
     networks:
       - saga-sales-network
@@ -237,6 +242,8 @@ services:
     build:
       context: ..
       dockerfile: src/SagaSales.BlazorWeb/Dockerfile
+      args:
+        SAGA_BUILD_LABEL: ${SAGA_BUILD_LABEL:-unlabeled}
     container_name: saga-sales-blazor-web
     ports:
       - "5008:80"
@@ -249,6 +256,7 @@ volumes:
   sqlserver_data:
   rabbitmq_data:
   seq_data:
+  catalog_images:
 
 networks:
   saga-sales-network:

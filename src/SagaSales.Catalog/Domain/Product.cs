@@ -25,6 +25,9 @@ public class Product
     /// <summary>True when the product carries lots with an expiry date (E-13).</summary>
     public bool TracksBatches { get; set; }
 
+    /// <summary>Indicates if the product is subject to tax/VAT.</summary>
+    public bool IsTaxable { get; set; } = true;
+
     /// <summary>Relative path of the picture, or null.</summary>
     public string? ImagePath { get; set; }
 

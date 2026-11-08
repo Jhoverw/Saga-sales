@@ -57,7 +57,11 @@ public sealed class UpdateSettingsCommandHandler(IBranchRepository repository)
 {
     public async Task<Result<SettingsDto>> Handle(UpdateSettingsCommand request, CancellationToken cancellationToken)
     {
-        Guard.AgainstNegativeOrZero(request.Request.ExpiryWarningDays, nameof(request.Request.ExpiryWarningDays));
+        if (request.Request.ExpiryWarningDays is < 1 or > 365)
+        {
+            throw new SagaSales.Shared.Exceptions.ValidationException(
+                "Los días de aviso deben estar entre 1 y 365.");
+        }
 
         var settings = await repository.UpdateSettingsAsync(request.Request, cancellationToken);
         return Result<SettingsDto>.Success(settings);

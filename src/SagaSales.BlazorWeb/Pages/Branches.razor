@@ -1,0 +1,231 @@
+@page "/branches"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<div class="page-head">
+    <div>
+        <h1>Sucursales</h1>
+        <div class="page-head__sub">Dónde está tu mercancía: el stock vive por sucursal</div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="panel">
+            <div class="panel__head">
+                <span>Listado</span>
+                <label class="form-check form-switch mb-0 ms-auto">
+                    <input class="form-check-input" type="checkbox" @bind="IncludeInactive" @bind:event="onchange" @bind:after="LoadAsync" />
+                    <span class="form-check-label">Mostrar inactivas</span>
+                </label>
+            </div>
+            <div class="panel__body p-0">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Dirección</th>
+                            <th>Teléfono</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var branch in BranchList)
+                        {
+                            <tr class="@(branch.Status == 2 ? "opacity-50" : "")">
+                                <td>
+                                    @branch.Name
+                                    @if (branch.IsDefault)
+                                    {
+                                        <span class="chip chip--ok">predeterminada</span>
+                                    }
+                                </td>
+                                <td>@(branch.Address ?? "—")</td>
+                                <td>@(branch.Phone ?? "—")</td>
+                                <td>
+                                    @if (branch.Status == 1)
+                                    {
+                                        <span class="chip chip--ok">activa</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="chip chip--neutral">inactiva</span>
+                                    }
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(branch)">Editar</button>
+                                    @if (branch.Status == 1 && !branch.IsDefault)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeactivateAsync(branch)">Desactivar</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (BranchList.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center py-3">Todavía no hay sucursales.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="panel">
+            <div class="panel__head">
+                @(EditingId is null ? "Nueva sucursal" : "Editando sucursal")
+            </div>
+            <div class="panel__body">
+                <div class="mb-3">
+                    <label class="form-label">Nombre *</label>
+                    <input class="form-control" @bind="Name" @bind:event="oninput" placeholder="Centro" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Dirección</label>
+                    <input class="form-control" @bind="Address" @bind:event="oninput" placeholder="Av. 9 de Octubre 123" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Teléfono</label>
+                    <input class="form-control" @bind="Phone" @bind:event="oninput" placeholder="+593 4 200 0000" />
+                </div>
+
+                @if (EditingId is null)
+                {
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" @bind="IsDefault" />
+                        <label class="form-check-label">Marcar como predeterminada</label>
+                    </div>
+                }
+                else
+                {
+                    <div class="page-head__sub mb-3">
+                        La sucursal predeterminada se elige en <a href="/settings">Parámetros</a>.
+                    </div>
+                }
+
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@Busy">
+                        @(Busy ? "Guardando..." : (EditingId is null ? "Crear sucursal" : "Guardar cambios"))
+                    </button>
+                    @if (EditingId is not null)
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="ClearForm">Cancelar</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<BranchDto> BranchList { get; set; } = [];
+
+    private Guid? EditingId { get; set; }
+    private string Name { get; set; } = string.Empty;
+    private string Address { get; set; } = string.Empty;
+    private string Phone { get; set; } = string.Empty;
+    private bool IsDefault { get; set; }
+    private bool IncludeInactive { get; set; }
+
+    private string? Message { get; set; }
+    private bool Error { get; set; }
+    private bool Busy { get; set; }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+        => BranchList = await Api.GetBranchesAsync(IncludeInactive) ?? [];
+
+    private void Edit(BranchDto branch)
+    {
+        EditingId = branch.Id;
+        Name = branch.Name;
+        Address = branch.Address ?? string.Empty;
+        Phone = branch.Phone ?? string.Empty;
+        IsDefault = branch.IsDefault;
+        Message = null;
+        Error = false;
+    }
+
+    private void ClearForm()
+    {
+        EditingId = null;
+        Name = string.Empty;
+        Address = string.Empty;
+        Phone = string.Empty;
+        IsDefault = false;
+        Message = null;
+        Error = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        Message = null;
+        Error = false;
+
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            Message = "El nombre es obligatorio.";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+
+        try
+        {
+            if (EditingId is null)
+            {
+                var created = await Api.CreateBranchAsync(new CreateBranchRequest
+                {
+                    Name = Name.Trim(),
+                    Address = Blank(Address),
+                    Phone = Blank(Phone),
+                    IsDefault = IsDefault,
+                });
+
+                Message = created is null ? "No se pudo crear la sucursal." : $"Sucursal «{created.Name}» creada.";
+                Error = created is null;
+            }
+            else
+            {
+                var updated = await Api.UpdateBranchAsync(EditingId.Value, new UpdateBranchRequest
+                {
+                    Name = Name.Trim(),
+                    Address = Blank(Address),
+                    Phone = Blank(Phone),
+                });
+
+                Message = updated is null ? "No se pudo guardar. ¿Nombre duplicado?" : "Cambios guardados.";
+                Error = updated is null;
+            }
+
+            if (!Error)
+            {
+                ClearForm();
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task DeactivateAsync(BranchDto branch)
+    {
+        var ok = await Api.DeactivateBranchAsync(branch.Id);
+        Message = ok ? $"«{branch.Name}» desactivada." : "No se pudo desactivar (la predeterminada no se puede desactivar).";
+        Error = !ok;
+        await LoadAsync();
+    }
+
+    private static string? Blank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

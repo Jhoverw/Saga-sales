@@ -1,13 +1,11 @@
 namespace SagaSales.Analytics.Queries;
 
-/// <summary>Day-by-day series for the dashboard chart.</summary>
-public record DailyPointDto(DateOnly Date, decimal Revenue, int Orders);
-
+/// <summary>Day-by-day series for the dashboard chart (US-013).</summary>
 public record GetDailySeriesQuery(DateOnly? From = null, DateOnly? To = null)
     : IQuery<IReadOnlyList<DailyPointDto>>;
 
 public sealed class GetDailySeriesQueryHandler(
-    AnalyticsDbContext dbContext,
+    IAnalyticsRepository repository,
     ICurrentUser currentUser) : IQueryHandler<GetDailySeriesQuery, IReadOnlyList<DailyPointDto>>
 {
     public async Task<Result<IReadOnlyList<DailyPointDto>>> Handle(
@@ -19,13 +17,12 @@ public sealed class GetDailySeriesQueryHandler(
         var to = request.To ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var from = request.From ?? to.AddDays(-6);
 
-        var points = await dbContext.SalesReports
-            .AsNoTracking()
-            .Where(r => r.TenantId == tenantId && r.ReportDate >= from && r.ReportDate <= to)
-            .OrderBy(r => r.ReportDate)
-            .Select(r => new DailyPointDto(r.ReportDate, r.TotalRevenue, r.OrderCount))
-            .ToListAsync(cancellationToken);
+        if (from > to)
+        {
+            throw new ConflictException("The 'from' date must be earlier than or equal to 'to'.");
+        }
 
+        var points = await repository.GetDailySeriesAsync(tenantId, from, to, cancellationToken);
         return Result<IReadOnlyList<DailyPointDto>>.Success(points);
     }
 }

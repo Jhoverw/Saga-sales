@@ -1,8 +1,6 @@
 global using System.Reflection;
 global using MediatR;
-global using Microsoft.EntityFrameworkCore;
 global using SagaSales.Analytics.Data;
-global using SagaSales.Analytics.Domain;
 global using SagaSales.BuildingBlocks.Common;
 global using SagaSales.BuildingBlocks.EventBus;
 global using SagaSales.BuildingBlocks.Extensions;

@@ -7,14 +7,18 @@ public static class OrderMapping
     public static OrderDto ToDto(this Order order) => new()
     {
         Id = order.Id,
+        OrderNumber = order.OrderNumber,
         CustomerId = order.CustomerId,
         Status = order.Status.ToString(),
         Subtotal = order.Subtotal,
+        TaxAmount = order.TaxAmount,
+        Total = order.Total,
         PaidAmount = order.PaidAmount,
         ShippingAddress = order.ShippingAddress,
         OrderDate = order.OrderDate,
         PaidDate = order.PaidDate,
         CreatedBy = order.CreatedBy,
+        CreatedByName = order.CreatedByName,
         Items = order.Items.Select(i => i.ToDto()).ToList(),
     };
 

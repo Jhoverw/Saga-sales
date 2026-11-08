@@ -19,6 +19,7 @@ public interface IProductRepository
         Guid? categoryId,
         Guid createdBy,
         bool tracksBatches,
+        bool isTaxable,
         CancellationToken cancellationToken);
 
     Task<Product> UpdateAsync(
@@ -34,6 +35,8 @@ public interface IProductRepository
         CancellationToken cancellationToken);
 
     Task RetireAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<Product> SetImageAsync(Guid id, string? imagePath, CancellationToken cancellationToken);
 
     Task<Product?> GetAsync(Guid id, CancellationToken cancellationToken);
 
@@ -81,6 +84,7 @@ public sealed class ProductRepository(
         Guid? categoryId,
         Guid createdBy,
         bool tracksBatches,
+        bool isTaxable,
         CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
@@ -91,7 +95,8 @@ public sealed class ProductRepository(
             .With("stock_quantity", stockQuantity)
             .With("category_id", categoryId)
             .With("created_by", createdBy)
-            .With("tracks_batches", tracksBatches);
+            .With("tracks_batches", tracksBatches)
+            .With("is_taxable", isTaxable);
 
         var row = await executor.QueryProcSingleAsync<ProductRow>(
             "dbo.sp_product_create", arguments, cancellationToken: cancellationToken);
@@ -133,6 +138,18 @@ public sealed class ProductRepository(
     {
         var arguments = SqlArgs.New().With("product_id", id);
         return executor.ExecuteProcAsync("dbo.sp_product_retire", arguments, cancellationToken: cancellationToken);
+    }
+
+    public async Task<Product> SetImageAsync(Guid id, string? imagePath, CancellationToken cancellationToken)
+    {
+        var arguments = SqlArgs.New()
+            .With("product_id", id)
+            .With("image_path", imagePath);
+
+        var row = await executor.QueryProcSingleAsync<ProductRow>(
+            "dbo.sp_product_set_image", arguments, cancellationToken: cancellationToken);
+
+        return row!.ToProduct();
     }
 
     public async Task<Product?> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -234,6 +251,8 @@ public sealed class ProductRepository(
 
         public bool TracksBatches { get; set; }
 
+        public bool IsTaxable { get; set; } = true;
+
         public string? ImagePath { get; set; }
 
         public int TotalCount { get; set; }
@@ -252,6 +271,7 @@ public sealed class ProductRepository(
             UpdatedAt = UpdatedAt,
             Cost = Cost,
             TracksBatches = TracksBatches,
+            IsTaxable = IsTaxable,
             ImagePath = ImagePath,
         };
     }

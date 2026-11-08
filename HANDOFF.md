@@ -30,9 +30,14 @@ constitución §VIII), Blazor WebAssembly para el panel, MassTransit + RabbitMQ 
 | **Clientes: alta con dirección, edición, búsqueda, baja lógica** | ✅ verificado (10/10) |
 | **Cobro manual, doble cobro rechazado, reembolso parcial con tope** | ✅ verificado |
 | **Cancelar pedido devolviendo el stock** | ✅ verificado (10 → 8 → 10) |
+| **Subida de imagen de producto + servicio estático `/images`** | ✅ verificado |
+| **Pantallas de Sucursales y Parámetros** | ✅ verificado |
+| **US6: avanzar estados a mano y filtrar pedidos** | ✅ verificado |
+| **US7: analítica con stored procedures (sin EF Core)** | ✅ verificado (ingresos, pedidos, top productos) |
+| **Ingreso de mercadería multi-línea: un documento, varios lotes, borrador y recepción** | ✅ verificado |
 
-Esquema aplicado: `saga_identity` V003 · `saga_catalog` V013 · `saga_sales` V002 ·
-`saga_customer` V002 · `saga_payment` V002.
+Esquema aplicado: `saga_identity` V003 · `saga_catalog` V016 · `saga_sales` V002 ·
+`saga_customer` V002 · `saga_payment` V002 · `saga_analytics` V002.
 
 ---
 
@@ -41,16 +46,28 @@ Esquema aplicado: `saga_identity` V003 · `saga_catalog` V013 · `saga_sales` V0
 | Necesito | Comando |
 |---|---|
 | Arrancar todo | `./scripts/up.ps1` |
+| Verificar Spec Kit (prerrequisitos de la feature) | `powershell -NoProfile -ExecutionPolicy Bypass -File .specify\scripts\powershell\check-prerequisites.ps1 -Json`. Sin `Bypass` o `Unblock-File`, Windows bloquea los scripts no firmados |
+| **Correr la suite completa** (unit + contrato + integración) | `./scripts/test.ps1` |
+| **Ver el panel con datos** | `./scripts/seed-demo.ps1` (admin@demo.local / Demo12345!) |
+| Preparar bases `_test` (una vez) | `./scripts/apply-db.ps1 -UseContainer -DatabaseSuffix '_test'` |
 | Aplicar SQL nuevo y verificar | `./scripts/verify-db.ps1 -Apply` |
 | Reconstruir sólo lo que cambió | `./scripts/refresh.ps1` |
+| **Ver qué build tengo** (el panel muestra la misma etiqueta: pie de página y sidebar) | `./scripts/build-label.ps1` o mirar el pie del panel. Formato: `v<versión>-<commit>[-dirty] \| <fecha UTC>`. `-dirty` = hay cambios sin commit. Tras reconstruir, recarga con Ctrl+F5 |
 | Reconstruir todo, en serie | `$env:COMPOSE_PARALLEL_LIMIT="1"; ./scripts/refresh.ps1 -All` |
 | **Panel sin Docker** (ciclo rápido) | `./scripts/dev-panel.ps1` |
 | Probar identidad | `./scripts/smoke-identity.ps1 -SkipDb` |
 | Probar compras | `./scripts/smoke-purchasing.ps1` |
+| Probar compra multi-línea (lotes/borrador) | `./scripts/smoke-purchase-lines.ps1` |
+| Probar US6/US7/imagen | `./scripts/smoke-us6-us7-image.ps1` |
 | Diagnóstico del entorno | `./scripts/doctor.ps1` |
 
 Reglas operativas aprendidas:
 
+- **Nada se da por terminado sin `./scripts/test.ps1` en verde.** Las unitarias son la puerta dura;
+  sin servicios, contrato e integración se omiten con aviso (nunca verde falso). CI en
+  `.github/workflows/ci.yml` ejecuta `dotnet test` en cada push y PR.
+- Un cambio de esquema puede romper un procedimiento que ya usaba otro parámetro (pasó con
+  `sp_product_create`: V018/V019 le quitaron `@tracks_batches`). Tras tocar un SP, correr la suite.
 - Reconstruir un servicio cambia su IP: **reinicia el gateway** o YARP devuelve 502. `up.ps1` y
   `refresh.ps1` ya lo hacen.
 - El panel **no necesita Docker**: `dev-panel.ps1` lo sirve en el host y evita la caché de imágenes.
@@ -60,16 +77,16 @@ Reglas operativas aprendidas:
 
 ## Pendiente, por prioridad
 
-1. **Subida de imagen de producto.** Falta endpoint y un volumen en `docker-compose.yml`.
-   Columnas `products.image_path` y `ProductDto.ImagePath` ya existen.
-2. **Pantallas de Sucursales y Parámetros** como páginas propias (la API existe; Compras crea la
-   primera sucursal y los parámetros solo se cambian por API).
-3. **Reconstruir los servicios que aún corren con una `Shared` anterior**: identity, analytics,
-   notification. Funcionan, pero conviene alinearlos.
-4. **US6 — panel de pedidos**: la pantalla ya cobra, cancela y reembolsa; falta mover estados a
-   mano (enviado/entregado) y filtrar.
-5. **US7 — analítica** (`db/analytics/`): ingresos, pedidos y productos más vendidos.
-6. **US8 — notificaciones** (`db/notification/`), **US9 — roles**, **US10 — escaparate**.
+1. ~~Subida de imagen de producto~~ — ✅ hecho (V014 + endpoint multipart + volumen `catalog_images` +
+   ruta gateway `/images` + thumbnail en Catálogo).
+2. ~~Pantallas de Sucursales y Parámetros~~ — ✅ hecho (`Branches.razor` y `Settings.razor` + menú).
+3. **Reconstruir los servicios que aún corren con una `Shared` anterior**: notification (identity ya
+   está alineada). Analytics y Payment se reconstruyeron en esta sesión.
+4. ~~US6 — panel de pedidos~~ — ✅ hecho (avanzar estado y filtrar en `Orders.razor`).
+5. ~~US7 — analítica~~ — ✅ hecho (`db/analytics/` V001/V002 + `AnalyticsRepository` Dapper, EF eliminado).
+6. **US8 — notificaciones** (`db/notification/`): la base está vacía (`notification_logs` no existe),
+   así que su consumidor de pedidos falla. Aislado en su propia cola tras el fix de topología.
+7. **US9 — roles**, **US10 — escaparate**.
 
 ## Deudas conocidas
 
@@ -80,7 +97,12 @@ Reglas operativas aprendidas:
 - Los webhooks de pasarela se retiraron: aceptaban llamadas sin verificar firma. Vuelven con E-04b.
 - `Microsoft.AspNetCore.Authentication.JwtBearer 8.0.4` con TFM `net10.0`: funciona, fuera de banda.
 - Un producto creado con stock **sin sucursal** no puede venderse (no hay dónde ponerlo). V013 lo
-  maneja cuando existe la predeterminada; falta avisar en el formulario.
+  maneja cuando existe la predeterminada; falta avisar en el formulario. V015 ya devuelve 409
+  `INSUFFICIENT_STOCK` (antes 500) cuando la sucursal existe pero no tiene esa mercancía.
+- **Topología de eventos**: `OrderPlacedConsumer` estaba registrado en Analytics, Payment y
+  Notification con el mismo nombre de cola MassTransit, compitiendo en vez de repartir. Se dio cola
+  propia a Analytics y Payment (`analytics-order-placed`, `payment-order-placed`); Notification
+  queda aislado en `OrderPlaced` y su fallo ya no roba pedidos a la analítica.
 
 ---
 

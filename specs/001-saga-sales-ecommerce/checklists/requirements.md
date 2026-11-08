@@ -41,3 +41,17 @@
   **absent** from this document; they belong to the constitution and to `plan.md`.
 - **Scope impact of the clarification**: price lists per customer type expand E-02 (product
   pricing) and E-05 (customer type). `epics.md` was updated accordingly.
+- **Update 2026-11-05**: `spec.md` now includes the purchases/costs and real-inventory work that
+  had only lived in `epics.md` — stories 11–16 (US-021…US-026) and FR-031…FR-050, plus the
+  multi-line purchase clarification. The completeness checks above still hold.
+- **Update 2026-11-08 (Módulo Ventas)**: `spec.md` now includes the sales backlog V-01…V-10 (four
+  epics V1–V4), the receipt and payment stories H-01…H-10 as decided in chat, and the sessions of
+  2026-11-08 (order number, counter screen, several payments). Checks:
+  - [x] Every story has acceptance criteria (V-01…V-10 numbered; H-05…H-10 in the session notes).
+  - [x] FR-016 revised and recorded (several payments, balance with VAT, 10-second duplicate guard).
+  - [x] Open decisions resolved: prices shown with VAT, no line discount, held sales reserve stock for
+        30 minutes, payment before delivery except credit (V-06 moves to P2).
+  - [ ] **Open**: who may grant credit and its limits; how a debt is settled. Needs a decision before V-06.
+  - [ ] **Open**: fiscal fields reserved on the order (H-07) are not in the data model yet.
+  - Implementation status per task is tracked in `tasks.md`, Phase 16. This checklist covers the
+    specification only, not the implementation.

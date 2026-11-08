@@ -1,0 +1,114 @@
+@page "/checkout/{ProductId:guid}"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Checkout</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h3 class="mb-4">Finalizar Pedido</h3>
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Datos de Envío</h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Nombre Completo</label>
+                        <input @bind="customerName" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input @bind="customerEmail" class="form-control" type="email" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Dirección de Envío</label>
+                        <textarea @bind="shippingAddress" class="form-control" rows="3" required></textarea>
+                    </div>
+                    
+                    <button class="btn btn-success w-100 py-2 mt-3" @onclick="PlaceOrder">Confirmar Pedido</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <h3 class="mb-4">Resumen</h3>
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    @if (product != null)
+                    {
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <img src="/images/products/@(product.ImagePath)" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;" alt="Product Image">
+                            <div>
+                                <strong class="d-block">@product.Name</strong>
+                                <span class="text-primary">@product.Price.ToString("C")</span>
+                            </div>
+                        </div>
+                        <hr/>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="h6">Total:</span>
+                            <span class="h5 text-success">@product.Price.ToString("C")</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <span class="ms-2">Cargando producto...</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid ProductId { get; set; }
+    private ProductDto product;
+    
+    // Local state for form
+    private string customerName = "";
+    private string customerEmail = "";
+    private string shippingAddress = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try {
+            product = await Http.GetFromJsonAsync<ProductDto>($"api/products/{ProductId}");
+        } catch {
+            Navigation.NavigateTo("/store");
+        }
+    }
+
+    private async Task PlaceOrder()
+    {
+        if (string.IsNullOrWhiteSpace(customerName) || string.IsNullOrWhiteSpace(customerEmail) || string.IsNullOrWhiteSpace(shippingAddress))
+        {
+            return; // Simple validation
+        }
+
+        // Create request based on the record definition
+        var request = new CreateOrderRequest(
+            CustomerId: Guid.Empty, // Backend handles guest logic
+            Items: new List<OrderItemRequest> { new OrderItemRequest(ProductId, 1) },
+            ShippingAddress: shippingAddress,
+            Notes: $"Guest Order: {customerName} ({customerEmail})"
+        );
+
+        var response = await Http.PostAsJsonAsync("api/orders", request);
+        if (response.IsSuccessStatusCode)
+        {
+            var order = await response.Content.ReadFromJsonAsync<OrderDto>();
+            Navigation.NavigateTo($"/confirmation/{order.Id}");
+        }
+        else
+        {
+            // Handle error
+            Console.WriteLine("Order failed");
+        }
+    }
+
+    public record ProductDto(Guid Id, string Name, string Description, decimal Price, string Currency, string ImagePath);
+    public record CreateOrderRequest(Guid CustomerId, List<OrderItemRequest> Items, string ShippingAddress, string Notes);
+    public record OrderItemRequest(Guid ProductId, int Quantity);
+    public record OrderDto(Guid Id, decimal TotalAmount);
+}

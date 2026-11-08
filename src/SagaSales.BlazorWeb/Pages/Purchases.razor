@@ -5,7 +5,7 @@
 <div class="page-head">
     <div>
         <h1>Compras</h1>
-        <div class="page-head__sub">Lo que entra al inventario, a qué costo y con qué lote</div>
+        <div class="page-head__sub">Un documento por pedido, con muchas líneas y lote por línea</div>
     </div>
 </div>
 
@@ -26,7 +26,7 @@
 else
 {
     <div class="panel">
-        <div class="panel__head">Registrar compra</div>
+        <div class="panel__head">Nueva compra</div>
         <div class="panel__body">
             <div class="row g-2 align-items-end">
                 <div class="col-md-3">
@@ -49,59 +49,95 @@ else
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Producto</label>
-                    <select class="form-select" @bind="ProductId">
-                        <option value="@Guid.Empty">— elige —</option>
-                        @foreach (var p in Products)
-                        {
-                            <option value="@p.Id">@p.Name</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-3">
                     <label class="form-label">Factura del proveedor</label>
                     <input class="form-control" @bind="InvoiceNumber" @bind:event="oninput" placeholder="opcional" />
                 </div>
-            </div>
-
-            <div class="row g-2 align-items-end mt-1">
                 <div class="col-md-2">
-                    <label class="form-label">Cantidad</label>
-                    <input class="form-control" type="number" min="1" @bind="Quantity" />
+                    <label class="form-label">Fecha</label>
+                    <input class="form-control" type="date" @bind="PurchasedAt" />
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Costo unitario</label>
-                    <input class="form-control" type="number" step="0.01" min="0.01" @bind="UnitCost" />
-                </div>
-
-                @if (SelectedProductTracksBatches)
-                {
-                    <div class="col-md-2">
-                        <label class="form-label">Lote</label>
-                        <input class="form-control" @bind="LotCode" @bind:event="oninput" placeholder="A-2026" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Caduca</label>
-                        <input class="form-control" type="date" @bind="ExpiresAt" />
-                    </div>
-                }
-
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" @bind="ReceiveNow" id="receiveNow" />
-                        <label class="form-check-label" for="receiveNow">Recibir ahora</label>
+                        <label class="form-check-label" for="receiveNow">Recibir</label>
                     </div>
-                </div>
-                <div class="col-md-2">
-                    <button class="btn btn-primary w-100" @onclick="RegisterAsync" disabled="@Busy">
-                        @(Busy ? "Guardando..." : "Registrar")
-                    </button>
                 </div>
             </div>
 
-            <p class="page-head__sub mb-0 mt-2">
-                Con «Recibir ahora» el stock entra en el mismo paso. Desmárcalo si la mercancía llega después.
-            </p>
+            <div class="row g-2 mt-1">
+                <div class="col-md-12">
+                    <label class="form-label">Notas</label>
+                    <input class="form-control" @bind="Notes" @bind:event="oninput"
+                           placeholder="Condiciones, transporte, observaciones del pedido…" />
+                </div>
+            </div>
+
+            <div class="table-responsive mt-3">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th style="min-width:220px;">Producto</th>
+                            <th style="width:90px;">Cant.</th>
+                            <th style="width:110px;">Costo</th>
+                            <th style="width:140px;">Lote</th>
+                            <th style="width:160px;">Caduca</th>
+                            <th class="text-end" style="width:110px;">Total</th>
+                            <th style="width:150px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in Lines)
+                        {
+                            <tr>
+                                <td>
+                                    <select class="form-select form-select-sm" @bind="line.ProductId">
+                                        <option value="@Guid.Empty">— elige —</option>
+                                        @foreach (var p in Products)
+                                        {
+                                            <option value="@p.Id">@p.Name@(p.TracksBatches ? " · lleva lote" : "")</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" type="number" min="1" @bind="line.Quantity" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" type="number" step="0.01" min="0.01" @bind="line.UnitCost" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" @bind="line.LotCode" @bind:event="oninput"
+                                           placeholder="@(TracksBatches(line.ProductId) ? "obligatorio" : "opcional")" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" type="date" @bind="line.ExpiresAt" />
+                                </td>
+                                <td class="text-end">@LineTotal(line).ToString("C")</td>
+                                <td class="text-end text-nowrap">
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Duplicate(line)" title="Repetir producto para otro lote">Duplicar</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => Remove(line)" disabled="@(Lines.Count <= 1)" title="Quitar línea">×</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="AddLine">+ Añadir línea</button>
+                <div>
+                    <span class="page-head__sub">@Lines.Count línea(s)</span>
+                    <span class="ms-3">Total: <strong>@Total.ToString("C")</strong></span>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <button class="btn btn-primary" @onclick="RegisterAsync" disabled="@Busy">
+                    @(Busy ? "Guardando..." : (ReceiveNow ? "Registrar y recibir" : "Guardar borrador"))
+                </button>
+                <span class="page-head__sub mb-0 ms-2">
+                    @(ReceiveNow ? "El stock entra en el mismo paso." : "Queda en borrador; recíbelo cuando llegue.")
+                </span>
+            </div>
         </div>
     </div>
 }
@@ -118,28 +154,73 @@ else
                     <th>Factura</th>
                     <th class="text-end">Total</th>
                     <th>Estado</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var purchase in PurchaseList)
                 {
-                    <tr>
+                    <tr class="@(SelectedPurchase?.Id == purchase.Id ? "table-active" : "")">
                         <td>@purchase.PurchasedAt.ToString("dd/MM/yyyy")</td>
                         <td>@SupplierName(purchase.SupplierId)</td>
                         <td>@BranchName(purchase.BranchId)</td>
                         <td>@(purchase.SupplierInvoiceNumber ?? "—")</td>
                         <td class="text-end">@purchase.Total.ToString("C")</td>
                         <td><span class="chip">@StatusLabel(purchase.Status)</span></td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenAsync(purchase)">Ver líneas</button>
+                            @if (purchase.Status == 1)
+                            {
+                                <button class="btn btn-sm btn-primary" @onclick="() => ReceiveAsync(purchase)">Recibir</button>
+                            }
+                        </td>
                     </tr>
                 }
                 @if (PurchaseList.Count == 0)
                 {
-                    <tr><td colspan="6" class="text-center py-3">Todavía no hay compras.</td></tr>
+                    <tr><td colspan="7" class="text-center py-3">Todavía no hay compras.</td></tr>
                 }
             </tbody>
         </table>
     </div>
 </div>
+
+@if (SelectedPurchase is not null)
+{
+    <div class="panel mt-3">
+        <div class="panel__head">
+            <span>Compra del @SelectedPurchase.PurchasedAt.ToString("dd/MM/yyyy") · @SelectedPurchase.Lines.Count línea(s)</span>
+            <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="CloseDetail">Cerrar</button>
+        </div>
+        <div class="panel__body p-0">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th class="text-end">Cant.</th>
+                        <th class="text-end">Costo</th>
+                        <th>Lote</th>
+                        <th>Caduca</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in SelectedPurchase.Lines)
+                    {
+                        <tr>
+                            <td>@line.ProductName</td>
+                            <td class="text-end">@line.Quantity</td>
+                            <td class="text-end">@line.UnitCost.ToString("C")</td>
+                            <td>@(line.LotCode ?? "—")</td>
+                            <td>@(line.ExpiresAt?.ToString("dd/MM/yyyy") ?? "—")</td>
+                            <td class="text-end">@line.LineTotal.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
 
 @code {
     private List<BranchDto> Branches { get; set; } = [];
@@ -149,20 +230,19 @@ else
 
     private Guid SupplierId { get; set; } = Guid.Empty;
     private Guid BranchId { get; set; } = Guid.Empty;
-    private Guid ProductId { get; set; } = Guid.Empty;
     private string InvoiceNumber { get; set; } = string.Empty;
-    private string LotCode { get; set; } = string.Empty;
-    private DateTime? ExpiresAt { get; set; }
-    private int Quantity { get; set; } = 1;
-    private decimal UnitCost { get; set; }
+    private DateTime PurchasedAt { get; set; } = DateTime.Today;
+    private string Notes { get; set; } = string.Empty;
     private bool ReceiveNow { get; set; } = true;
+
+    private List<LineDraft> Lines { get; set; } = [new()];
+    private PurchaseDto? SelectedPurchase { get; set; }
 
     private string? Message { get; set; }
     private bool Error { get; set; }
     private bool Busy { get; set; }
 
-    private bool SelectedProductTracksBatches
-        => Products.FirstOrDefault(p => p.Id == ProductId)?.TracksBatches ?? false;
+    private decimal Total => Lines.Sum(LineTotal);
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -197,23 +277,75 @@ else
         await LoadAsync();
     }
 
+    private void AddLine() => Lines.Add(new LineDraft());
+
+    private void Duplicate(LineDraft line) => Lines.Add(new LineDraft
+    {
+        ProductId = line.ProductId,
+        Quantity = line.Quantity,
+        UnitCost = line.UnitCost,
+        LotCode = line.LotCode,
+        ExpiresAt = line.ExpiresAt,
+    });
+
+    private void Remove(LineDraft line)
+    {
+        if (Lines.Count > 1)
+        {
+            Lines.Remove(line);
+        }
+    }
+
+    private decimal LineTotal(LineDraft line) => line.Quantity * line.UnitCost;
+
+    private bool TracksBatches(Guid productId)
+        => Products.FirstOrDefault(p => p.Id == productId)?.TracksBatches ?? false;
+
     private async Task RegisterAsync()
     {
         Message = null;
         Error = false;
 
-        if (SupplierId == Guid.Empty || BranchId == Guid.Empty || ProductId == Guid.Empty)
+        if (SupplierId == Guid.Empty || BranchId == Guid.Empty)
         {
-            Message = "Elige proveedor, sucursal y producto.";
+            Message = "Elige proveedor y sucursal.";
             Error = true;
             return;
         }
 
-        if (SelectedProductTracksBatches && string.IsNullOrWhiteSpace(LotCode))
+        var valid = Lines.Where(l => l.ProductId != Guid.Empty).ToList();
+
+        if (valid.Count == 0)
         {
-            Message = "Este producto lleva lote: escribe el código.";
+            Message = "Añade al menos una línea con producto.";
             Error = true;
             return;
+        }
+
+        foreach (var line in valid)
+        {
+            var name = Products.FirstOrDefault(p => p.Id == line.ProductId)?.Name ?? "línea";
+
+            if (line.Quantity <= 0)
+            {
+                Message = $"«{name}»: la cantidad debe ser mayor que cero.";
+                Error = true;
+                return;
+            }
+
+            if (line.UnitCost <= 0)
+            {
+                Message = $"«{name}»: el costo debe ser mayor que cero.";
+                Error = true;
+                return;
+            }
+
+            if (TracksBatches(line.ProductId) && string.IsNullOrWhiteSpace(line.LotCode))
+            {
+                Message = $"«{name}» lleva lote: escribe el código.";
+                Error = true;
+                return;
+            }
         }
 
         Busy = true;
@@ -226,35 +358,35 @@ else
                 BranchId = BranchId,
                 ReceiveNow = ReceiveNow,
                 SupplierInvoiceNumber = string.IsNullOrWhiteSpace(InvoiceNumber) ? null : InvoiceNumber.Trim(),
-                Lines =
-                [
-                    new PurchaseLineRequest
-                    {
-                        ProductId = ProductId,
-                        Quantity = Quantity,
-                        UnitCost = UnitCost,
-                        CostIncludesTax = true,
-                        LotCode = string.IsNullOrWhiteSpace(LotCode) ? null : LotCode.Trim(),
-                        ExpiresAt = ExpiresAt,
-                    },
-                ],
+                PurchasedAt = PurchasedAt.Date,
+                Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim(),
+                Lines = valid.Select(line => new PurchaseLineRequest
+                {
+                    ProductId = line.ProductId,
+                    Quantity = line.Quantity,
+                    UnitCost = line.UnitCost,
+                    CostIncludesTax = true,
+                    LotCode = string.IsNullOrWhiteSpace(line.LotCode) ? null : line.LotCode.Trim(),
+                    ExpiresAt = line.ExpiresAt,
+                }).ToList(),
             };
 
             var created = await Api.CreatePurchaseAsync(request);
 
             if (created is null)
             {
-                Message = "No se pudo registrar la compra. Revisa la cantidad y el costo.";
+                Message = "No se pudo registrar la compra. Revisa cantidades, costos y lotes.";
                 Error = true;
                 return;
             }
 
             Message = created.Status == 2
-                ? $"Compra recibida: {created.Total:C}. El stock ya entró."
-                : $"Compra guardada en borrador: {created.Total:C}.";
+                ? $"Compra recibida: {created.Total:C} en {created.Lines.Count} línea(s). El stock ya entró."
+                : $"Compra guardada en borrador: {created.Total:C} en {created.Lines.Count} línea(s).";
 
-            LotCode = string.Empty;
-            ExpiresAt = null;
+            Lines = [new()];
+            InvoiceNumber = string.Empty;
+            Notes = string.Empty;
             await LoadAsync();
         }
         finally
@@ -262,6 +394,36 @@ else
             Busy = false;
         }
     }
+
+    private async Task OpenAsync(PurchaseDto purchase)
+        => SelectedPurchase = await Api.GetPurchaseAsync(purchase.Id) ?? purchase;
+
+    private async Task ReceiveAsync(PurchaseDto purchase)
+    {
+        Busy = true;
+
+        try
+        {
+            var received = await Api.ReceivePurchaseAsync(purchase.Id);
+            Message = received is null
+                ? "No se pudo recibir la compra (¿ya estaba recibida?)."
+                : $"Compra recibida: {received.Total:C}. El stock y los lotes ya entraron.";
+            Error = received is null;
+
+            if (SelectedPurchase?.Id == purchase.Id)
+            {
+                SelectedPurchase = await Api.GetPurchaseAsync(purchase.Id) ?? SelectedPurchase;
+            }
+
+            await LoadAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private void CloseDetail() => SelectedPurchase = null;
 
     private string SupplierName(Guid id)
         => Suppliers.FirstOrDefault(s => s.Id == id)?.Name ?? "—";
@@ -276,4 +438,17 @@ else
         3 => "Anulada",
         _ => status.ToString(),
     };
+
+    private sealed class LineDraft
+    {
+        public Guid ProductId { get; set; }
+
+        public int Quantity { get; set; } = 1;
+
+        public decimal UnitCost { get; set; }
+
+        public string LotCode { get; set; } = string.Empty;
+
+        public DateTime? ExpiresAt { get; set; }
+    }
 }

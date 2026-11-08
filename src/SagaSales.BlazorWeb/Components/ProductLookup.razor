@@ -1,0 +1,56 @@
+@using SagaSales.BlazorWeb.DTOs
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<div class="mb-3">
+    <input class="form-control" placeholder="Buscar producto (nombre o código)" @bind="searchTerm" @oninput="OnSearchChanged" />
+</div>
+
+@if (results != null && results.Count > 0)
+{
+    <ul class="list-group">
+        @foreach (var p in results)
+        {
+            <li class="list-group-item d-flex align-items-center" @onclick="() => SelectProduct(p)">
+                <img src="@p.ThumbnailUrl" alt="thumb" style="width:40px;height:40px;margin-right:8px;" />
+                <div>
+                    <div><strong>@p.Nombre</strong></div>
+                    <small>Cod: @p.CodigoBarras</small>
+                    @if (p.Stock == 0)
+                    {
+                        <span class="badge bg-warning text-dark ms-2">Sin stock – pre‑venta</span>
+                    }
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private string searchTerm = string.Empty;
+    private IReadOnlyList<ProductLookupDto>? results;
+    private System.Threading.CancellationTokenSource? cts;
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        if (searchTerm.Length < 3)
+        {
+            results = null;
+            return;
+        }
+        cts?.Cancel();
+        cts = new System.Threading.CancellationTokenSource();
+        try
+        {
+            results = await Api.LookupProductsAsync(searchTerm);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void SelectProduct(ProductLookupDto product)
+    {
+        // Raise an event to parent page – for demo we navigate to a placeholder order line page.
+        Nav.NavigateTo($"/orders/create?productId={product.Id}");
+    }
+}

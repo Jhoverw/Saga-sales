@@ -7,7 +7,7 @@ public record GetSalesSummaryQuery(DateOnly? From = null, DateOnly? To = null)
     : IQuery<SalesSummaryDto>;
 
 public sealed class GetSalesSummaryQueryHandler(
-    AnalyticsDbContext dbContext,
+    IAnalyticsRepository repository,
     ICurrentUser currentUser) : IQueryHandler<GetSalesSummaryQuery, SalesSummaryDto>
 {
     public async Task<Result<SalesSummaryDto>> Handle(
@@ -24,33 +24,16 @@ public sealed class GetSalesSummaryQueryHandler(
             throw new ConflictException("The 'from' date must be earlier than or equal to 'to'.");
         }
 
-        var reports = await dbContext.SalesReports
-            .AsNoTracking()
-            .Where(r => r.TenantId == tenantId && r.ReportDate >= from && r.ReportDate <= to)
-            .ToListAsync(cancellationToken);
-
-        var topProducts = await dbContext.ProductSales
-            .AsNoTracking()
-            .Where(p => p.TenantId == tenantId && p.ReportDate >= from && p.ReportDate <= to)
-            .GroupBy(p => new { p.ProductId, p.ProductName })
-            .Select(g => new TopProductDto
-            {
-                ProductId = g.Key.ProductId,
-                ProductName = g.Key.ProductName,
-                UnitsSold = g.Sum(x => x.UnitsSold),
-                Revenue = g.Sum(x => x.Revenue),
-            })
-            .OrderByDescending(p => p.Revenue)
-            .Take(5)
-            .ToListAsync(cancellationToken);
+        var totals = await repository.GetSummaryAsync(tenantId, from, to, cancellationToken);
+        var topProducts = await repository.GetTopProductsAsync(tenantId, from, to, cancellationToken);
 
         var summary = new SalesSummaryDto
         {
             From = from.ToDateTime(TimeOnly.MinValue),
             To = to.ToDateTime(TimeOnly.MaxValue),
-            TotalRevenue = reports.Sum(r => r.TotalRevenue),
-            OrderCount = reports.Sum(r => r.OrderCount),
-            PaymentSuccessCount = reports.Sum(r => r.PaymentSuccessCount),
+            TotalRevenue = totals.TotalRevenue,
+            OrderCount = totals.OrderCount,
+            PaymentSuccessCount = totals.PaymentSuccessCount,
             TopProducts = topProducts,
         };
 

@@ -1,5 +1,8 @@
 namespace SagaSales.Notification.Commands;
 
+using SagaSales.Notification.Queries;
+using SagaSales.Shared;
+
 public record SendNotificationCommand(
     NotificationType Type,
     string Recipient,
@@ -19,7 +22,7 @@ public sealed class SendNotificationCommandHandler(
 
         var tenantId = currentUser.RequireTenantId();
 
-        var log = await dispatcher.DispatchAsync(
+        var notificationId = await dispatcher.DispatchAsync(
             tenantId,
             null,
             request.Type,
@@ -28,6 +31,15 @@ public sealed class SendNotificationCommandHandler(
             request.Body,
             cancellationToken);
 
-        return Result<NotificationDto>.Success(log.ToDto());
+        return Result<NotificationDto>.Success(new NotificationDto(
+            notificationId,
+            null,
+            (int)request.Type,
+            "Email", // Default channel
+            request.Subject.Trim(),
+            request.Body,
+            1, // Pending
+            null,
+            DateTime.UtcNow));
     }
 }

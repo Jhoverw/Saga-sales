@@ -203,6 +203,9 @@ a:hover { color: var(--cyan); }
 
 .nav-item.active svg { opacity: 1; color: var(--blue); }
 
+/* Icons are inline SVG: they inherit currentColor and need no icon font. */
+.nav-item.nav-highlight svg { color: var(--cyan); }
+
 .sidebar__foot { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); }
 
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
@@ -304,6 +307,26 @@ a:hover { color: var(--cyan); }
 .chip--warn { color: var(--warn); background: rgba(230, 180, 92, 0.10); border-color: rgba(230, 180, 92, 0.26); }
 .chip--danger { color: var(--danger); background: rgba(242, 109, 109, 0.10); border-color: rgba(242, 109, 109, 0.26); }
 .chip--neutral { color: var(--text-muted); background: rgba(230, 238, 252, 0.05); border-color: var(--line); }
+
+/* Product picture thumbnail (E-13 · US-026). */
+.product-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.product-thumb--placeholder {
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 16px;
+  background: linear-gradient(135deg, var(--surface-2), var(--surface-3));
+}
 
 /* Bootstrap badges used by existing pages map onto the same scale. */
 .badge { font-weight: 600; letter-spacing: 0.01em; padding: 0.35em 0.6em; border-radius: 999px; }
@@ -492,6 +515,30 @@ a:hover { color: var(--cyan); }
 
 /* ── responsive ───────────────────────────────────────────────────────────── */
 
+/* Paleta de colores para iconos de FontAwesome */
+.icon-brand      { color: #00f2ff; text-shadow: 0 0 6px rgba(0,242,255,0.7); }
+.icon-red        { color: #ff4d4f; text-shadow: 0 0 6px rgba(255,77,79,0.7); }
+.icon-orange     { color: #ff9c40; text-shadow: 0 0 6px rgba(255,156,64,0.7); }
+.icon-purple     { color: #e1baff; text-shadow: 0 0 6px rgba(225,186,255,0.7); }
+.icon-blue       { color: #4dabf7; text-shadow: 0 0 6px rgba(77,171,247,0.7); }
+.icon-teal       { color: #38d9a9; text-shadow: 0 0 6px rgba(56,217,169,0.7); }
+.icon-green      { color: #69db7c; text-shadow: 0 0 6px rgba(105,219,124,0.7); }
+.icon-yellow     { color: #ffe066; text-shadow: 0 0 6px rgba(255,224,102,0.7); }
+.icon-orange-dark{ color: #fd7e14; text-shadow: 0 0 6px rgba(253,126,20,0.7); }
+.icon-pink       { color: #ff6b81; text-shadow: 0 0 6px rgba(255,107,129,0.7); }
+.icon-gray       { color: #868e96; text-shadow: 0 0 6px rgba(134,142,150,0.7); }
+.icon-cyan       { color: #2dd4ff; text-shadow: 0 0 6px rgba(45,212,255,0.7); }
+
+/* Efecto hover sutil con escala y glow extra */
+.nav-item i {
+    transition: transform .18s cubic-bezier(.4,0,.2,1), filter .18s;
+}
+.nav-item:hover i {
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 4px rgba(255,255,255,0.3));
+}
+
+/* Para los iconos de la sidebar en modo movil */
 @media (max-width: 900px) {
   .app-shell { flex-direction: column; }
   .sidebar {
@@ -506,7 +553,7 @@ a:hover { color: var(--cyan); }
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
-  .sidebar__brand { padding: 0 12px 0 4px; }
+  .sidebar__brand { padding: 0 12px 0 4px; gap: 4px; }
   .sidebar__section, .sidebar__foot { display: none; }
   .sidebar__nav { flex-direction: row; gap: 4px; }
   .nav-item span { display: none; }
