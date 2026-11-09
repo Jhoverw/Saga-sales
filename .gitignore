@@ -33,3 +33,6 @@ seq-data/
 # ── OS noise ─────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# Marca de refresh local (la genera scripts/refresh.ps1)
+deploy/.last-refresh

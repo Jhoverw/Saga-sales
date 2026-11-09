@@ -1,0 +1,62 @@
+# Saga-Sales — modo desarrollo (hot reload con `dotnet watch`).
+#
+# No se carga sola: úsala de forma explícita desde esta carpeta:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Usa la etapa `build` de cada Dockerfile (la que tiene el SDK y el código), no la de runtime,
+# porque la imagen de runtime no trae `dotnet`.
+
+x-dev-service: &dev-service
+  build:
+    target: build
+  volumes:
+    - ../src:/src:cached
+    - ../global.json:/global.json:cached
+    - ../Directory.Build.props:/Directory.Build.props:cached
+  environment:
+    DOTNET_USE_POLLING_FILE_WATCHER: "1"
+
+services:
+  identity:
+    <<: *dev-service
+    command: dotnet watch run --project /src/SagaSales.Identity/SagaSales.Identity.csproj
+
+  catalog:
+    <<: *dev-service
+    command: dotnet watch run --project /src/SagaSales.Catalog/SagaSales.Catalog.csproj
+
+  sales:
+    <<: *dev-service
+    command: dotnet watch run --project /src/SagaSales.Sales/SagaSales.Sales.csproj
+
+  payment:
+    <<: *dev-service
+    command: dotnet watch run --project /src/SagaSales.Payment/SagaSales.Payment.csproj
+
+  customer:
+    <<: *dev-service
+    command: dotnet watch run --project /src/SagaSales.Customer/SagaSales.Customer.csproj
+
+  analytics:
+    <<: *dev-service
+    command: dotnet watch run --project /src/SagaSales.Analytics/SagaSales.Analytics.csproj
+
+  notification:
+    <<: *dev-service
+    command: dotnet watch run --project /src/SagaSales.Notification/SagaSales.Notification.csproj
+
+  # api-gateway: descomentar para depurar sus cambios en caliente.
+  # api-gateway:
+  #   <<: *dev-service
+  #   command: dotnet watch run --project /src/SagaSales.ApiGateway/SagaSales.ApiGateway.csproj
+
+  blazor-web:
+    build:
+      target: build
+    volumes:
+      - ../src:/src:cached
+      - ../global.json:/global.json:cached
+      - ../Directory.Build.props:/Directory.Build.props:cached
+    environment:
+      DOTNET_USE_POLLING_FILE_WATCHER: "1"
+    command: dotnet watch run --project /src/SagaSales.BlazorWeb/SagaSales.BlazorWeb.csproj --urls "http://0.0.0.0:80"
