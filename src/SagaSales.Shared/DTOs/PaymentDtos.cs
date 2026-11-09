@@ -41,6 +41,17 @@ public class PaymentDto
 
     /// <summary>Tarjeta, transferencia o depósito: para enviar el pedido necesita comprobante (spec 007).</summary>
     public bool NeedsProof => (int)Method is 1 or 4 or 9;
+
+    /// <summary>0 no requiere · 1 por verificar · 2 verificado · 3 rechazado (spec 008).</summary>
+    public int VerificationStatus { get; set; }
+
+    public string? RejectionReason { get; set; }
+}
+
+/// <summary>Motivo para rechazar un pago que no llegó (spec 008).</summary>
+public class RejectPaymentRequest
+{
+    public string Reason { get; set; } = string.Empty;
 }
 
 /// <summary>Foto o PDF que respalda un pago (spec 007).</summary>
@@ -95,6 +106,12 @@ public class ManualPaymentRequest
 
     /// <summary>Required for cash: the amount the customer handed over. Must be at least Amount (H-09).</summary>
     public decimal? CashReceived { get; set; }
+
+    /// <summary>
+    /// Pago de un pedido (spec 008): si no es efectivo, queda por verificar y no cuenta como verificado en el pedido
+    /// hasta que el vendedor lo confirme. Las ventas de mostrador no lo envían.
+    /// </summary>
+    public bool RequiresVerification { get; set; }
 }
 
 public class RefundPaymentRequest

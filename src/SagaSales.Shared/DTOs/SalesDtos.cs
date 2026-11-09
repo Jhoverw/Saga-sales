@@ -80,6 +80,12 @@ public class CreateOrderRequest
     public string? Notes { get; set; }
 
     public IList<OrderItemRequest> Items { get; set; } = [];
+
+    /// <summary>1 mostrador (Caja) · 2 pedido (spec 008). Solo los pedidos verifican pagos y vencen.</summary>
+    public int Channel { get; set; } = 1;
+
+    /// <summary>Pedido contra entrega: no vence ni pide verificación; se cobra al entregar.</summary>
+    public bool CashOnDelivery { get; set; }
 }
 
 public class OrderItemRequest

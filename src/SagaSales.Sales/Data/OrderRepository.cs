@@ -34,6 +34,28 @@ public interface IOrderRepository
     Task<OrderShipmentDto?> GetShipmentAsync(Guid orderId, CancellationToken cancellationToken);
 
     Task<Order> RegisterPaymentAsync(Guid orderId, decimal amount, CancellationToken cancellationToken);
+
+    // ── spec 008: pedidos ────────────────────────────────────────────────────
+    Task<Order> RegisterPaymentAsync(Guid orderId, decimal amount, bool verified, CancellationToken cancellationToken);
+
+    Task SetChannelAsync(Guid orderId, int channel, bool cashOnDelivery, CancellationToken cancellationToken);
+
+    Task<Order> PaymentVerifiedAsync(Guid orderId, decimal amount, CancellationToken cancellationToken);
+
+    Task<Order> PaymentRejectedAsync(Guid orderId, decimal amount, CancellationToken cancellationToken);
+
+    Task<OrderFulfillmentDto?> GetFulfillmentAsync(Guid orderId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<RemoteOrderDto>> ListRemoteAsync(CancellationToken cancellationToken);
+
+    Task<SalesSettingsDto> GetSettingsAsync(CancellationToken cancellationToken);
+
+    Task<SalesSettingsDto> SetSettingsAsync(int orderHoldHours, CancellationToken cancellationToken);
+
+    /// <summary>Pedidos vencidos de todas las tiendas (sin tienda: lo usa el servicio de vencimiento).</summary>
+    Task<IReadOnlyList<(Guid TenantId, Guid OrderId)>> HoldsDueAsync(int maxRows, CancellationToken cancellationToken);
+
+    Task MarkExpiredAsync(Guid orderId, CancellationToken cancellationToken);
 }
 
 public sealed record OrderListResult(IReadOnlyList<Order> Items, int TotalCount);
@@ -180,17 +202,183 @@ public sealed class OrderRepository(
         public DateTime? ShippedAt { get; set; }
     }
 
-    public async Task<Order> RegisterPaymentAsync(Guid orderId, decimal amount, CancellationToken cancellationToken)
+    public Task<Order> RegisterPaymentAsync(Guid orderId, decimal amount, CancellationToken cancellationToken)
+        => RegisterPaymentAsync(orderId, amount, verified: true, cancellationToken);
+
+    public async Task<Order> RegisterPaymentAsync(Guid orderId, decimal amount, bool verified, CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
             .With("order_id", orderId)
-            .With("amount", amount);
+            .With("amount", amount)
+            .With("verified", verified);
 
         var row = await executor.QueryProcSingleAsync<OrderRow>(
             "dbo.sp_order_register_payment", arguments, cancellationToken: cancellationToken);
 
         return row!.ToOrder([]);
     }
+
+    public Task SetChannelAsync(Guid orderId, int channel, bool cashOnDelivery, CancellationToken cancellationToken)
+    {
+        var arguments = SqlArgs.New()
+            .With("order_id", orderId)
+            .With("channel", (short)channel)
+            .With("cash_on_delivery", cashOnDelivery);
+
+        return executor.ExecuteProcAsync("dbo.sp_order_set_channel", arguments, cancellationToken: cancellationToken);
+    }
+
+    public Task<Order> PaymentVerifiedAsync(Guid orderId, decimal amount, CancellationToken cancellationToken)
+        => AdjustAsync("dbo.sp_order_payment_verified", orderId, amount, cancellationToken);
+
+    public Task<Order> PaymentRejectedAsync(Guid orderId, decimal amount, CancellationToken cancellationToken)
+        => AdjustAsync("dbo.sp_order_payment_rejected", orderId, amount, cancellationToken);
+
+    public async Task<OrderFulfillmentDto?> GetFulfillmentAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var row = await executor.QueryProcSingleAsync<FulfillmentRow>(
+            "dbo.sp_order_fulfillment_get",
+            SqlArgs.New().With("order_id", orderId),
+            cancellationToken: cancellationToken);
+
+        return row?.ToDto();
+    }
+
+    public async Task<IReadOnlyList<RemoteOrderDto>> ListRemoteAsync(CancellationToken cancellationToken)
+    {
+        var rows = await executor.QueryProcAsync<RemoteRow>(
+            "dbo.sp_order_remote_list", SqlArgs.New(), cancellationToken: cancellationToken);
+
+        return rows.Select(r => r.ToDto()).ToList();
+    }
+
+    public async Task<SalesSettingsDto> GetSettingsAsync(CancellationToken cancellationToken)
+        => (await executor.QueryProcSingleAsync<SalesSettingsDto>(
+               "dbo.sp_sales_settings_get", SqlArgs.New(), cancellationToken: cancellationToken))!;
+
+    public async Task<SalesSettingsDto> SetSettingsAsync(int orderHoldHours, CancellationToken cancellationToken)
+        => (await executor.QueryProcSingleAsync<SalesSettingsDto>(
+               "dbo.sp_sales_settings_set",
+               SqlArgs.New().With("order_hold_hours", orderHoldHours),
+               cancellationToken: cancellationToken))!;
+
+    public async Task<IReadOnlyList<(Guid TenantId, Guid OrderId)>> HoldsDueAsync(int maxRows, CancellationToken cancellationToken)
+    {
+        // The one call without a tenant: it lists every store's expired holds; each is then cancelled in its own store.
+        var rows = await executor.QueryProcAsync<HoldRow>(
+            "dbo.sp_order_holds_due",
+            SqlArgs.New().With("max_rows", maxRows),
+            tenantScoped: false,
+            cancellationToken: cancellationToken);
+
+        return rows.Select(r => (r.TenantId, r.OrderId)).ToList();
+    }
+
+    public Task MarkExpiredAsync(Guid orderId, CancellationToken cancellationToken)
+        => executor.ExecuteProcAsync(
+            "dbo.sp_order_mark_expired", SqlArgs.New().With("order_id", orderId), cancellationToken: cancellationToken);
+
+    private async Task<Order> AdjustAsync(string procedure, Guid orderId, decimal amount, CancellationToken cancellationToken)
+    {
+        var row = await executor.QueryProcSingleAsync<OrderRow>(
+            procedure,
+            SqlArgs.New().With("order_id", orderId).With("amount", amount),
+            cancellationToken: cancellationToken);
+
+        return row!.ToOrder([]);
+    }
+
+    private sealed class HoldRow
+    {
+        public Guid TenantId { get; set; }
+
+        public Guid OrderId { get; set; }
+    }
+
+    private sealed class FulfillmentRow
+    {
+        public short Channel { get; set; }
+
+        public bool CashOnDelivery { get; set; }
+
+        public DateTime? HoldUntil { get; set; }
+
+        public DateTime? ExpiredAt { get; set; }
+
+        public decimal VerifiedAmount { get; set; }
+
+        public decimal PaidAmount { get; set; }
+
+        public decimal Total { get; set; }
+
+        public short? ShippingMethod { get; set; }
+
+        public string? CourierCompany { get; set; }
+
+        public string? TrackingNumber { get; set; }
+
+        public DateTime? ShippedAt { get; set; }
+
+        public OrderFulfillmentDto ToDto() => new()
+        {
+            Channel = Channel,
+            CashOnDelivery = CashOnDelivery,
+            HoldUntil = Utc(HoldUntil),
+            ExpiredAt = Utc(ExpiredAt),
+            VerifiedAmount = VerifiedAmount,
+            PaidAmount = PaidAmount,
+            Total = Total,
+            ShippingMethod = ShippingMethod,
+            CourierCompany = CourierCompany,
+            TrackingNumber = TrackingNumber,
+            ShippedAt = Utc(ShippedAt),
+        };
+    }
+
+    private sealed class RemoteRow
+    {
+        public Guid Id { get; set; }
+
+        public string? OrderNumber { get; set; }
+
+        public Guid CustomerId { get; set; }
+
+        public short Status { get; set; }
+
+        public decimal Total { get; set; }
+
+        public decimal PaidAmount { get; set; }
+
+        public decimal VerifiedAmount { get; set; }
+
+        public bool CashOnDelivery { get; set; }
+
+        public DateTime? HoldUntil { get; set; }
+
+        public DateTime? ExpiredAt { get; set; }
+
+        public DateTime OrderDate { get; set; }
+
+        public string? CreatedByName { get; set; }
+
+        public RemoteOrderDto ToDto() => new()
+        {
+            Id = Id,
+            OrderNumber = OrderNumber,
+            CustomerId = CustomerId,
+            Status = ((OrderStatus)Status).ToString(),
+            Total = Total,
+            PaidAmount = PaidAmount,
+            VerifiedAmount = VerifiedAmount,
+            CashOnDelivery = CashOnDelivery,
+            HoldUntil = Utc(HoldUntil),
+            ExpiredAt = Utc(ExpiredAt),
+            OrderDate = DateTime.SpecifyKind(OrderDate, DateTimeKind.Utc),
+            CreatedByName = CreatedByName,
+        };
+    }
+
+    private static DateTime? Utc(DateTime? value) => value is { } v ? DateTime.SpecifyKind(v, DateTimeKind.Utc) : null;
 
     private sealed class OrderRow
     {

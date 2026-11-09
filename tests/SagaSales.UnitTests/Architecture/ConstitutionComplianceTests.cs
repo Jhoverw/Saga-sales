@@ -20,6 +20,7 @@ public class ConstitutionComplianceTests
         ["sp_tenant_create"] = "bootstrap: creates the tenant itself",
         ["sp_tenant_get_by_slug"] = "resolves the tenant from the store slug at sign-in",
         ["sp_user_find_by_email"] = "sign-in lookup before the tenant claim exists; confirm the email is unique per tenant",
+        ["sp_order_holds_due"] = "spec 008: the expiry sweep lists every store's expired holds; each is cancelled in its own store",
     };
 
     private static readonly Regex CreateProcedure = new(

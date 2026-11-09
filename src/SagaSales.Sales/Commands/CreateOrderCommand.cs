@@ -12,7 +12,9 @@ public record CreateOrderCommand(
     Guid CustomerId,
     IReadOnlyList<OrderItemRequest> Items,
     string ShippingAddress,
-    string? Notes = null) : ICommand<OrderDto>;
+    string? Notes = null,
+    int Channel = 1,
+    bool CashOnDelivery = false) : ICommand<OrderDto>;
 
 public sealed class CreateOrderCommandHandler(
     IOrderRepository repository,
@@ -68,6 +70,12 @@ public sealed class CreateOrderCommandHandler(
                 lines,
                 currentUser.DisplayName,
                 cancellationToken);
+
+            // Spec 008: a pedido (channel 2) holds its stock until the payment is verified or the hold expires.
+            if (request.Channel != 1 || request.CashOnDelivery)
+            {
+                await repository.SetChannelAsync(order.Id, request.Channel, request.CashOnDelivery, cancellationToken);
+            }
 
             // The server priced every line (spec 003): read them back so the event and the response carry
             // the stored base, VAT and total instead of recomputing them here.

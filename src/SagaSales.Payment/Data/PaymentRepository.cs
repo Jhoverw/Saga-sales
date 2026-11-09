@@ -31,6 +31,15 @@ public interface IPaymentRepository
 
     Task<IReadOnlyList<PaymentDto>> ListByOrderAsync(Guid orderId, CancellationToken cancellationToken);
 
+    // ── spec 008: verificación ───────────────────────────────────────────────
+    Task RequireVerificationAsync(Guid paymentId, CancellationToken cancellationToken);
+
+    Task<PaymentVerificationState?> GetVerificationStateAsync(Guid paymentId, CancellationToken cancellationToken);
+
+    Task VerifyAsync(Guid paymentId, Guid verifiedBy, CancellationToken cancellationToken);
+
+    Task RejectAsync(Guid paymentId, Guid rejectedBy, string reason, CancellationToken cancellationToken);
+
     Task UpsertOrderReferenceAsync(
         Guid orderId,
         Guid customerId,
@@ -135,6 +144,30 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
             "dbo.sp_order_reference_upsert", arguments, cancellationToken: cancellationToken);
     }
 
+    public Task RequireVerificationAsync(Guid paymentId, CancellationToken cancellationToken)
+        => executor.ExecuteProcAsync(
+            "dbo.sp_payment_require_verification",
+            SqlArgs.New().With("payment_id", paymentId),
+            cancellationToken: cancellationToken);
+
+    public Task<PaymentVerificationState?> GetVerificationStateAsync(Guid paymentId, CancellationToken cancellationToken)
+        => executor.QueryProcSingleAsync<PaymentVerificationState>(
+            "dbo.sp_payment_verification_get",
+            SqlArgs.New().With("payment_id", paymentId),
+            cancellationToken: cancellationToken);
+
+    public Task VerifyAsync(Guid paymentId, Guid verifiedBy, CancellationToken cancellationToken)
+        => executor.ExecuteProcAsync(
+            "dbo.sp_payment_verify",
+            SqlArgs.New().With("payment_id", paymentId).With("verified_by", verifiedBy),
+            cancellationToken: cancellationToken);
+
+    public Task RejectAsync(Guid paymentId, Guid rejectedBy, string reason, CancellationToken cancellationToken)
+        => executor.ExecuteProcAsync(
+            "dbo.sp_payment_reject",
+            SqlArgs.New().With("payment_id", paymentId).With("rejected_by", rejectedBy).With("reason", reason),
+            cancellationToken: cancellationToken);
+
     private sealed class PaymentRow
     {
         public Guid Id { get; set; }
@@ -169,6 +202,10 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
 
         public int AttachmentCount { get; set; }
 
+        public short VerificationStatus { get; set; }
+
+        public string? RejectionReason { get; set; }
+
         public PaymentDto ToDto() => new()
         {
             Id = Id,
@@ -187,6 +224,24 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
             CashReceived = CashReceived,
             ChangeGiven = ChangeGiven,
             AttachmentCount = AttachmentCount,
+            VerificationStatus = VerificationStatus,
+            RejectionReason = RejectionReason,
         };
     }
+}
+
+/// <summary>Lo que el servicio revisa antes de verificar o rechazar un pago (spec 008).</summary>
+public sealed class PaymentVerificationState
+{
+    public Guid Id { get; set; }
+
+    public Guid OrderId { get; set; }
+
+    public decimal Amount { get; set; }
+
+    public short VerificationStatus { get; set; }
+
+    public short Status { get; set; }
+
+    public int AttachmentCount { get; set; }
 }

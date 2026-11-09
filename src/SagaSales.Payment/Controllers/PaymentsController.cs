@@ -26,7 +26,8 @@ public sealed class PaymentsController(IMediator mediator) : ControllerBase
             request.Amount,
             request.Reference,
             request.PaidAt,
-            CashReceived: request.CashReceived);
+            CashReceived: request.CashReceived,
+            RequiresVerification: request.RequiresVerification);
 
         var result = await mediator.Send(command, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);

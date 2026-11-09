@@ -6,8 +6,15 @@
 <div class="page-head">
     <div>
         <h1>Pedidos</h1>
-        <div class="page-head__sub">Registrar la venta, cobrarla y cancelarla devolviendo el stock</div>
+        <div class="page-head__sub">Pedidos para enviar: se anotan apartando el stock, se verifica el pago y se despachan</div>
     </div>
+    <AuthorizeView Roles="@SagaSalesRoles.Owner" Context="auth">
+        <div class="d-flex gap-2 align-items-center">
+            <label class="form-label mb-0 text-nowrap" title="Si el pago no se verifica en este tiempo, el pedido se anula y el stock vuelve">Apartar stock (horas)</label>
+            <input class="form-control" style="max-width:90px;" type="number" lang="en-US" min="1" max="720" @bind="HoldHours" />
+            <button class="btn btn-sm btn-outline-secondary" @onclick="SaveHoldHoursAsync" disabled="@Busy">Guardar</button>
+        </div>
+    </AuthorizeView>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(Message))
@@ -64,10 +71,18 @@
         </div>
 
         <div class="d-flex align-items-center gap-3 mt-3">
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="cod" @bind="CashOnDelivery" />
+                <label class="form-check-label" for="cod">Contra entrega</label>
+            </div>
             <button class="btn btn-primary" @onclick="CreateAsync" disabled="@Busy">
                 @(Busy ? "Guardando..." : "Crear pedido")
             </button>
-            <span class="page-head__sub mb-0">El IVA vigente y el total se calculan al guardar.</span>
+            <span class="page-head__sub mb-0">
+                @(CashOnDelivery
+                    ? "Se cobra al entregar; el stock queda apartado."
+                    : $"El stock queda apartado {HoldHours} horas mientras se verifica el pago.")
+            </span>
         </div>
     </div>
 </div>
@@ -175,9 +190,36 @@
             <div class="panel">
                 <div class="panel__head">Avanzar estado</div>
                 <div class="panel__body">
+                    @if (Fulfillment is { Channel: 2 } f)
+                    {
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            @if (f.CashOnDelivery)
+                            {
+                                <span class="chip chip--info">Contra entrega</span>
+                            }
+                            else if (f.PaymentVerified)
+                            {
+                                <span class="chip chip--ok">Pago verificado</span>
+                            }
+                            else
+                            {
+                                <span class="chip chip--warn">Por verificar: @f.VerifiedAmount.ToString("C") de @f.Total.ToString("C")</span>
+                            }
+                            @if (f.ExpiredAt is { } expired)
+                            {
+                                <span class="chip chip--danger">Anulado por falta de pago el @expired.ToLocalTime().ToString("dd/MM HH:mm")</span>
+                            }
+                            else if (f.HoldUntil is { } hold && !f.PaymentVerified && Selected.Status is "Pending" or "Confirmed")
+                            {
+                                <span class="chip @(hold < DateTime.UtcNow.AddHours(6) ? "chip--danger" : "chip--neutral")">
+                                    Stock apartado hasta @hold.ToLocalTime().ToString("dd/MM HH:mm") (@HoursLeft(hold))
+                                </span>
+                            }
+                        </div>
+                    }
                     @if (Selected.Status == "Processing")
                     {
-                        <AuthorizeView Roles="@SagaSalesRoles.ManagerOrOwner" Context="auth">
+                        <AuthorizeView Roles="@SagaSalesRoles.Staff" Context="auth">
                             <div class="row g-2 mb-2">
                                 <div class="col-md-4">
                                     <label class="form-label">Envío</label>
@@ -204,22 +246,18 @@
                                     </div>
                                 }
                             </div>
-                            @if (MissingProofs > 0 || PaymentList.Count(p => p.Status is PaymentStatus.Captured or PaymentStatus.PartiallyRefunded) == 0)
+                            @if (ShipBlocker is { } blocker)
                             {
-                                <div class="alert alert-warning py-2 small">
-                                    @(MissingProofs > 0
-                                        ? $"Para enviar falta el comprobante de {MissingProofs} pago(s) que no son en efectivo."
-                                        : "Para enviar registra primero la forma de pago del pedido.")
-                                </div>
+                                <div class="alert alert-warning py-2 small">@blocker</div>
                             }
                         </AuthorizeView>
                     }
-                    @if (Shipment?.ShippedAt is not null)
+                    @if (Fulfillment?.ShippedAt is { } shippedAt)
                     {
                         <div class="mb-2 small">
-                            <strong>Enviado</strong> el @Shipment.ShippedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ·
-                            @(Shipment.ShippingMethod == 1
-                                ? $"{Shipment.CourierCompany}, guía {Shipment.TrackingNumber}"
+                            <strong>Enviado</strong> el @shippedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ·
+                            @(Fulfillment.ShippingMethod == 1
+                                ? $"{Fulfillment.CourierCompany}, guía {Fulfillment.TrackingNumber}"
                                 : "entrega propia o retiro")
                         </div>
                     }
@@ -227,7 +265,7 @@
                         <span class="chip chip--info">@StatusLabel(Selected.Status)</span>
                         @if (NextTransition(Selected.Status) is { } next)
                         {
-                            <AuthorizeView Roles="@SagaSalesRoles.ManagerOrOwner" Context="auth">
+                            <AuthorizeView Roles="@SagaSalesRoles.Staff" Context="auth">
                                 <button class="btn btn-sm btn-primary" @onclick="AdvanceAsync" disabled="@Busy">
                                     @NextTransitionLabel(Selected.Status)
                                 </button>
@@ -320,7 +358,7 @@
                 <div class="panel__body p-0">
                     <table class="table mb-0">
                         <thead>
-                            <tr><th>Fecha</th><th>Medio</th><th class="text-end">Importe</th><th class="text-end">Devuelto</th><th>Estado</th><th>Comprobante</th><th></th></tr>
+                            <tr><th>Fecha</th><th>Medio</th><th class="text-end">Importe</th><th class="text-end">Devuelto</th><th>Estado</th><th>Comprobante</th><th>Verificación</th><th></th></tr>
                         </thead>
                         <tbody>
                             @foreach (var payment in PaymentList)
@@ -348,6 +386,40 @@
                                                        OnChange="args => UploadProofAsync(payment, args)" title="Subir comprobante" />
                                         }
                                     </td>
+                                    <td>
+                                        @switch (payment.VerificationStatus)
+                                        {
+                                            case 1:
+                                                <span class="chip chip--warn">Por verificar</span>
+                                                if (RejectingId == payment.Id)
+                                                {
+                                                    <div class="d-flex gap-1 mt-1">
+                                                        <input class="form-control form-control-sm" maxlength="200" placeholder="Motivo" @bind="RejectReason" />
+                                                        <button class="btn btn-sm btn-danger" @onclick="() => RejectAsync(payment)" disabled="@Busy">Rechazar</button>
+                                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => RejectingId = null">×</button>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="d-flex gap-1 mt-1">
+                                                        <button class="btn btn-sm btn-success" @onclick="() => VerifyAsync(payment)"
+                                                                disabled="@(Busy || payment.AttachmentCount == 0)"
+                                                                title="@(payment.AttachmentCount == 0 ? "Sube el comprobante primero" : "Confirmar que el dinero llegó")">Verificar</button>
+                                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => StartReject(payment)" disabled="@Busy">Rechazar</button>
+                                                    </div>
+                                                }
+                                                break;
+                                            case 2:
+                                                <span class="chip chip--ok">Verificado</span>
+                                                break;
+                                            case 3:
+                                                <span class="chip chip--danger" title="@payment.RejectionReason">Rechazado</span>
+                                                break;
+                                            default:
+                                                <span class="page-head__sub">—</span>
+                                                break;
+                                        }
+                                    </td>
                                     <td class="text-end">
                                         @if (payment.RefundableAmount > 0)
                                         {
@@ -358,7 +430,7 @@
                             }
                             @if (PaymentList.Count == 0)
                             {
-                                <tr><td colspan="7" class="text-center py-3">Sin pagos.</td></tr>
+                                <tr><td colspan="8" class="text-center py-3">Sin pagos.</td></tr>
                             }
                         </tbody>
                     </table>
@@ -385,7 +457,42 @@
 
     private (string Name, string ContentType, byte[] Bytes)? ProofFile { get; set; }
 
-    private OrderShipmentDto? Shipment { get; set; }
+    // ── spec 008: pedidos ───────────────────────────────────────────────────
+    private OrderFulfillmentDto? Fulfillment { get; set; }
+
+    private bool CashOnDelivery { get; set; }
+
+    private int HoldHours { get; set; } = 48;
+
+    private Guid? RejectingId { get; set; }
+
+    private string RejectReason { get; set; } = string.Empty;
+
+    /// <summary>Why the order cannot ship yet, as the server would say it; null when it can.</summary>
+    private string? ShipBlocker
+    {
+        get
+        {
+            if (Fulfillment is { CashOnDelivery: true })
+            {
+                return null;
+            }
+
+            if (PaymentList.Count(p => p.Status is PaymentStatus.Captured or PaymentStatus.PartiallyRefunded) == 0)
+            {
+                return "Para enviar registra primero la forma de pago del pedido.";
+            }
+
+            if (MissingProofs > 0)
+            {
+                return $"Para enviar falta el comprobante de {MissingProofs} pago(s) que no son en efectivo.";
+            }
+
+            return Fulfillment is { Channel: 2, PaymentVerified: false }
+                ? "Para enviar, verifica primero el pago del pedido."
+                : null;
+        }
+    }
 
     private int ShipMethod { get; set; } = 1;
 
@@ -460,6 +567,7 @@
     {
         Customers = await Api.GetCustomersAsync(1, 100) is { } customers ? customers.Items.ToList() : [];
         Products = await Api.GetProductsAsync(1, 100) is { } products ? products.Items.ToList() : [];
+        HoldHours = (await Api.GetSalesSettingsAsync())?.OrderHoldHours ?? 48;
         await LoadOrdersAsync();
     }
 
@@ -531,6 +639,8 @@
                 CustomerId = CustomerId,
                 ShippingAddress = ShippingAddress.Trim(),
                 Items = Lines.Select(l => new OrderItemRequest { ProductId = l.ProductId, Quantity = l.Quantity }).ToList(),
+                Channel = 2,
+                CashOnDelivery = CashOnDelivery,
             });
 
             Message = order is null
@@ -583,6 +693,8 @@
                 Method = (ManualPaymentMethod)MethodId,
                 Reference = string.IsNullOrWhiteSpace(Reference) ? null : Reference.Trim(),
                 CashReceived = MethodId == 5 ? CashReceived : null,
+                // Spec 008: a pedido's non-cash payment waits for the seller to confirm it arrived.
+                RequiresVerification = Fulfillment?.Channel == 2,
             });
 
             Message = payment is null
@@ -709,7 +821,59 @@
             Attachments[payment.Id] = await Api.GetPaymentAttachmentsAsync(payment.Id) ?? [];
         }
 
-        Shipment = Selected is null ? null : await Api.GetOrderShipmentAsync(Selected.Id);
+        Fulfillment = Selected is null ? null : await Api.GetOrderFulfillmentAsync(Selected.Id);
+    }
+
+    private static string HoursLeft(DateTime holdUntilUtc)
+    {
+        var left = holdUntilUtc - DateTime.UtcNow;
+        return left <= TimeSpan.Zero ? "vencido, se anula en minutos" : $"quedan {(int)left.TotalHours} h {left.Minutes} min";
+    }
+
+    private async Task SaveHoldHoursAsync()
+    {
+        Busy = true;
+        var (saved, _, failure) = await Api.SetSalesSettingsAsync(HoldHours);
+        Busy = false;
+
+        Error = saved is null;
+        Message = saved is null ? failure ?? "No se pudo guardar." : $"Los pedidos nuevos apartan el stock {saved.OrderHoldHours} horas.";
+    }
+
+    private async Task VerifyAsync(PaymentDto payment)
+    {
+        Busy = true;
+        var (ok, failure) = await Api.VerifyPaymentAsync(payment.Id);
+        Busy = false;
+
+        Error = !ok;
+        Message = ok ? $"Pago de {payment.Amount:C} verificado." : failure ?? "No se pudo verificar el pago.";
+        await LoadOrdersAsync();
+    }
+
+    private void StartReject(PaymentDto payment)
+    {
+        RejectingId = payment.Id;
+        RejectReason = string.Empty;
+    }
+
+    private async Task RejectAsync(PaymentDto payment)
+    {
+        if (RejectReason.Trim().Length < 3)
+        {
+            Error = true;
+            Message = "Indica el motivo del rechazo.";
+            return;
+        }
+
+        Busy = true;
+        var (ok, failure) = await Api.RejectPaymentAsync(payment.Id, RejectReason.Trim());
+        Busy = false;
+
+        Error = !ok;
+        Message = ok ? $"Pago de {payment.Amount:C} rechazado: ya no cuenta como pagado." : failure ?? "No se pudo rechazar el pago.";
+        RejectingId = null;
+        await LoadOrdersAsync();
     }
 
     private List<PaymentAttachmentDto> AttachmentsOf(Guid paymentId)

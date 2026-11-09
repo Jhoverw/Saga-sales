@@ -60,6 +60,24 @@ public sealed class AttachmentsController(IMediator mediator) : ControllerBase
         return File(file.Content, file.ContentType, file.FileName);
     }
 
+    /// <summary>Spec 008: el vendedor confirma que el dinero llegó. Exige comprobante.</summary>
+    [HttpPost("{paymentId:guid}/verify")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Verify(Guid paymentId, CancellationToken cancellationToken)
+    {
+        await mediator.Send(new VerifyPaymentCommand(paymentId), cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Spec 008: el dinero no llegó; el pago deja de contar en el pedido.</summary>
+    [HttpPost("{paymentId:guid}/reject")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Reject(Guid paymentId, [FromBody] RejectPaymentRequest request, CancellationToken cancellationToken)
+    {
+        await mediator.Send(new RejectPaymentCommand(paymentId, request.Reason ?? string.Empty), cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>Lo consulta Sales antes de marcar un pedido como enviado (FR-003).</summary>
     [HttpGet("proof-status")]
     [ProducesResponseType(typeof(OrderProofStatusDto), StatusCodes.Status200OK)]

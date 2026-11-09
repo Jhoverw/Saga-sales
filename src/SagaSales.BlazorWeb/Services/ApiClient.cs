@@ -182,6 +182,31 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     public Task<OrderShipmentDto?> GetOrderShipmentAsync(Guid orderId)
         => GetAsync<OrderShipmentDto>($"api/orders/{orderId}/shipment");
 
+    // ── pedidos (spec 008) ──────────────────────────────────────────────────
+    public Task<OrderFulfillmentDto?> GetOrderFulfillmentAsync(Guid orderId)
+        => GetAsync<OrderFulfillmentDto>($"api/orders/{orderId}/fulfillment");
+
+    public Task<List<RemoteOrderDto>?> GetRemoteOrdersAsync() => GetAsync<List<RemoteOrderDto>>("api/orders/remote");
+
+    public Task<SalesSettingsDto?> GetSalesSettingsAsync() => GetAsync<SalesSettingsDto>("api/orders/settings");
+
+    public Task<(SalesSettingsDto? Value, System.Net.HttpStatusCode? Status, string? Error)> SetSalesSettingsAsync(int hours)
+        => SendForResultAsync<SalesSettingsDto>(HttpMethod.Put, "api/orders/settings", new SalesSettingsDto { OrderHoldHours = hours });
+
+    public async Task<(bool Ok, string? Error)> VerifyPaymentAsync(Guid paymentId)
+    {
+        var message = await BuildAsync(HttpMethod.Post, $"api/payments/{paymentId}/verify", null);
+        var response = await http.SendAsync(message);
+        return response.IsSuccessStatusCode ? (true, null) : (false, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
+
+    public async Task<(bool Ok, string? Error)> RejectPaymentAsync(Guid paymentId, string reason)
+    {
+        var message = await BuildAsync(HttpMethod.Post, $"api/payments/{paymentId}/reject", new RejectPaymentRequest { Reason = reason });
+        var response = await http.SendAsync(message);
+        return response.IsSuccessStatusCode ? (true, null) : (false, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
+
     // ── comprobantes de pago (spec 007) ─────────────────────────────────────
     public async Task<(PaymentAttachmentDto? Value, string? Error)> UploadPaymentAttachmentAsync(
         Guid paymentId, byte[] bytes, string fileName, string contentType)

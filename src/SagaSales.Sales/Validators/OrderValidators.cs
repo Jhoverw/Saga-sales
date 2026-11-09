@@ -16,5 +16,10 @@ public sealed class CreateOrderCommandValidator : AbstractValidator<Commands.Cre
 
         RuleFor(x => x.ShippingAddress).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Notes).MaximumLength(2000);
+
+        // Spec 008: 1 mostrador, 2 pedido; contra entrega solo existe en pedidos.
+        RuleFor(x => x.Channel).InclusiveBetween(1, 2);
+        RuleFor(x => x.CashOnDelivery).Equal(false).When(x => x.Channel == 1)
+            .WithMessage("Contra entrega solo aplica a pedidos.");
     }
 }

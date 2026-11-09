@@ -5,7 +5,7 @@ namespace SagaSales.Sales.Commands;
 /// the order reflects what was collected: <c>paid_amount</c> grows and a fully paid pending order
 /// moves to processing.
 /// </summary>
-public record RegisterOrderPaymentCommand(Guid OrderId, decimal Amount) : ICommand<OrderDto>;
+public record RegisterOrderPaymentCommand(Guid OrderId, decimal Amount, bool Verified = true) : ICommand<OrderDto>;
 
 public sealed class RegisterOrderPaymentCommandHandler(
     IOrderRepository repository,
@@ -22,7 +22,7 @@ public sealed class RegisterOrderPaymentCommandHandler(
                      ?? throw new NotFoundException("Order", request.OrderId);
 
         // Validates that the order exists for this tenant and adds to paid_amount.
-        var order = await repository.RegisterPaymentAsync(request.OrderId, request.Amount, cancellationToken);
+        var order = await repository.RegisterPaymentAsync(request.OrderId, request.Amount, request.Verified, cancellationToken);
 
         if (before.Status != order.Status)
         {

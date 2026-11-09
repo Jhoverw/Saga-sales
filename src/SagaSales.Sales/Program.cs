@@ -30,6 +30,9 @@ builder.Services
         http.BaseAddress = new Uri(builder.Configuration["Services:Payment"] ?? "http://localhost:5004"))
     .AddHttpMessageHandler<ForwardCredentialsHandler>();
 
+// Spec 008: pedidos whose payment is not verified in time give their stock back.
+builder.Services.AddHostedService<SagaSales.Sales.Services.HoldExpiryService>();
+
 builder.Services.AddSagaSalesMessageBus(builder.Configuration);
 
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateOrderCommandHandler).Assembly));

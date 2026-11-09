@@ -15,7 +15,8 @@ public record CreatePaymentCommand(
     string? Reference = null,
     DateTime? PaidAt = null,
     Guid CustomerId = default,
-    decimal? CashReceived = null) : ICommand<PaymentDto>;
+    decimal? CashReceived = null,
+    bool RequiresVerification = false) : ICommand<PaymentDto>;
 
 public sealed class CreatePaymentCommandHandler(
     IPaymentRepository repository,
@@ -32,7 +33,9 @@ public sealed class CreatePaymentCommandHandler(
         // FR-016: Sales decides first. It refuses an amount above the balance (409) and then nothing is
         // recorded here. Only an accepted amount becomes a payment.
         await repository.AssertNotDuplicateAsync(request.OrderId, method, request.Amount, cancellationToken);
-        await ordering.RegisterPaymentAsync(request.OrderId, request.Amount, cancellationToken);
+        // Spec 008: a pedido paid by card, transfer or deposit counts as paid but not verified until checked.
+        var pendingCheck = request.RequiresVerification && method != ManualPaymentMethod.Cash;
+        await ordering.RegisterPaymentAsync(request.OrderId, request.Amount, !pendingCheck, cancellationToken);
 
         var payment = await repository.CreateManualAsync(
             request.OrderId,
@@ -44,6 +47,12 @@ public sealed class CreatePaymentCommandHandler(
             request.CashReceived,
             cancellationToken,
             currentUser.UserId);
+
+        if (pendingCheck)
+        {
+            await repository.RequireVerificationAsync(payment.Id, cancellationToken);
+            payment.VerificationStatus = 1;
+        }
 
         return Result<PaymentDto>.Success(payment);
     }

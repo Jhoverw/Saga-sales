@@ -52,6 +52,13 @@ public sealed class UpdateOrderStatusCommandHandler(
         var shipment = request.Shipment
             ?? throw new SagaSales.Shared.Exceptions.ValidationException("Indica cómo sale el pedido: courier (con empresa y guía) o entrega propia.");
 
+        // Spec 008: contra entrega sale sin pago todavía; se cobra al entregar.
+        var fulfillment = await repository.GetFulfillmentAsync(request.OrderId, cancellationToken);
+        if (fulfillment is { CashOnDelivery: true })
+        {
+            return await repository.ShipAsync(request.OrderId, shipment, cancellationToken);
+        }
+
         var proof = await payments.GetProofStatusAsync(request.OrderId, cancellationToken);
 
         if (proof.Payments == 0)

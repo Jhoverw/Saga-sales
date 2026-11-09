@@ -20,7 +20,9 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
             request.CustomerId,
             request.Items.Select(i => new OrderItemRequest { ProductId = i.ProductId, Quantity = i.Quantity }).ToList(),
             request.ShippingAddress,
-            request.Notes);
+            request.Notes,
+            request.Channel,
+            request.CashOnDelivery);
 
         var result = await mediator.Send(command, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
@@ -80,7 +82,8 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
-    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
+    // Spec 008: the seller who runs the shipments moves orders along; cancelling stays with managers.
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
     [HttpPut("{id:guid}/status")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateStatus(
@@ -106,9 +109,66 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(
-            new Commands.RegisterOrderPaymentCommand(id, request.Amount),
+            new Commands.RegisterOrderPaymentCommand(id, request.Amount, request.Verified),
             cancellationToken);
 
+        return Ok(result.Value);
+    }
+
+    // ── spec 008: pedidos ─────────────────────────────────────────────────────
+
+    /// <summary>Payment confirmed that money it had recorded really arrived.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
+    [HttpPost("{id:guid}/payments/verified")]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> PaymentVerified(Guid id, [FromBody] OrderPaymentAdjustmentRequest request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Commands.OrderPaymentVerifiedCommand(id, request.Amount), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>Payment rejected money that never arrived: it stops counting as paid.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
+    [HttpPost("{id:guid}/payments/rejected")]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> PaymentRejected(Guid id, [FromBody] OrderPaymentAdjustmentRequest request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Commands.OrderPaymentRejectedCommand(id, request.Amount), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>Canal, apartado, verificación y envío del pedido.</summary>
+    [HttpGet("{id:guid}/fulfillment")]
+    [ProducesResponseType(typeof(OrderFulfillmentDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetFulfillment(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Queries.GetOrderFulfillmentQuery(id), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>Pedidos en curso para el tablero, cada uno con su columna.</summary>
+    [HttpGet("remote")]
+    [ProducesResponseType(typeof(IReadOnlyList<RemoteOrderDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListRemote(CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Queries.GetRemoteOrdersQuery(), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    [HttpGet("settings")]
+    [ProducesResponseType(typeof(SalesSettingsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSettings(CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Queries.GetSalesSettingsQuery(), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Owner)]
+    [HttpPut("settings")]
+    [ProducesResponseType(typeof(SalesSettingsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetSettings([FromBody] SalesSettingsDto request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Commands.SetSalesSettingsCommand(request.OrderHoldHours), cancellationToken);
         return Ok(result.Value);
     }
 
