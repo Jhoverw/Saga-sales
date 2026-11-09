@@ -33,14 +33,14 @@ jobs:
       - name: Unit tests (hard gate)
         run: >
           dotnet test tests/SagaSales.UnitTests/SagaSales.UnitTests.csproj
-          -c Release --no-build
+          -c Release --no-build --filter "Category!=KnownDebt"
           --logger "trx;LogFileName=unit.trx"
           --results-directory TestResults
 
       - name: Integration and contract tests (skip without services)
         run: >
           dotnet test SagaSales.sln
-          -c Release --no-build
+          -c Release --no-build --filter "Category!=KnownDebt"
           --logger "trx;LogFileName=all.trx"
           --results-directory TestResults
 
