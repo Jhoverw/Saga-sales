@@ -1,0 +1,51 @@
+@* Spec 007: a receipt usually comes as a screenshot (bank app, WhatsApp). This box takes it with Ctrl+V or by
+   dropping the file on it, so nobody has to save the image first. The file goes to the same upload. *@
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+<div @ref="_zone" class="paste-zone @(Compact ? "paste-zone--compact" : "")" tabindex="0" role="button"
+     aria-label="@Label" title="Haz clic aquí y pega con Ctrl+V, o arrastra la imagen">
+    <i class="fa-regular fa-clipboard"></i>
+    <span>@Label</span>
+</div>
+
+<style>
+    .paste-zone { display: flex; align-items: center; gap: .5rem; border: 1.5px dashed var(--line-strong); border-radius: 8px;
+                  padding: .6rem .75rem; color: var(--text-muted); cursor: pointer; outline: none; font-size: .9rem; }
+    .paste-zone:focus, .paste-zone.is-over { border-color: var(--cyan); color: var(--text); background: rgba(45, 212, 255, .06); }
+    .paste-zone--compact { padding: .3rem .5rem; font-size: .8rem; margin-top: .25rem; }
+</style>
+
+@code {
+    private ElementReference _zone;
+    private DotNetObjectReference<PasteZone>? _self;
+
+    [Parameter]
+    public string Label { get; set; } = "Pega aquí la captura (Ctrl+V) o arrastra la imagen";
+
+    [Parameter]
+    public bool Compact { get; set; }
+
+    /// <summary>Name, content type and bytes of the pasted or dropped file.</summary>
+    [Parameter]
+    public EventCallback<(string Name, string ContentType, byte[] Bytes)> OnFile { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _self = DotNetObjectReference.Create(this);
+            await Js.InvokeVoidAsync("sagaPasteZone", _zone, _self);
+        }
+    }
+
+    [JSInvokable]
+    public Task ReceiveAsync(string name, string contentType, string base64)
+        => OnFile.InvokeAsync((name, contentType, Convert.FromBase64String(base64)));
+
+    public ValueTask DisposeAsync()
+    {
+        _self?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

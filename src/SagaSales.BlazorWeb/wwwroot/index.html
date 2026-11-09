@@ -146,6 +146,46 @@
             link.click();
             link.remove();
         };
+        // Comprobantes (spec 007): pegar una captura (Ctrl+V) o soltar el archivo. Una captura grande se
+        // convierte a JPEG para quedar bajo los 5 MB que acepta el servidor.
+        window.sagaPasteZone = function (element, dotnet) {
+            var limit = 4.5 * 1024 * 1024;
+            var send = function (blob, name) {
+                var reader = new FileReader();
+                reader.onload = function () {
+                    var base64 = String(reader.result).split(',')[1];
+                    dotnet.invokeMethodAsync('ReceiveAsync', name, blob.type, base64);
+                };
+                reader.readAsDataURL(blob);
+            };
+            var take = function (file) {
+                if (!file) { return; }
+                var name = file.name || ('captura-' + Date.now() + '.png');
+                if (file.type.indexOf('image/') !== 0 || file.size <= limit) { send(file, name); return; }
+                var image = new Image();
+                image.onload = function () {
+                    var canvas = document.createElement('canvas');
+                    canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+                    canvas.getContext('2d').drawImage(image, 0, 0);
+                    canvas.toBlob(function (jpeg) { send(jpeg, name.replace(/\.[^.]+$/, '') + '.jpg'); }, 'image/jpeg', 0.85);
+                    URL.revokeObjectURL(image.src);
+                };
+                image.src = URL.createObjectURL(file);
+            };
+            element.addEventListener('click', function () { element.focus(); });
+            element.addEventListener('paste', function (e) {
+                var items = (e.clipboardData && e.clipboardData.items) || [];
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].kind === 'file') { e.preventDefault(); take(items[i].getAsFile()); return; }
+                }
+            });
+            element.addEventListener('dragover', function (e) { e.preventDefault(); element.classList.add('is-over'); });
+            element.addEventListener('dragleave', function () { element.classList.remove('is-over'); });
+            element.addEventListener('drop', function (e) {
+                e.preventDefault(); element.classList.remove('is-over');
+                if (e.dataTransfer && e.dataTransfer.files.length) { take(e.dataTransfer.files[0]); }
+            });
+        };
         // Comprobantes (spec 007): se abren en otra pestaña desde un blob; no tienen URL pública.
         window.sagaOpenFile = function (contentType, base64) {
             var bytes = Uint8Array.from(atob(base64), function (c) { return c.charCodeAt(0); });

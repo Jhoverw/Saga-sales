@@ -328,6 +328,7 @@
                             <div class="mt-2">
                                 <label class="form-label">Comprobante (foto del recibo, captura de la transferencia o PDF) *</label>
                                 <InputFile class="form-control" accept="image/jpeg,image/png,image/webp,application/pdf" OnChange="PickProofAsync" />
+                                <PasteZone OnFile="PasteProof" />
                                 @if (ProofFile is not null)
                                 {
                                     <div class="small mt-1">@ProofFile.Value.Name · @((ProofFile.Value.Bytes.Length / 1024.0).ToString("0.#")) KB</div>
@@ -384,6 +385,7 @@
                                         {
                                             <InputFile class="form-control form-control-sm mt-1" accept="image/jpeg,image/png,image/webp,application/pdf"
                                                        OnChange="args => UploadProofAsync(payment, args)" title="Subir comprobante" />
+                                            <PasteZone Compact="true" Label="o pega la captura aquí" OnFile="file => UploadPastedProofAsync(payment, file)" />
                                         }
                                     </td>
                                     <td>
@@ -933,9 +935,28 @@
         Message = ProofFile is null ? "El comprobante no puede superar los 5 MB." : null;
     }
 
-    private async Task UploadProofAsync(PaymentDto payment, InputFileChangeEventArgs args)
+    private void PasteProof((string Name, string ContentType, byte[] Bytes) file)
     {
-        var proof = await ReadProofAsync(args.File);
+        if (file.Bytes.Length > MaxProofBytes)
+        {
+            Error = true;
+            Message = "El comprobante no puede superar los 5 MB.";
+            return;
+        }
+
+        ProofFile = file;
+        Error = false;
+        Message = "Captura lista: se adjunta al registrar el cobro.";
+    }
+
+    private Task UploadPastedProofAsync(PaymentDto payment, (string Name, string ContentType, byte[] Bytes) file)
+        => UploadProofBytesAsync(payment, file.Bytes.Length > MaxProofBytes ? null : file);
+
+    private async Task UploadProofAsync(PaymentDto payment, InputFileChangeEventArgs args)
+        => await UploadProofBytesAsync(payment, await ReadProofAsync(args.File));
+
+    private async Task UploadProofBytesAsync(PaymentDto payment, (string Name, string ContentType, byte[] Bytes)? proof)
+    {
         if (proof is null)
         {
             Message = "El comprobante no puede superar los 5 MB.";
