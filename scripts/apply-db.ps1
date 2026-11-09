@@ -98,8 +98,52 @@ function Invoke-Sql {
     return ($result -join "`n").Trim()
 }
 
+# Scripts go through ADO.NET when it is available: the text travels as UTF-16 straight to SQL Server, so no
+# console code page, pipe or container locale can touch the accents (sqlcmd lost them on the way).
+$hasSqlClient = $null -ne ('System.Data.SqlClient.SqlConnection' -as [type])
+
+function Invoke-SqlFileDirect {
+    param([string]$Database, [string]$Path)
+
+    $builder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+    $builder['Data Source'] = $Server
+    $builder['Initial Catalog'] = $Database
+    $builder['User ID'] = $User
+    $builder['Password'] = $Password
+    $builder['TrustServerCertificate'] = $true
+
+    $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    # Same batch separator as sqlcmd: a line with only GO.
+    $batches = [regex]::Split($text, '(?im)^\s*GO\s*(?:--[^\r\n]*)?\r?$') | Where-Object { $_.Trim() }
+
+    $connection = New-Object System.Data.SqlClient.SqlConnection($builder.ConnectionString)
+    $connection.add_InfoMessage({ param($source, $e) Write-Host ("  " + $e.Message) -ForegroundColor DarkGray })
+    try {
+        $connection.Open()
+        foreach ($batch in $batches) {
+            $command = $connection.CreateCommand()
+            $command.CommandText = $batch
+            $command.CommandTimeout = 0
+            [void]$command.ExecuteNonQuery()
+        }
+    }
+    catch {
+        $inner = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $_.Exception.Message }
+        Write-Host $inner -ForegroundColor DarkRed
+        throw "Script failed: $Path"
+    }
+    finally {
+        $connection.Dispose()
+    }
+}
+
 function Invoke-SqlFile {
     param([string]$Database, [string]$Path)
+
+    if ($hasSqlClient) {
+        Invoke-SqlFileDirect -Database $Database -Path $Path
+        return
+    }
 
     if ($useDocker) {
         # Without -Q and -i, sqlcmd executes what it reads from stdin. The scripts are UTF-8: read them as
