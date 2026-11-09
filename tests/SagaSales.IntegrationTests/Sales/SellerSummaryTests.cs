@@ -31,10 +31,10 @@ public class SellerSummaryTests
         await SetDateAsync(connection, order, new DateTime(2026, 11, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var days = await DailyAsync(connection, tenantId, seller,
-            new DateTime(2026, 11, 9, 5, 0, 0), new DateTime(2026, 11, 11, 5, 0, 0));
+            new DateTime(2026, 11, 9, 5, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 11, 5, 0, 0, DateTimeKind.Utc));
 
         var day = Assert.Single(days);
-        Assert.Equal(new DateTime(2026, 11, 9), day.Day);
+        Assert.Equal(new DateTime(2026, 11, 9, 0, 0, 0, DateTimeKind.Unspecified), day.Day);
         Assert.Equal(1, day.Orders);
         Assert.Equal(2.00m, day.Total);
     }

@@ -102,7 +102,7 @@
                         @foreach (var tick in YTicks())
                         {
                             <line class="grid" x1="@N(PadLeft)" x2="@N(ChartWidth - PadRight)" y1="@N(Y(tick))" y2="@N(Y(tick))" />
-                            <text class="axis" x="@N(PadLeft - 6)" y="@N(Y(tick) + 4)" text-anchor="end">@tick.ToString("0.##", CultureInfo.InvariantCulture)</text>
+                            <g><text class="axis" x="@N(PadLeft - 6)" y="@N(Y(tick) + 4)" text-anchor="end">@tick.ToString("0.##", CultureInfo.InvariantCulture)</text></g>
                         }
                         <path class="area" d="@AreaPath()" />
                         <polyline class="line" points="@LinePoints()" />
@@ -115,7 +115,7 @@
                             </circle>
                             @if (i % 2 == 0 || isToday)
                             {
-                                <text class="axis" x="@N(X(i))" y="@N(ChartHeight - 8)" text-anchor="middle">@day.Day.ToString("dd/MM", CultureInfo.InvariantCulture)</text>
+                                <g><text class="axis" x="@N(X(i))" y="@N(ChartHeight - 8)" text-anchor="middle">@day.Day.ToString("dd/MM", CultureInfo.InvariantCulture)</text></g>
                             }
                         }
                     </svg>
