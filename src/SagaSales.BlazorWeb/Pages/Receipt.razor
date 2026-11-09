@@ -139,7 +139,7 @@ else
     private string CustomerName(Guid id)
     {
         var customer = Customers.FirstOrDefault(c => c.Id == id);
-        return customer is null ? id.ToString()[..8] : $"{customer.LastName}, {customer.FirstName}";
+        return customer is null ? id.ToString()[..8] : customer.BusinessName ?? $"{customer.LastName}, {customer.FirstName}";
     }
 
     private static string MethodLabel(PaymentMethod method) => method switch

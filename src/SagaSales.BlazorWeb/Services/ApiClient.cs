@@ -95,6 +95,48 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     public Task<CustomerDto?> CreateCustomerAsync(CreateCustomerRequest request)
         => PostAsync<CustomerDto>("api/customers", request);
 
+    /// <summary>
+    /// Creates a customer and keeps the reason when it fails, so Caja can tell "already exists" (409)
+    /// from "invalid data" (400) instead of a generic error (spec 002, US3).
+    /// </summary>
+    public async Task<(CustomerDto? Customer, System.Net.HttpStatusCode? Status, string? Error)> CreateCustomerWithResultAsync(
+        CreateCustomerRequest request)
+    {
+        var message = await BuildAsync(HttpMethod.Post, "api/customers", request);
+        var response = await http.SendAsync(message);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return (await response.Content.ReadFromJsonAsync<CustomerDto>(), response.StatusCode, null);
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        return (null, response.StatusCode, ExtractError(body));
+    }
+
+    private static string ExtractError(string body)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(body);
+            foreach (var name in new[] { "message", "detail", "title" })
+            {
+                if (document.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && document.RootElement.TryGetProperty(name, out var value)
+                    && value.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    return value.GetString() ?? body;
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Not JSON: fall through and show the raw text.
+        }
+
+        return body.Length > 200 ? body[..200] : body;
+    }
+
     public async Task<CustomerDto?> UpdateCustomerAsync(Guid id, UpdateCustomerRequest request)
     {
         var response = await http.PutAsJsonAsync($"api/customers/{id}", request);

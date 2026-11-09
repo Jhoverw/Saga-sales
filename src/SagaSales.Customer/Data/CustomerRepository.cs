@@ -13,10 +13,13 @@ public interface ICustomerRepository
     Task<CustomerDto> CreateAsync(
         string firstName,
         string lastName,
-        string email,
+        string? email,
         string? phone,
         CustomerType customerType,
         AddressDto? address,
+        IdentificationType? identificationType,
+        string? identificationNumber,
+        string? businessName,
         CancellationToken cancellationToken);
 
     Task<CustomerDto> UpdateAsync(
@@ -25,6 +28,9 @@ public interface ICustomerRepository
         string lastName,
         string? phone,
         CustomerType customerType,
+        IdentificationType? identificationType,
+        string? identificationNumber,
+        string? businessName,
         CancellationToken cancellationToken);
 
     Task DeactivateAsync(Guid id, CancellationToken cancellationToken);
@@ -50,23 +56,29 @@ public sealed class CustomerRepository(IStoredProcedureExecutor executor) : ICus
     public async Task<CustomerDto> CreateAsync(
         string firstName,
         string lastName,
-        string email,
+        string? email,
         string? phone,
         CustomerType customerType,
         AddressDto? address,
+        IdentificationType? identificationType,
+        string? identificationNumber,
+        string? businessName,
         CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
             .With("first_name", firstName)
             .With("last_name", lastName)
-            .With("email", email)
+            .With("email", Nullify(email))
             .With("phone", Nullify(phone))
             .With("customer_type", (short)customerType)
             .With("line1", Nullify(address?.Line1))
             .With("city", Nullify(address?.City))
             .With("state_province", Nullify(address?.StateProvince))
             .With("postal_code", Nullify(address?.PostalCode))
-            .With("country", Nullify(address?.Country));
+            .With("country", Nullify(address?.Country))
+            .With("identification_type", (short?)identificationType)
+            .With("identification_number", Nullify(identificationNumber))
+            .With("business_name", Nullify(businessName));
 
         // A duplicate email surfaces from the procedure as CONFLICT → 409.
         var row = await executor.QueryProcSingleAsync<CustomerRow>(
@@ -81,6 +93,9 @@ public sealed class CustomerRepository(IStoredProcedureExecutor executor) : ICus
         string lastName,
         string? phone,
         CustomerType customerType,
+        IdentificationType? identificationType,
+        string? identificationNumber,
+        string? businessName,
         CancellationToken cancellationToken)
     {
         var arguments = SqlArgs.New()
@@ -88,7 +103,10 @@ public sealed class CustomerRepository(IStoredProcedureExecutor executor) : ICus
             .With("first_name", firstName)
             .With("last_name", lastName)
             .With("phone", Nullify(phone))
-            .With("customer_type", (short)customerType);
+            .With("customer_type", (short)customerType)
+            .With("identification_type", (short?)identificationType)
+            .With("identification_number", Nullify(identificationNumber))
+            .With("business_name", Nullify(businessName));
 
         var row = await executor.QueryProcSingleAsync<CustomerRow>(
             "dbo.sp_customer_update", arguments, cancellationToken: cancellationToken);
@@ -176,7 +194,7 @@ public sealed class CustomerRepository(IStoredProcedureExecutor executor) : ICus
 
         public string LastName { get; set; } = string.Empty;
 
-        public string Email { get; set; } = string.Empty;
+        public string? Email { get; set; }
 
         public string? Phone { get; set; }
 
@@ -188,6 +206,12 @@ public sealed class CustomerRepository(IStoredProcedureExecutor executor) : ICus
 
         public int TotalCount { get; set; }
 
+        public short? IdentificationType { get; set; }
+
+        public string? IdentificationNumber { get; set; }
+
+        public string? BusinessName { get; set; }
+
         public CustomerDto ToDto() => new()
         {
             Id = Id,
@@ -198,6 +222,9 @@ public sealed class CustomerRepository(IStoredProcedureExecutor executor) : ICus
             CustomerType = (CustomerType)CustomerType,
             Status = (CustomerStatus)Status,
             CreatedAt = CreatedAt,
+            IdentificationType = (SagaSales.Shared.Enums.IdentificationType?)IdentificationType,
+            IdentificationNumber = IdentificationNumber,
+            BusinessName = BusinessName,
         };
     }
 

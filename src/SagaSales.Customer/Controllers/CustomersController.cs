@@ -22,7 +22,10 @@ public sealed class CustomersController(IMediator mediator) : ControllerBase
             request.Email,
             request.Phone,
             request.CustomerType,
-            request.Address);
+            request.Address,
+            request.IdentificationType,
+            request.IdentificationNumber,
+            request.BusinessName);
 
         var result = await mediator.Send(command, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
@@ -65,7 +68,10 @@ public sealed class CustomersController(IMediator mediator) : ControllerBase
             request.LastName,
             request.Phone,
             request.Status,
-            request.CustomerType);
+            request.CustomerType,
+            request.IdentificationType,
+            request.IdentificationNumber,
+            request.BusinessName);
 
         var result = await mediator.Send(command, cancellationToken);
         return Ok(result.Value);

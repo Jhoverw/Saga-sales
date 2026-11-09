@@ -24,7 +24,7 @@
                     <option value="@Guid.Empty">— elige —</option>
                     @foreach (var customer in Customers)
                     {
-                        <option value="@customer.Id">@customer.LastName, @customer.FirstName</option>
+                        <option value="@customer.Id">@(customer.BusinessName ?? $"{customer.LastName}, {customer.FirstName}")</option>
                     }
                 </select>
             </div>
@@ -560,7 +560,7 @@
     private string CustomerName(Guid id)
     {
         var customer = Customers.FirstOrDefault(c => c.Id == id);
-        return customer is null ? id.ToString()[..8] : $"{customer.LastName}, {customer.FirstName}";
+        return customer is null ? id.ToString()[..8] : customer.BusinessName ?? $"{customer.LastName}, {customer.FirstName}";
     }
 
     // The order DTO carries the state as text (it is what the API returns), so the labels map names.

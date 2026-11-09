@@ -4,7 +4,7 @@ using SagaSales.Customer.Data;
 
 /// <summary>
 /// Edits a buyer. The customer type lives here because it decides which price list applies when
-/// this customer orders (D5).
+/// this customer orders (D5). Identification and business name can be corrected (spec 002).
 /// </summary>
 public record UpdateCustomerCommand(
     Guid Id,
@@ -12,7 +12,10 @@ public record UpdateCustomerCommand(
     string LastName,
     string? Phone = null,
     CustomerStatus Status = CustomerStatus.Active,
-    CustomerType CustomerType = CustomerType.Retail) : ICommand<CustomerDto>;
+    CustomerType CustomerType = CustomerType.Retail,
+    IdentificationType? IdentificationType = null,
+    string? IdentificationNumber = null,
+    string? BusinessName = null) : ICommand<CustomerDto>;
 
 public sealed class UpdateCustomerCommandHandler(ICustomerRepository repository)
     : ICommandHandler<UpdateCustomerCommand, CustomerDto>
@@ -20,15 +23,16 @@ public sealed class UpdateCustomerCommandHandler(ICustomerRepository repository)
     public async Task<Result<CustomerDto>> Handle(UpdateCustomerCommand request, CancellationToken cancellationToken)
     {
         Guard.AgainstEmptyGuid(request.Id, nameof(request.Id));
-        Guard.AgainstNullOrEmpty(request.FirstName, nameof(request.FirstName));
-        Guard.AgainstNullOrEmpty(request.LastName, nameof(request.LastName));
 
         var customer = await repository.UpdateAsync(
             request.Id,
-            request.FirstName.Trim(),
-            request.LastName.Trim(),
+            request.FirstName?.Trim() ?? string.Empty,
+            request.LastName?.Trim() ?? string.Empty,
             request.Phone,
             request.CustomerType,
+            request.IdentificationType,
+            request.IdentificationNumber?.Trim(),
+            request.BusinessName?.Trim(),
             cancellationToken);
 
         return Result<CustomerDto>.Success(customer);

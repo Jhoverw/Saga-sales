@@ -38,7 +38,11 @@
                         {
                             <tr class="@(customer.Status == CustomerStatus.Inactive ? "opacity-50" : "")">
                                 <td>
-                                    @customer.LastName, @customer.FirstName
+                                    @NameOf(customer)
+                                    @if (!string.IsNullOrWhiteSpace(customer.IdentificationNumber))
+                                    {
+                                        <div class="page-head__sub mb-0">@customer.IdentificationNumber</div>
+                                    }
                                     @if (customer.Status == CustomerStatus.Inactive)
                                     {
                                         <span class="chip">inactivo</span>
@@ -151,6 +155,13 @@
     private List<CustomerDto> CustomerList { get; set; } = [];
 
     private Guid? EditingId { get; set; }
+
+    // Spec 002: kept while editing so saving does not wipe the identification or business name.
+    private IdentificationType? EditingIdentificationType { get; set; }
+
+    private string? EditingIdentificationNumber { get; set; }
+
+    private string? EditingBusinessName { get; set; }
     private string FirstName { get; set; } = string.Empty;
     private string LastName { get; set; } = string.Empty;
     private string Email { get; set; } = string.Empty;
@@ -180,7 +191,10 @@
         EditingId = customer.Id;
         FirstName = customer.FirstName;
         LastName = customer.LastName;
-        Email = customer.Email;
+        Email = customer.Email ?? string.Empty;
+        EditingIdentificationType = customer.IdentificationType;
+        EditingIdentificationNumber = customer.IdentificationNumber;
+        EditingBusinessName = customer.BusinessName;
         Phone = customer.Phone ?? string.Empty;
         CustomerTypeId = (int)customer.CustomerType;
         Message = null;
@@ -190,6 +204,9 @@
     private void ClearForm()
     {
         EditingId = null;
+        EditingIdentificationType = null;
+        EditingIdentificationNumber = null;
+        EditingBusinessName = null;
         FirstName = LastName = Email = Phone = string.Empty;
         Line1 = City = StateProvince = PostalCode = string.Empty;
         CustomerTypeId = 1;
@@ -202,7 +219,8 @@
         Message = null;
         Error = false;
 
-        if (string.IsNullOrWhiteSpace(FirstName) || string.IsNullOrWhiteSpace(LastName))
+        if (string.IsNullOrWhiteSpace(EditingBusinessName)
+            && (string.IsNullOrWhiteSpace(FirstName) || string.IsNullOrWhiteSpace(LastName)))
         {
             Message = "Nombre y apellido son obligatorios.";
             Error = true;
@@ -248,7 +266,7 @@
 
                 Message = created is null
                     ? "No se pudo crear. ¿Ese email ya existe en esta tienda?"
-                    : $"Cliente «{created.FirstName} {created.LastName}» creado.";
+                    : $"Cliente «{created.DisplayName}» creado.";
                 Error = created is null;
             }
             else
@@ -260,6 +278,9 @@
                     Phone = Blank(Phone),
                     CustomerType = (CustomerType)CustomerTypeId,
                     Status = CustomerStatus.Active,
+                    IdentificationType = EditingIdentificationType,
+                    IdentificationNumber = EditingIdentificationNumber,
+                    BusinessName = EditingBusinessName,
                 });
 
                 Message = updated is null ? "No se pudo guardar." : "Cambios guardados.";
@@ -282,7 +303,7 @@
     {
         var ok = await Api.DeactivateCustomerAsync(customer.Id);
         Message = ok
-            ? $"«{customer.FirstName} {customer.LastName}» desactivado. Sus pedidos anteriores se conservan."
+            ? $"«{customer.DisplayName}» desactivado. Sus pedidos anteriores se conservan."
             : "No se pudo desactivar.";
         Error = !ok;
         await SearchAsync();
@@ -290,6 +311,11 @@
 
     private static string TypeLabel(CustomerType type)
         => type == CustomerType.Wholesale ? "Mayorista" : "Minorista";
+
+    private static string NameOf(CustomerDto customer)
+        => !string.IsNullOrWhiteSpace(customer.BusinessName)
+            ? customer.BusinessName!
+            : $"{customer.LastName}, {customer.FirstName}";
 
     private static string? Blank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

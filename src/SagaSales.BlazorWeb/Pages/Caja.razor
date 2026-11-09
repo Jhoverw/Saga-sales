@@ -1,19 +1,27 @@
 @page "/caja"
 @attribute [Authorize]
+@using SagaSales.Shared.Validation
 @inject ApiClient Api
 @inject IJSRuntime Js
 
 <PageTitle>Caja</PageTitle>
 
 <style>
-    .caja { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: .75rem; }
+    .caja { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: .75rem; }
     .caja__search { position: relative; }
     .caja__results { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; background: #111827; border: 1px solid #334155; border-radius: 6px; max-height: 260px; overflow-y: auto; }
     .caja__results button { display: flex; width: 100%; justify-content: space-between; gap: .75rem; background: none; border: 0; color: #e5e7eb; padding: .45rem .7rem; text-align: left; }
     .caja__results button:hover, .caja__results button.is-active { background: #1e3a8a; }
     .caja__results small { color: #94a3b8; }
-    .caja__lines td, .caja__lines th { font-size: .92rem; vertical-align: middle; }
-    .caja__qty { width: 80px; }
+    .caja__customer { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .caja__customer-name { font-weight: 600; }
+    .caja__customer-id { color: #94a3b8; font-size: .85rem; }
+    .caja__grid { width: 100%; border-collapse: collapse; }
+    .caja__grid th { font-size: .78rem; text-transform: uppercase; color: #94a3b8; border-bottom: 1px solid #334155; padding: .4rem .5rem; white-space: nowrap; }
+    .caja__grid td { font-size: .92rem; border-bottom: 1px solid #1f2937; padding: .3rem .5rem; vertical-align: middle; }
+    .caja__grid tr.is-entry td { background: #0b1220; }
+    .caja__qty { width: 90px; text-align: right; }
+    .caja__num { text-align: right; white-space: nowrap; }
     .caja__total { background: #000; color: #22c55e; font-family: 'Consolas', monospace; border-radius: 6px; padding: .6rem .9rem; text-align: right; }
     .caja__total-value { font-size: 2.6rem; line-height: 1.1; letter-spacing: .04em; }
     .caja__total-label { font-size: .75rem; color: #86efac; text-transform: uppercase; }
@@ -36,54 +44,124 @@
 
 <div class="caja" @onkeydown="OnKeyDown">
     <div>
+        @* ── Cliente ─────────────────────────────────────────────────────── *@
         <div class="panel">
-            <div class="panel__head">Venta</div>
+            <div class="panel__head">Cliente</div>
             <div class="panel__body">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-8 caja__search">
-                        <label class="form-label">Producto (nombre, 3 letras o más) · Enter agrega</label>
-                        <input id="caja-search" class="form-control form-control-lg" autocomplete="off"
-                               @bind="SearchText" @bind:event="oninput" @bind:after="OnSearchChangedAsync" @onkeydown="SearchKeyDown"
-                               placeholder="Escribe para buscar…" />
-                        @if (Results.Count > 0)
-                        {
-                            <div class="caja__results">
-                                @for (var i = 0; i < Results.Count; i++)
+                @if (!ShowNewCustomer)
+                {
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-5">
+                            <div class="caja__customer">
+                                @if (Customer is null)
                                 {
-                                    var product = Results[i];
-                                    var index = i;
-                                    <button type="button" class="@(index == ActiveResult ? "is-active" : "")"
-                                            @onclick="() => AddProduct(product)">
-                                        <span>@product.Name</span>
-                                        <small>
-                                            @GrossUnit(product.BasePrice).ToString("C") · stock @product.StockQuantity
-                                        </small>
-                                    </button>
+                                    <span class="caja__hint">Cargando…</span>
+                                }
+                                else
+                                {
+                                    <span class="caja__customer-name">@Customer.DisplayName</span>
+                                    <span class="caja__customer-id">@IdentificationLabel(Customer)</span>
                                 }
                             </div>
-                        }
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Cliente</label>
-                        <div class="form-control-plaintext">
-                            @(Customer is null ? "Cargando…" : $"{Customer.FirstName} {Customer.LastName}")
-                            <span class="caja__hint"> · por defecto (consumidor final)</span>
+                        </div>
+                        <div class="col-md-4 caja__search">
+                            <input id="caja-customer" class="form-control" autocomplete="off"
+                                   @bind="CustomerSearch" @bind:event="oninput" @bind:after="OnCustomerSearchChangedAsync"
+                                   @onkeydown="CustomerSearchKeyDown"
+                                   placeholder="Buscar: cédula, RUC o nombre (3 o más)" />
+                            @if (CustomerResults.Count > 0)
+                            {
+                                <div class="caja__results">
+                                    @foreach (var candidate in CustomerResults)
+                                    {
+                                        <button type="button" @onclick="() => SelectCustomer(candidate)">
+                                            <span>@candidate.DisplayName</span>
+                                            <small>@IdentificationLabel(candidate)</small>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="col-md-3 d-flex gap-2">
+                            <button class="btn btn-outline-primary w-100" @onclick="OpenNewCustomer">Nuevo</button>
+                            @if (Customer is not null && ConsumerCustomer is not null && Customer.Id != ConsumerCustomer.Id)
+                            {
+                                <button class="btn btn-outline-secondary w-100" title="Volver a consumidor final"
+                                        @onclick="UseConsumer">C. final</button>
+                            }
                         </div>
                     </div>
-                </div>
+                }
+                else
+                {
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-select" @bind="NewType">
+                                <option value="@IdentificationType.Cedula">Cédula</option>
+                                <option value="@IdentificationType.Ruc">RUC</option>
+                                <option value="@IdentificationType.Passport">Pasaporte</option>
+                                <option value="@IdentificationType.Foreign">Exterior</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Número</label>
+                            <input id="caja-new-number" class="form-control" @bind="NewNumber" @bind:event="oninput" autocomplete="off" />
+                        </div>
+                        @if (NewIsCompany)
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label">Razón social</label>
+                                <input class="form-control" @bind="NewBusinessName" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="col-md-3">
+                                <label class="form-label">Nombre</label>
+                                <input class="form-control" @bind="NewFirstName" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Apellido</label>
+                                <input class="form-control" @bind="NewLastName" />
+                            </div>
+                        }
+                        <div class="col-md-4">
+                            <label class="form-label">Email (opcional)</label>
+                            <input class="form-control" type="email" @bind="NewEmail" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Teléfono (opcional)</label>
+                            <input class="form-control" @bind="NewPhone" />
+                        </div>
+                        <div class="col-md-5 d-flex align-items-end gap-2">
+                            <button class="btn btn-primary w-100" @onclick="SaveNewCustomerAsync" disabled="@SavingCustomer">
+                                @(SavingCustomer ? "Guardando…" : "Guardar y usar")
+                            </button>
+                            <button class="btn btn-outline-secondary w-100" @onclick="CloseNewCustomer" disabled="@SavingCustomer">Cancelar</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(NewCustomerError))
+                        {
+                            <div class="col-12 text-danger small">@NewCustomerError</div>
+                        }
+                    </div>
+                }
             </div>
         </div>
 
+        @* ── Detalle ─────────────────────────────────────────────────────── *@
         <div class="panel mt-3">
-            <div class="panel__head">Líneas</div>
+            <div class="panel__head">Detalle</div>
             <div class="panel__body p-0">
-                <table class="table mb-0 caja__lines">
+                <table class="caja__grid">
                     <thead>
                         <tr>
                             <th>Producto</th>
-                            <th class="text-end">Precio c/IVA</th>
-                            <th class="text-center">Cant.</th>
-                            <th class="text-end">Total c/IVA</th>
+                            <th>Descripción</th>
+                            <th class="caja__num">Cantidad</th>
+                            <th class="caja__num">Precio unit. c/IVA</th>
+                            <th class="caja__num">Total c/IVA</th>
+                            <th class="caja__num">Stock</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -92,27 +170,52 @@
                         {
                             <tr>
                                 <td>@line.Name</td>
-                                <td class="text-end">@GrossUnit(line.UnitNet).ToString("C")</td>
-                                <td class="text-center">
-                                    <input class="form-control form-control-sm caja__qty mx-auto" type="number" min="1"
+                                <td>@line.Description</td>
+                                <td class="caja__num">
+                                    <input class="form-control form-control-sm caja__qty ms-auto" type="number" min="1"
                                            value="@line.Quantity" @onchange="e => ChangeQuantity(line, e)" />
                                 </td>
-                                <td class="text-end"><strong>@GrossLine(line).ToString("C")</strong></td>
+                                <td class="caja__num">@GrossUnit(line.UnitNet).ToString("C")</td>
+                                <td class="caja__num"><strong>@GrossLine(line).ToString("C")</strong></td>
+                                <td class="caja__num @(line.Quantity > line.Stock ? "text-danger" : "")"
+                                    title="@(line.Quantity > line.Stock ? "La cantidad supera el stock" : null)">@line.Stock</td>
                                 <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(line)">×</button>
+                                    <button class="btn btn-sm btn-outline-danger" title="Quitar fila" @onclick="() => RemoveLine(line)">×</button>
                                 </td>
                             </tr>
                         }
-                        @if (Cart.Count == 0)
-                        {
-                            <tr><td colspan="5" class="text-center py-4">Busca un producto para empezar.</td></tr>
-                        }
+                        <tr class="is-entry">
+                            <td colspan="2" class="caja__search">
+                                <input id="caja-search" class="form-control form-control-sm" autocomplete="off"
+                                       @bind="SearchText" @bind:event="oninput" @bind:after="OnSearchChangedAsync" @onkeydown="SearchKeyDown"
+                                       placeholder="Agregar producto: escribe 3 letras o más · Enter agrega" />
+                                @if (Results.Count > 0)
+                                {
+                                    <div class="caja__results">
+                                        @for (var i = 0; i < Results.Count; i++)
+                                        {
+                                            var product = Results[i];
+                                            var index = i;
+                                            <button type="button" class="@(index == ActiveResult ? "is-active" : "")"
+                                                    @onclick="() => AddProduct(product)">
+                                                <span>@product.Name</span>
+                                                <small>@GrossUnit(product.BasePrice).ToString("C") · stock @product.StockQuantity</small>
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </td>
+                            <td colspan="5" class="caja__hint">
+                                @(Cart.Count == 0 ? "Busca un producto para empezar." : $"{Cart.Count} línea(s)")
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 
+    @* ── Total y cobro ───────────────────────────────────────────────────── *@
     <div>
         <div class="caja__total">
             <div class="caja__total-label">Total a pagar</div>
@@ -163,7 +266,7 @@
                 }
 
                 <button class="btn btn-success btn-lg w-100" @onclick="ChargeAsync"
-                        disabled="@(Busy || Cart.Count == 0 || TaxRate is null)">
+                        disabled="@(Busy || Cart.Count == 0 || TaxRate is null || Customer is null)">
                     @(Busy ? "Cobrando…" : "Cobrar (F4)")
                 </button>
 
@@ -180,14 +283,31 @@
 </div>
 
 @code {
+    // Kept so a store whose consumer was created before spec 002 is still found.
     private const string ConsumerEmail = "consumidor.final@caja.local";
 
     private string SearchText { get; set; } = string.Empty;
     private List<ProductDto> Results { get; set; } = [];
     private int ActiveResult { get; set; } = 0;
     private List<CartLine> Cart { get; set; } = [];
-    private CustomerDto? Customer { get; set; }
     private TaxRateDto? TaxRate { get; set; }
+
+    // Customer (spec 002): consumer by default, any customer by search, or a quick sign-up.
+    private CustomerDto? Customer { get; set; }
+    private CustomerDto? ConsumerCustomer { get; set; }
+    private string CustomerSearch { get; set; } = string.Empty;
+    private List<CustomerDto> CustomerResults { get; set; } = [];
+
+    private bool ShowNewCustomer { get; set; }
+    private bool SavingCustomer { get; set; }
+    private IdentificationType NewType { get; set; } = IdentificationType.Cedula;
+    private string NewNumber { get; set; } = string.Empty;
+    private string NewFirstName { get; set; } = string.Empty;
+    private string NewLastName { get; set; } = string.Empty;
+    private string NewBusinessName { get; set; } = string.Empty;
+    private string NewEmail { get; set; } = string.Empty;
+    private string NewPhone { get; set; } = string.Empty;
+    private string? NewCustomerError { get; set; }
 
     private int MethodId { get; set; } = 5;
     private decimal Amount { get; set; }
@@ -204,7 +324,11 @@
 
         public string Name { get; init; } = string.Empty;
 
+        public string Description { get; init; } = string.Empty;
+
         public decimal UnitNet { get; init; }
+
+        public int Stock { get; init; }
 
         public int Quantity { get; set; } = 1;
     }
@@ -228,6 +352,31 @@
 
     private bool ReceivedShort => MethodId == 5 && Received is { } r && r < GrossTotal;
 
+    // A RUC whose third digit is 6 or 9 belongs to a company: it is named by business name (FR-008).
+    private bool NewIsCompany
+    {
+        get
+        {
+            var number = NewNumber.Trim();
+            return NewType == IdentificationType.Ruc && number.Length >= 3 && number[2] is '6' or '9';
+        }
+    }
+
+    private static string IdentificationLabel(CustomerDto customer)
+    {
+        var type = customer.IdentificationType switch
+        {
+            IdentificationType.Cedula => "Cédula",
+            IdentificationType.Ruc => "RUC",
+            IdentificationType.Passport => "Pasaporte",
+            IdentificationType.FinalConsumer => "Consumidor final",
+            IdentificationType.Foreign => "Exterior",
+            _ => null,
+        };
+
+        return type is null ? "sin identificación" : $"{type} · {customer.IdentificationNumber}";
+    }
+
     protected override async Task OnInitializedAsync()
     {
         // A failing API call must not blank the page: the cashier sees why instead.
@@ -240,7 +389,8 @@
                 Error = true;
             }
 
-            Customer = await FindOrCreateConsumerAsync();
+            ConsumerCustomer = await FindOrCreateConsumerAsync();
+            Customer = ConsumerCustomer;
             if (Customer is null)
             {
                 Message = "No se pudo preparar el cliente 'consumidor final'. Revisa la conexión con el servidor.";
@@ -256,8 +406,19 @@
 
     private async Task<CustomerDto?> FindOrCreateConsumerAsync()
     {
-        var page = await Api.GetCustomersAsync(1, 100);
-        var existing = page?.Items.FirstOrDefault(c => string.Equals(c.Email, ConsumerEmail, StringComparison.OrdinalIgnoreCase));
+        var page = await Api.GetCustomersAsync(1, 20, EcuadorIdentification.FinalConsumerNumber);
+        var existing = page?.Items.FirstOrDefault(c =>
+            c.IdentificationType == IdentificationType.FinalConsumer
+            && c.IdentificationNumber == EcuadorIdentification.FinalConsumerNumber);
+
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        // Before spec 002 the consumer was only recognisable by its email.
+        page = await Api.GetCustomersAsync(1, 20, ConsumerEmail);
+        existing = page?.Items.FirstOrDefault(c => string.Equals(c.Email, ConsumerEmail, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
             return existing;
@@ -268,9 +429,146 @@
             FirstName = "Consumidor",
             LastName = "Final",
             Email = ConsumerEmail,
+            IdentificationType = IdentificationType.FinalConsumer,
+            IdentificationNumber = EcuadorIdentification.FinalConsumerNumber,
         });
     }
 
+    // ── customer search ────────────────────────────────────────────────────
+    private async Task OnCustomerSearchChangedAsync()
+    {
+        if (CustomerSearch.Trim().Length < 3)
+        {
+            CustomerResults = [];
+            return;
+        }
+
+        try
+        {
+            var page = await Api.GetCustomersAsync(1, 8, CustomerSearch.Trim());
+            CustomerResults = page?.Items.Where(c => c.Status == CustomerStatus.Active).ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            CustomerResults = [];
+            Message = $"No se pudo buscar el cliente: {ex.Message}";
+            Error = true;
+        }
+    }
+
+    private void CustomerSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && CustomerResults.Count > 0)
+        {
+            SelectCustomer(CustomerResults[0]);
+        }
+    }
+
+    private void SelectCustomer(CustomerDto customer)
+    {
+        Customer = customer;
+        CustomerSearch = string.Empty;
+        CustomerResults = [];
+        Message = null;
+        _ = Js.InvokeVoidAsync("sagaFocus", "caja-search");
+    }
+
+    private void UseConsumer()
+    {
+        if (ConsumerCustomer is not null)
+        {
+            SelectCustomer(ConsumerCustomer);
+        }
+    }
+
+    // ── quick sign-up ──────────────────────────────────────────────────────
+    private void OpenNewCustomer()
+    {
+        // A cashier who searched by number usually wants to register that same number.
+        var typed = CustomerSearch.Trim();
+        NewType = typed.Length == 13 && typed.All(char.IsAsciiDigit) ? IdentificationType.Ruc : IdentificationType.Cedula;
+        NewNumber = typed.All(char.IsAsciiLetterOrDigit) ? typed : string.Empty;
+        NewFirstName = NewLastName = NewBusinessName = NewEmail = NewPhone = string.Empty;
+        NewCustomerError = null;
+        CustomerResults = [];
+        ShowNewCustomer = true;
+        _ = Js.InvokeVoidAsync("sagaFocus", "caja-new-number");
+    }
+
+    private void CloseNewCustomer()
+    {
+        ShowNewCustomer = false;
+        NewCustomerError = null;
+    }
+
+    private async Task SaveNewCustomerAsync()
+    {
+        // Same library as the server (FR-009): the cashier sees the problem before the round trip.
+        var error = EcuadorIdentification.Validate(NewType, NewNumber);
+        if (error is null && NewIsCompany && string.IsNullOrWhiteSpace(NewBusinessName))
+        {
+            error = "Un RUC de sociedad requiere razón social.";
+        }
+        else if (error is null && !NewIsCompany
+                 && (string.IsNullOrWhiteSpace(NewFirstName) || string.IsNullOrWhiteSpace(NewLastName)))
+        {
+            error = "Nombre y apellido son obligatorios.";
+        }
+
+        if (error is not null)
+        {
+            NewCustomerError = error;
+            return;
+        }
+
+        SavingCustomer = true;
+        try
+        {
+            var (created, status, failure) = await Api.CreateCustomerWithResultAsync(new CreateCustomerRequest
+            {
+                FirstName = NewIsCompany ? string.Empty : NewFirstName.Trim(),
+                LastName = NewIsCompany ? string.Empty : NewLastName.Trim(),
+                BusinessName = NewIsCompany ? NewBusinessName.Trim() : null,
+                Email = string.IsNullOrWhiteSpace(NewEmail) ? null : NewEmail.Trim(),
+                Phone = string.IsNullOrWhiteSpace(NewPhone) ? null : NewPhone.Trim(),
+                IdentificationType = NewType,
+                IdentificationNumber = NewNumber.Trim(),
+            });
+
+            if (created is not null)
+            {
+                ShowNewCustomer = false;
+                SelectCustomer(created);
+                Message = $"Cliente {created.DisplayName} registrado.";
+                Error = false;
+                return;
+            }
+
+            if (status == System.Net.HttpStatusCode.Conflict)
+            {
+                // Already registered: show it in the search so the cashier picks it.
+                NewCustomerError = "Ya existe un cliente con esa identificación o email en la tienda. Búscalo arriba.";
+                ShowNewCustomer = false;
+                CustomerSearch = NewNumber.Trim();
+                await OnCustomerSearchChangedAsync();
+                Message = NewCustomerError;
+                Error = true;
+                return;
+            }
+
+            NewCustomerError = $"No se pudo registrar el cliente: {failure}";
+        }
+        catch (Exception ex)
+        {
+            NewCustomerError = $"No se pudo registrar el cliente: {ex.Message}";
+        }
+        finally
+        {
+            SavingCustomer = false;
+        }
+    }
+
+    // ── products ───────────────────────────────────────────────────────────
     private async Task OnSearchChangedAsync()
     {
         if (SearchText.Trim().Length < 3)
@@ -294,7 +592,7 @@
         }
     }
 
-    private async Task SearchKeyDown(KeyboardEventArgs e)
+    private void SearchKeyDown(KeyboardEventArgs e)
     {
         switch (e.Key)
         {
@@ -322,7 +620,15 @@
         }
         else if (e.Key == "Escape" && !Busy)
         {
-            await Clear();
+            // Esc closes the sign-up form first, so a cashier never loses the sale by accident.
+            if (ShowNewCustomer)
+            {
+                CloseNewCustomer();
+            }
+            else
+            {
+                await Clear();
+            }
         }
     }
 
@@ -339,7 +645,9 @@
             {
                 ProductId = product.Id,
                 Name = product.Name,
+                Description = product.Description ?? string.Empty,
                 UnitNet = product.BasePrice,
+                Stock = product.StockQuantity,
             });
         }
 
@@ -393,9 +701,10 @@
 
         try
         {
+            var buyer = Customer;
             var order = await Api.CreateOrderAsync(new CreateOrderRequest
             {
-                CustomerId = Customer.Id,
+                CustomerId = buyer.Id,
                 ShippingAddress = "Mostrador",
                 Items = Cart.Select(l => new OrderItemRequest { ProductId = l.ProductId, Quantity = l.Quantity }).ToList(),
             });
@@ -427,13 +736,16 @@
             var change = payment.ChangeGiven is { } c && c > 0 ? $" Vuelto: {c:C}." : string.Empty;
             var pending = order.Total - toPay;
             var balance = pending > 0 ? $" Pendiente: {pending:C}." : string.Empty;
-            Message = $"Venta {order.OrderNumber} cobrada por {toPay:C}.{change}{balance}";
+            Message = $"Venta {order.OrderNumber} a {buyer.DisplayName} cobrada por {toPay:C}.{change}{balance}";
             Error = false;
 
             Cart.Clear();
             Received = null;
             Reference = string.Empty;
             Amount = 0;
+
+            // The next sale starts again with consumidor final (spec 002, US1).
+            Customer = ConsumerCustomer ?? Customer;
             await Js.InvokeVoidAsync("sagaFocus", "caja-search");
         }
         catch (Exception ex)
