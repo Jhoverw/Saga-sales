@@ -83,14 +83,23 @@ function Invoke-SqlFile {
     param([string]$Database, [string]$Path)
 
     if ($useDocker) {
-        # Without -Q and -i, sqlcmd executes what it reads from stdin.
-        Get-Content $Path -Raw | docker exec -i $Container /opt/mssql-tools18/bin/sqlcmd `
-            -S localhost -U $User -P "$Password" -C -d $Database -b -I
+        # Without -Q and -i, sqlcmd executes what it reads from stdin. The scripts are UTF-8: read them as
+        # UTF-8, pipe them as UTF-8 (Windows PowerShell pipes ASCII by default and turns accents into "??"),
+        # and tell sqlcmd the code page (-f 65001).
+        $previousEncoding = $OutputEncoding
+        $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+        try {
+            Get-Content $Path -Raw -Encoding UTF8 | docker exec -i $Container /opt/mssql-tools18/bin/sqlcmd `
+                -S localhost -U $User -P "$Password" -C -d $Database -b -I -f 65001
+        }
+        finally {
+            $OutputEncoding = $previousEncoding
+        }
         if ($LASTEXITCODE -ne 0) { throw "Script failed: $Path" }
         return
     }
 
-    $arguments = @('-S', $Server, '-U', $User, '-P', $Password, '-d', $Database, '-b', '-I', '-i', $Path)
+    $arguments = @('-S', $Server, '-U', $User, '-P', $Password, '-d', $Database, '-b', '-I', '-f', '65001', '-i', $Path)
     if ($TrustServerCertificate) { $arguments += @('-C') }
     & sqlcmd @arguments
     if ($LASTEXITCODE -ne 0) { throw "Script failed: $Path" }

@@ -61,6 +61,13 @@ internal sealed class ContractSession : IDisposable
                 "api/branches",
                 new CreateBranchRequest { Name = "Principal", IsDefault = true });
             Assert.Equal(HttpStatusCode.Created, branch.StatusCode);
+
+            // A store that sells needs a VAT rate in force (V-03), like the real setup in Configuración Fiscal.
+            using var tax = await session.SendAsync(
+                HttpMethod.Post,
+                "api/taxes",
+                new CreateTaxRateRequest(0.15m, new DateOnly(2000, 1, 1), null, "IVA contrato"));
+            Assert.Equal(HttpStatusCode.OK, tax.StatusCode);
         }
 
         return session;
