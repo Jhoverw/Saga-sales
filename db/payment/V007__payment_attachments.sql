@@ -106,13 +106,15 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Vigente: capturado (3) o reembolsado en parte (6).
+    -- Vigente: capturado (3) o reembolsado en parte (6). SQL Server no admite una subconsulta dentro de
+    -- SUM, así que los comprobantes se cuentan antes en una tabla derivada.
     SELECT COUNT(*) AS Payments,
-           SUM(CASE WHEN p.method IN (1, 4, 9)
-                     AND NOT EXISTS (SELECT 1 FROM dbo.payment_attachments a
-                                     WHERE a.tenant_id = p.tenant_id AND a.payment_id = p.id)
-                    THEN 1 ELSE 0 END) AS WithoutProof
+           ISNULL(SUM(CASE WHEN p.method IN (1, 4, 9) AND a.files IS NULL THEN 1 ELSE 0 END), 0) AS WithoutProof
     FROM dbo.payments p
+    LEFT JOIN (SELECT payment_id, COUNT(*) AS files
+               FROM dbo.payment_attachments
+               WHERE tenant_id = @p_tenant_id
+               GROUP BY payment_id) a ON a.payment_id = p.id
     WHERE p.tenant_id = @p_tenant_id AND p.order_id = @order_id AND p.status IN (3, 6);
 END
 GO
