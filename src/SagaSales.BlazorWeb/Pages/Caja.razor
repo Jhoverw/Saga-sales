@@ -172,7 +172,7 @@
                                 <td>@line.Name</td>
                                 <td>@line.Description</td>
                                 <td class="caja__num">
-                                    <input class="form-control form-control-sm caja__qty ms-auto" type="number" min="1"
+                                    <input class="form-control form-control-sm caja__qty ms-auto" type="number" lang="en-US" min="1"
                                            value="@line.Quantity" @onchange="e => ChangeQuantity(line, e)" />
                                 </td>
                                 <td class="caja__num">@GrossUnit(line.UnitNet).ToString("C")</td>
@@ -237,7 +237,7 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Importe</label>
-                    <input class="form-control" type="number" step="0.01" min="0" @bind="Amount" />
+                    <input class="form-control" type="number" lang="en-US" step="0.01" min="0" @bind="Amount" />
                 </div>
 
                 @if (MethodId == 5)
@@ -245,7 +245,7 @@
                     <div class="row g-2 mb-2">
                         <div class="col-6">
                             <label class="form-label">Entregado</label>
-                            <input class="form-control" type="number" step="0.01" min="0" @bind="Received" />
+                            <input class="form-control" type="number" lang="en-US" step="0.01" min="0" @bind="Received" />
                         </div>
                         <div class="col-6">
                             <label class="form-label">A devolver</label>

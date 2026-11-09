@@ -41,7 +41,7 @@
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Stock inicial</label>
-                <input class="form-control" type="number" placeholder="0" @bind="NewStock" />
+                <input class="form-control" type="number" lang="en-US" placeholder="0" @bind="NewStock" />
             </div>
             <div class="col-md-3 d-flex align-items-center gap-2">
                 <div class="form-check mt-4">
@@ -149,10 +149,7 @@ else
     private void OnPriceChanged(ChangeEventArgs e)
     {
         PriceError = string.Empty;
-        if (decimal.TryParse(e.Value?.ToString(),
-                             NumberStyles.AllowDecimalPoint,
-                             CultureInfo.InvariantCulture,
-                             out var price))
+        if (SagaSales.Shared.Formatting.AppCulture.TryParseDecimal(e.Value?.ToString(), out var price) && price >= 0)
         {
             // Round to 4 decimal places for storage
             price = Math.Round(price, 4);
@@ -161,7 +158,7 @@ else
         }
         else
         {
-            PriceError = "Introduzca un número válido (use punto o coma como separador decimal).";
+            PriceError = "Introduzca un número válido, con punto como separador decimal (ej.: 12.50).";
         }
     }
 
@@ -171,10 +168,7 @@ else
         Error = null;
 
         // Validate price string
-        if (!decimal.TryParse(NewPriceString,
-                              NumberStyles.AllowDecimalPoint,
-                              CultureInfo.InvariantCulture,
-                              out var price))
+        if (!SagaSales.Shared.Formatting.AppCulture.TryParseDecimal(NewPriceString, out var price) || price < 0)
         {
             PriceError = "Precio no válido.";
             Busy = false;

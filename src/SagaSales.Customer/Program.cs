@@ -4,6 +4,9 @@ using SagaSales.Customer.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// One number format everywhere: the point is the decimal separator (constitution v2.4.0).
+SagaSales.Shared.Formatting.AppCulture.Apply();
+
 builder.AddSagaSalesLogging(SagaSalesConstants.ApplicationName);
 
 builder.Services.AddSagaSalesInfrastructure(builder.Configuration);

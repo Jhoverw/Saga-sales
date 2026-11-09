@@ -42,7 +42,7 @@ public class OrderConfirmationConsumer(INotificationService notificationService,
             e.TenantId, 
             e.CustomerId, 
             $"Order Confirmed: {e.OrderId}", 
-            $"Your order has been placed. Total: {e.TotalAmount:C}", 
+            $"Your order has been placed. Total: {e.TotalAmount.ToString("C", SagaSales.Shared.Formatting.AppCulture.Current)}", 
             1, "email");
     }
 }

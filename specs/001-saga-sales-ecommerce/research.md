@@ -156,7 +156,7 @@ with the storefront (E-09, P3).
 
 **Decision**: Analytics keeps `sales_report_daily` and `product_sales_daily`, updated by
 consumers. Queries read only those tables. CSV is generated in the service (separator `;`,
-decimal comma, UTF-8 with BOM) so it opens in Excel without a wizard.
+decimal point — superseded by constitution v2.4.0, UTF-8 with BOM) so it opens in Excel without a wizard.
 
 *Rationale*: reports must not query the Sales database (§VII). CSV is the agreed format (D4).
 

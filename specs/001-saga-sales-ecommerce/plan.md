@@ -48,7 +48,7 @@ any payment gateway; 100 orders/day at peak; 10 stores; 50 products per store.
 
 **Constraints**: money is `numeric(18,2)` in USD only; stock must never go negative under
 concurrency; a tenant filter is mandatory on every query; no service opens another service's
-database; the buyer does not sign in during the MVP; CSV with `;` and decimal comma for reports.
+database; the buyer does not sign in during the MVP; CSV with `;` and decimal point (constitution v2.4.0) for reports.
 
 **Scale/Scope**: 8 deployable services + SPA, ~50 functional requirements covering 16 user stories,
 7 databases, ~60 stored procedures, 1 SPA with 12 screens.

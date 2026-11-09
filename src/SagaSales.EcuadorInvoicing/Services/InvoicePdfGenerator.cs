@@ -44,17 +44,17 @@ public class InvoicePdfGenerator
                             table.Cell().Element(CellStyle).Text(item.Descripcion);
                             table.Cell().Element(CellStyle).AlignCenter().Text(item.Cantidad.ToString());
                             table.Cell().Element(CellStyle).AlignCenter().Text(item.UnidadMedida);
-                            table.Cell().Element(CellStyle).AlignRight().Text(item.PrecioUnitario.ToString("C"));
+                            table.Cell().Element(CellStyle).AlignRight().Text(item.PrecioUnitario.ToString("C", SagaSales.Shared.Formatting.AppCulture.Current));
                             var total = item.BaseImponible;
-                            table.Cell().Element(CellStyle).AlignRight().Text(total.ToString("C"));
+                            table.Cell().Element(CellStyle).AlignRight().Text(total.ToString("C", SagaSales.Shared.Formatting.AppCulture.Current));
                         }
                         // Totals
                         table.Cell().ColumnSpan(4).Element(CellStyle).AlignRight().Text("Subtotal");
-                        table.Cell().Element(CellStyle).AlignRight().Text(invoice.TotalSinImpuestos.ToString("C"));
+                        table.Cell().Element(CellStyle).AlignRight().Text(invoice.TotalSinImpuestos.ToString("C", SagaSales.Shared.Formatting.AppCulture.Current));
                         table.Cell().ColumnSpan(4).Element(CellStyle).AlignRight().Text("Impuestos");
-                        table.Cell().Element(CellStyle).AlignRight().Text(invoice.TotalImpuestos.ToString("C"));
+                        table.Cell().Element(CellStyle).AlignRight().Text(invoice.TotalImpuestos.ToString("C", SagaSales.Shared.Formatting.AppCulture.Current));
                         table.Cell().ColumnSpan(4).Element(CellStyle).AlignRight().Text("Total");
-                        table.Cell().Element(CellStyle).AlignRight().Text(invoice.Total.ToString("C"));
+                        table.Cell().Element(CellStyle).AlignRight().Text(invoice.Total.ToString("C", SagaSales.Shared.Formatting.AppCulture.Current));
                     });
                 });
                 page.Footer().AlignCenter().Text($"Estado: {invoice.Estado}");

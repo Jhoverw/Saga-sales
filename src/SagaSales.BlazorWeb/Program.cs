@@ -6,6 +6,9 @@ using SagaSales.BlazorWeb.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
+// One number format everywhere: the point is the decimal separator (constitution v2.4.0).
+SagaSales.Shared.Formatting.AppCulture.Apply();
+
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 

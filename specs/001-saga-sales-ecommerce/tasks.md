@@ -198,7 +198,7 @@ Monorepo: `src/<Service>/`, `db/<service>/`, `tests/<Kind>/`, `specs/<feature>/`
 ## Phase 11: User Story 9 - Understand the business and export it — ⚠️ parcial
 
 - [ ] T088 [P] [US9] Integration test: aggregates from events equal the sum of the orders
-- [ ] T089 [P] [US9] Integration test: CSV with `;`, decimal comma, BOM; empty range returns headers
+- [ ] T089 [P] [US9] Integration test: CSV with `;`, decimal point (constitution v2.4.0), BOM; empty range returns headers
 - [x] T090 [P] [US9] `db/analytics/V001__schema.sql` (sales_report_daily, product_sales_daily, customer_activity)
 - [x] T091 [P] [US9] `db/analytics/V002__functions.sql` (`sp_report_order_upsert`, `sp_report_payment_upsert`, `sp_product_sales_upsert`, `sp_activity_add`, `sp_sales_summary_get`, `sp_top_products_get`, `sp_daily_series_get`)
 - [x] T092 [P] [US9] `AnalyticsRepository` (Dapper)

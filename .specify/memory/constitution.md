@@ -123,6 +123,7 @@ This principle supersedes any earlier "framework trust" wording that implied an 
 | Tracing | OpenTelemetry |
 | Validation | FluentValidation |
 | Reports | **CSV** export (Excel-compatible); no server-side `.xlsx` generation |
+| Number format | **Decimal point (`.`) everywhere**: screens, inputs, CSV, PDF, messages and APIs. The comma is only the thousands separator when a number is displayed. Implemented once in `SagaSales.Shared.Formatting.AppCulture` |
 
 ## Scope Boundaries
 
@@ -177,5 +178,6 @@ Gates that SHALL block progress:
 | 2.1.0 | 2026-11-04 | Runtime moved from .NET 8 to .NET 10: the build host no longer has the .NET 8 targeting pack, and all projects now target `net10.0` |
 | 2.2.0 | 2026-11-04 | **Database corrected to SQL Server 2022 (T-SQL)**. Every earlier reference to PostgreSQL / PL/pgSQL is superseded: driver `Microsoft.Data.SqlClient`, locking with `UPDLOCK`, errors raised with `THROW` |
 | 2.3.0 | 2026-11-08 | **SRI scope clarified**: the database stores every field needed to issue an SRI invoice and the provider's result; XML signing and submission to SRI are delegated to an external provider and are not implemented here. Rationale (project owner, 2026-11-08): signing is contracted to a provider, so the platform only needs to persist the invoice data and the authorization result. Backward compatibility: additive columns only; existing fiscal fields on orders are kept |
+| 2.4.0 | 2026-11-08 | **Number format locked**: the decimal separator is always the point (`.`) in every screen, input, file and message (Technology Constraints). Rationale (project owner, 2026-11-08): the comma and the point were appearing mixed. Backward compatibility: stored values are unchanged (SQL `decimal`); only presentation and typed input change. CSV reports keep `;` as column separator |
 
-**Version**: 2.3.0 | **Ratified**: 2026-11-03 | **Last Amended**: 2026-11-08
+**Version**: 2.4.0 | **Ratified**: 2026-11-03 | **Last Amended**: 2026-11-08

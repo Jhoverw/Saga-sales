@@ -39,7 +39,7 @@ public class DailyPointDto
 // Defaults: to = today, from = to - 6 days (a week). An inverted range → 400 INVALID_RANGE.
 //
 // CSV export format (D4, FR-026) — must open in Excel with no import wizard:
-//   UTF-8 with BOM · separator ';' · decimal comma · one row per day · header row
+//   UTF-8 with BOM · separator ';' · decimal point (constitution v2.4.0) · one row per day · header row
 //   columns: fecha;ingresos;pedidos;pagos_aprobados
 //   A range with no movements returns the header only, never an error.
 //   Content-Disposition: attachment; filename="reporte-YYYYMMDD-YYYYMMDD.csv"
