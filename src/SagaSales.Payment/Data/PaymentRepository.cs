@@ -19,7 +19,8 @@ public interface IPaymentRepository
         string? reference,
         DateTime? paidAt,
         decimal? cashReceived,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        Guid? createdBy = null);
 
     /// <summary>Refuses an identical payment (same order, method and amount) recorded within 10 s (FR-016).</summary>
     Task AssertNotDuplicateAsync(Guid orderId, ManualPaymentMethod method, decimal amount, CancellationToken cancellationToken);
@@ -48,7 +49,8 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
         string? reference,
         DateTime? paidAt,
         decimal? cashReceived,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? createdBy = null)
     {
         var arguments = SqlArgs.New()
             .With("order_id", orderId)
@@ -57,7 +59,8 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
             .With("method", (short)method)
             .With("reference", string.IsNullOrWhiteSpace(reference) ? null : reference.Trim())
             .With("paid_at", paidAt)
-            .With("cash_received", cashReceived);
+            .With("cash_received", cashReceived)
+            .With("created_by", createdBy);
 
         // A second live payment for the same order surfaces as PAYMENT_ALREADY_EXISTS → 409.
         var row = await executor.QueryProcSingleAsync<PaymentRow>(

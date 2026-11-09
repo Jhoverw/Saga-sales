@@ -1,0 +1,533 @@
+@page "/mi-dia"
+@attribute [Authorize(Roles = SagaSalesRoles.Staff)]
+@inject ApiClient Api
+@using System.Globalization
+
+<PageTitle>Mi día</PageTitle>
+
+<style>
+    .myday-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+    .myday-kpi--strong .kpi__value { color: var(--ok); }
+    .myday-chart { width: 100%; height: auto; display: block; }
+    .myday-chart .grid { stroke: var(--line); stroke-width: 1; }
+    .myday-chart .axis { fill: var(--text-faint); font-size: 11px; }
+    .myday-chart .line { fill: none; stroke: var(--cyan); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+    .myday-chart .area { fill: rgba(45, 212, 255, .10); stroke: none; }
+    .myday-chart .dot { fill: var(--ink); stroke: var(--cyan); stroke-width: 2; }
+    .myday-chart .dot--today { fill: var(--cyan); }
+    .myday-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    .myday-table th { color: var(--text-muted); font-weight: 600; text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line-strong); }
+    .myday-table td { padding: .35rem .5rem; border-bottom: 1px solid var(--line); }
+    .myday-num { text-align: right !important; white-space: nowrap; }
+    .myday-void td { text-decoration: line-through; color: var(--text-faint); }
+    .myday-form { display: grid; grid-template-columns: 1fr 2fr 1fr auto; gap: .5rem; align-items: end; }
+    @@media (max-width: 720px) { .myday-form { grid-template-columns: 1fr; } }
+</style>
+
+<div class="page-head">
+    <div>
+        <h1>Mi día</h1>
+        <div class="page-head__sub">@DateTime.Now.ToString("dddd d 'de' MMMM", CultureInfo.CurrentCulture) · @(Scope)</div>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        @if (IsManager)
+        {
+            <select class="form-select" style="max-width:240px;" @bind="SellerFilter" @bind:after="LoadAsync">
+                <option value="">Toda la tienda</option>
+                @foreach (var seller in Sellers)
+                {
+                    <option value="@seller.Id">@seller.Name</option>
+                }
+            </select>
+        }
+        <button class="btn btn-outline-primary" @onclick="LoadAsync" disabled="@Busy">Actualizar</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+<div class="myday-kpis">
+    <div class="kpi myday-kpi--strong">
+        <div class="kpi__label">Vendido hoy</div>
+        <div class="kpi__value">@Money(Sales?.TodayTotal ?? 0)</div>
+        <div class="kpi__meta">@(Sales?.TodayOrders ?? 0) ventas</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi__label">Efectivo</div>
+        <div class="kpi__value">@Money(Payments?.Cash ?? 0)</div>
+        <div class="kpi__meta">Cobrado hoy</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi__label">Tarjetas</div>
+        <div class="kpi__value">@Money(Payments?.Card ?? 0)</div>
+        <div class="kpi__meta">Crédito y débito</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi__label">Otros</div>
+        <div class="kpi__value">@Money(Payments?.Other ?? 0)</div>
+        <div class="kpi__meta">Transferencias y depósitos</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi__label">Caja chica</div>
+        <div class="kpi__value">@Money(Payments?.PettyCash ?? 0)</div>
+        <div class="kpi__meta">Gastos de hoy</div>
+    </div>
+    <div class="kpi myday-kpi--strong">
+        <div class="kpi__label">Efectivo en caja</div>
+        <div class="kpi__value">@Money(Payments?.ExpectedCash ?? 0)</div>
+        <div class="kpi__meta">Efectivo − caja chica</div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-12 col-xl-8">
+        <div class="panel h-100">
+            <div class="panel__head">
+                <div>
+                    <div class="panel__title">Ventas de los últimos @ChartDays días</div>
+                    <div class="page-head__sub">Total por día · @Money(Days.Sum(d => d.Total)) en el período</div>
+                </div>
+            </div>
+            <div class="panel__body">
+                @if (Days.Count == 0)
+                {
+                    <div class="empty">Sin datos.</div>
+                }
+                else
+                {
+                    <svg class="myday-chart" viewBox="0 0 @ChartWidth @ChartHeight" role="img" aria-label="Ventas por día">
+                        @foreach (var tick in YTicks())
+                        {
+                            <line class="grid" x1="@N(PadLeft)" x2="@N(ChartWidth - PadRight)" y1="@N(Y(tick))" y2="@N(Y(tick))" />
+                            <text class="axis" x="@N(PadLeft - 6)" y="@N(Y(tick) + 4)" text-anchor="end">@tick.ToString("0.##", CultureInfo.InvariantCulture)</text>
+                        }
+                        <path class="area" d="@AreaPath()" />
+                        <polyline class="line" points="@LinePoints()" />
+                        @for (var i = 0; i < Days.Count; i++)
+                        {
+                            var day = Days[i];
+                            var isToday = i == Days.Count - 1;
+                            <circle class="dot @(isToday ? "dot--today" : "")" cx="@N(X(i))" cy="@N(Y(day.Total))" r="@(isToday ? "4.5" : "3.5")">
+                                <title>@day.Day.ToString("ddd dd/MM", CultureInfo.CurrentCulture): @Money(day.Total) · @day.Orders ventas</title>
+                            </circle>
+                            @if (i % 2 == 0 || isToday)
+                            {
+                                <text class="axis" x="@N(X(i))" y="@N(ChartHeight - 8)" text-anchor="middle">@day.Day.ToString("dd/MM", CultureInfo.InvariantCulture)</text>
+                            }
+                        }
+                    </svg>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-4">
+        <div class="panel h-100">
+            <div class="panel__head">
+                <div class="panel__title">Lo que vendí hoy</div>
+            </div>
+            <div class="panel__body p-0">
+                @if ((Sales?.TodayProducts.Count ?? 0) == 0)
+                {
+                    <div class="empty">Todavía no hay ventas hoy.</div>
+                }
+                else
+                {
+                    <table class="myday-table">
+                        <thead><tr><th>Producto</th><th class="myday-num">Cant.</th><th class="myday-num">Importe</th></tr></thead>
+                        <tbody>
+                            @foreach (var product in Sales!.TodayProducts)
+                            {
+                                <tr><td>@product.ProductName</td><td class="myday-num">@product.Quantity</td><td class="myday-num">@Money(product.Total)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel__head">
+                <div class="panel__title">Por vencer</div>
+                <span class="chip @(Alerts?.Expiring.Count > 0 ? "chip--warn" : "chip--neutral")">@(Alerts?.Expiring.Count ?? 0)</span>
+            </div>
+            <div class="panel__body p-0">
+                @if ((Alerts?.Expiring.Count ?? 0) == 0)
+                {
+                    <div class="empty">Ningún lote por vencer.</div>
+                }
+                else
+                {
+                    <table class="myday-table">
+                        <thead><tr><th>Producto</th><th>Lote</th><th>Vence</th><th class="myday-num">Días</th><th class="myday-num">Cant.</th></tr></thead>
+                        <tbody>
+                            @foreach (var batch in Alerts!.Expiring)
+                            {
+                                <tr>
+                                    <td>@batch.ProductName</td>
+                                    <td>@batch.LotCode</td>
+                                    <td>@(batch.ExpiresAt?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "—")</td>
+                                    <td class="myday-num @(batch.DaysLeft <= 0 ? "text-danger" : "")">@(batch.DaysLeft?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                    <td class="myday-num">@batch.Quantity</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel__head">
+                <div class="panel__title">Stock al límite</div>
+                <span class="chip @(Alerts?.LowStock.Count > 0 ? "chip--danger" : "chip--neutral")">@(Alerts?.LowStock.Count ?? 0)</span>
+            </div>
+            <div class="panel__body p-0">
+                @if ((Alerts?.LowStock.Count ?? 0) == 0)
+                {
+                    <div class="empty">Ningún producto bajo su nivel de reposición.</div>
+                }
+                else
+                {
+                    <table class="myday-table">
+                        <thead><tr><th>Producto</th><th class="myday-num">Stock</th><th class="myday-num">Nivel</th></tr></thead>
+                        <tbody>
+                            @foreach (var item in Alerts!.LowStock)
+                            {
+                                <tr>
+                                    <td>@item.Name @if (!string.IsNullOrWhiteSpace(item.Code)) { <small class="text-muted">· @item.Code</small> }</td>
+                                    <td class="myday-num @(item.Stock <= 0 ? "text-danger" : "")">@(item.Stock <= 0 ? "Agotado" : item.Stock.ToString(CultureInfo.InvariantCulture))</td>
+                                    <td class="myday-num">@(item.ReorderLevel?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel__head">
+        <div>
+            <div class="panel__title">Caja chica</div>
+            <div class="page-head__sub">Gastos pagados con el efectivo de la caja · máximo por gasto @Money(MaxAmount)</div>
+        </div>
+        <AuthorizeView Roles="@SagaSalesRoles.Owner" Context="auth">
+            <div class="d-flex gap-2 align-items-center">
+                <label class="form-label mb-0 text-nowrap">Máximo</label>
+                <DecimalInput @bind-Value="NewMaxAmount" style="max-width:110px;" />
+                <button class="btn btn-outline-secondary btn-sm" @onclick="SaveMaxAsync" disabled="@Busy">Guardar</button>
+            </div>
+        </AuthorizeView>
+    </div>
+    <div class="panel__body">
+        <div class="myday-form mb-3">
+            <div>
+                <label class="form-label">Categoría</label>
+                <select class="form-select" @bind="ExpenseCategory">
+                    @foreach (var category in Enum.GetValues<PettyCashCategory>())
+                    {
+                        <option value="@category">@CategoryLabel(category)</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Motivo</label>
+                <input class="form-control" maxlength="200" placeholder="Ej.: foco para la bodega" @bind="ExpenseDescription" />
+            </div>
+            <div>
+                <label class="form-label">Monto</label>
+                <DecimalInput @bind-Value="ExpenseAmount" />
+            </div>
+            <button class="btn btn-primary" @onclick="AddExpenseAsync" disabled="@(Busy || ExpenseAmount <= 0)">Registrar gasto</button>
+        </div>
+
+        @if (Expenses.Count == 0)
+        {
+            <div class="empty">Sin gastos de caja chica hoy.</div>
+        }
+        else
+        {
+            <table class="myday-table">
+                <thead>
+                    <tr><th>Hora</th><th>Categoría</th><th>Motivo</th>@if (IsManager) { <th>Registró</th> }<th class="myday-num">Monto</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var expense in Expenses)
+                    {
+                        <tr class="@(expense.IsVoided ? "myday-void" : "")">
+                            <td>@expense.CreatedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)</td>
+                            <td>@CategoryLabel(expense.Category)</td>
+                            <td>@expense.Description</td>
+                            @if (IsManager) { <td>@expense.UserName</td> }
+                            <td class="myday-num">@Money(expense.Amount)</td>
+                            <td class="myday-num">
+                                @if (expense.IsVoided)
+                                {
+                                    <small>Anulado</small>
+                                }
+                                else if (IsManager)
+                                {
+                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => VoidExpenseAsync(expense)" disabled="@Busy">Anular</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private const int ChartDays = 15;
+    private const double ChartWidth = 720;
+    private const double ChartHeight = 240;
+    private const double PadLeft = 52;
+    private const double PadRight = 16;
+    private const double PadTop = 14;
+    private const double PadBottom = 28;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private SellerSalesSummaryDto? Sales { get; set; }
+
+    private PaymentDaySummaryDto? Payments { get; set; }
+
+    private InventoryAlertsDto? Alerts { get; set; }
+
+    private List<PettyCashExpenseDto> Expenses { get; set; } = [];
+
+    private List<DailySalesDto> Days => Sales?.Days ?? [];
+
+    private List<SellerDto> Sellers { get; set; } = [];
+
+    private bool IsManager { get; set; }
+
+    private string SellerFilter { get; set; } = string.Empty;
+
+    private decimal MaxAmount { get; set; } = 20m;
+
+    private decimal NewMaxAmount { get; set; }
+
+    private PettyCashCategory ExpenseCategory { get; set; } = PettyCashCategory.Supplies;
+
+    private string ExpenseDescription { get; set; } = string.Empty;
+
+    private decimal ExpenseAmount { get; set; }
+
+    private bool Busy { get; set; }
+
+    private string? Message { get; set; }
+
+    private bool Error { get; set; }
+
+    private string Scope => !IsManager
+        ? "mis ventas"
+        : Guid.TryParse(SellerFilter, out var id)
+            ? Sellers.FirstOrDefault(s => s.Id == id)?.Name ?? "vendedor"
+            : "toda la tienda";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask is not null)
+        {
+            var user = (await AuthenticationStateTask).User;
+            IsManager = user.IsInRole(SagaSalesRoles.Owner) || user.IsInRole(SagaSalesRoles.Manager);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Busy = true;
+        Message = null;
+
+        try
+        {
+            Guid? seller = IsManager && Guid.TryParse(SellerFilter, out var id) ? id : null;
+
+            var salesTask = Api.GetSellerSummaryAsync(ChartDays, seller);
+            var paymentsTask = Api.GetPaymentDaySummaryAsync(seller);
+            var expensesTask = Api.GetPettyCashAsync(seller);
+            var alertsTask = Api.GetInventoryAlertsAsync();
+            var settingsTask = Api.GetPettyCashSettingsAsync();
+
+            Sales = await salesTask;
+            Payments = await paymentsTask;
+            Expenses = await expensesTask ?? [];
+            Alerts = await alertsTask;
+            var settings = await settingsTask;
+
+            if (settings is not null)
+            {
+                MaxAmount = settings.MaxAmount;
+                NewMaxAmount = settings.MaxAmount;
+            }
+
+            if (IsManager && Sales is not null && Sales.Sellers.Count > 0)
+            {
+                Sellers = Sales.Sellers;
+            }
+
+            if (Sales is null || Payments is null)
+            {
+                Error = true;
+                Message = "No se pudieron cargar las cifras del día. Intenta de nuevo.";
+            }
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task AddExpenseAsync()
+    {
+        if (ExpenseDescription.Trim().Length < 3)
+        {
+            Error = true;
+            Message = "Escribe el motivo del gasto (al menos 3 caracteres).";
+            return;
+        }
+
+        if (ExpenseAmount > MaxAmount)
+        {
+            Error = true;
+            Message = $"El gasto supera el máximo de caja chica ({Money(MaxAmount)}).";
+            return;
+        }
+
+        Busy = true;
+        var (created, _, failure) = await Api.CreatePettyCashAsync(new CreatePettyCashExpenseRequest
+        {
+            Category = ExpenseCategory,
+            Description = ExpenseDescription.Trim(),
+            Amount = ExpenseAmount,
+        });
+        Busy = false;
+
+        if (created is null)
+        {
+            Error = true;
+            Message = failure ?? "No se pudo registrar el gasto.";
+            return;
+        }
+
+        ExpenseDescription = string.Empty;
+        ExpenseAmount = 0;
+        await LoadAsync();
+        Error = false;
+        Message = $"Gasto registrado: {created.Description} · {Money(created.Amount)}.";
+    }
+
+    private async Task VoidExpenseAsync(PettyCashExpenseDto expense)
+    {
+        Busy = true;
+        var (ok, failure) = await Api.VoidPettyCashAsync(expense.Id);
+        Busy = false;
+
+        if (!ok)
+        {
+            Error = true;
+            Message = failure ?? "No se pudo anular el gasto.";
+            return;
+        }
+
+        await LoadAsync();
+        Error = false;
+        Message = "Gasto anulado.";
+    }
+
+    private async Task SaveMaxAsync()
+    {
+        Busy = true;
+        var (saved, _, failure) = await Api.SetPettyCashSettingsAsync(NewMaxAmount);
+        Busy = false;
+
+        if (saved is null)
+        {
+            Error = true;
+            Message = failure ?? "No se pudo guardar el máximo.";
+            return;
+        }
+
+        MaxAmount = saved.MaxAmount;
+        Error = false;
+        Message = $"Máximo de caja chica: {Money(MaxAmount)}.";
+    }
+
+    private static string Money(decimal value) => "$" + value.ToString("#,##0.00", CultureInfo.InvariantCulture);
+
+    private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string CategoryLabel(PettyCashCategory category) => category switch
+    {
+        PettyCashCategory.Maintenance => "Mantenimiento",
+        PettyCashCategory.Supplies => "Insumos y gastos",
+        PettyCashCategory.Emergency => "Pago emergente",
+        _ => "Otro",
+    };
+
+    // ── gráfico de líneas sin librerías ─────────────────────────────────────
+    private decimal ChartMax()
+    {
+        var max = Days.Count == 0 ? 0 : Days.Max(d => d.Total);
+        return NiceCeiling(max <= 0 ? 10 : max);
+    }
+
+    private static decimal NiceCeiling(decimal value)
+    {
+        var magnitude = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)value)));
+        foreach (var step in new[] { 1m, 2m, 2.5m, 5m, 10m })
+        {
+            if (value <= step * magnitude)
+            {
+                return step * magnitude;
+            }
+        }
+
+        return 10m * magnitude;
+    }
+
+    private IEnumerable<decimal> YTicks()
+    {
+        var max = ChartMax();
+        for (var i = 0; i <= 4; i++)
+        {
+            yield return max * i / 4;
+        }
+    }
+
+    private double X(int index) => Days.Count <= 1
+        ? PadLeft
+        : PadLeft + (index * (ChartWidth - PadLeft - PadRight) / (Days.Count - 1));
+
+    private double Y(decimal value) =>
+        ChartHeight - PadBottom - ((double)(value / ChartMax()) * (ChartHeight - PadTop - PadBottom));
+
+    private string LinePoints() => string.Join(' ', Days.Select((d, i) => $"{N(X(i))},{N(Y(d.Total))}"));
+
+    private string AreaPath()
+    {
+        if (Days.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var baseline = N(ChartHeight - PadBottom);
+        var line = string.Join(' ', Days.Select((d, i) => $"L {N(X(i))} {N(Y(d.Total))}"));
+        return $"M {N(X(0))} {baseline} {line} L {N(X(Days.Count - 1))} {baseline} Z";
+    }
+}

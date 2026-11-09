@@ -15,6 +15,7 @@ builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Sales")
 
 // Persistence: stored procedures only (constitution §VIII).
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<ISellerSummaryRepository, SellerSummaryRepository>();
 
 // Catalog is reached over HTTP; Sales never reads Catalog's database.
 builder.Services.AddTransient<ForwardCredentialsHandler>();

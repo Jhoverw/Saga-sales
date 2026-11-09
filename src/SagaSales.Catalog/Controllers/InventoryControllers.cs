@@ -117,6 +117,16 @@ public sealed class InventoryController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    /// <summary>Panel "Mi día" (spec 006): lotes por vencer y productos bajo su nivel de reorden, sin costos.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
+    [HttpGet("alerts")]
+    [ProducesResponseType(typeof(InventoryAlertsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Alerts([FromQuery] Guid? branchId = null, CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new Queries.GetInventoryAlertsQuery(branchId), cancellationToken);
+        return Ok(result.Value);
+    }
+
     /// <summary>Inventory control report (spec 004): what to restock first, value, last sale, supplier.</summary>
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpGet("report")]

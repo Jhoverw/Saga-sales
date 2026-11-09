@@ -433,6 +433,46 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
             : (false, ExtractError(await response.Content.ReadAsStringAsync()));
     }
 
+    // ── panel "Mi día" (spec 006) ───────────────────────────────────────────
+    // El servidor calcula "hoy" con el desfase del navegador: Ecuador es −300 minutos.
+    private static int OffsetMinutes() => (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow).TotalMinutes;
+
+    private static string SellerQuery(string name, Guid? id) => id is { } value ? $"&{name}={value}" : string.Empty;
+
+    public Task<SellerSalesSummaryDto?> GetSellerSummaryAsync(int days, Guid? sellerId = null)
+        => GetAsync<SellerSalesSummaryDto>(
+            $"api/orders/seller-summary?days={days}&offsetMinutes={OffsetMinutes()}{SellerQuery("sellerId", sellerId)}");
+
+    public Task<PaymentDaySummaryDto?> GetPaymentDaySummaryAsync(Guid? userId = null)
+        => GetAsync<PaymentDaySummaryDto>(
+            $"api/payments/summary?days=1&offsetMinutes={OffsetMinutes()}{SellerQuery("userId", userId)}");
+
+    public Task<List<PettyCashExpenseDto>?> GetPettyCashAsync(Guid? userId = null)
+        => GetAsync<List<PettyCashExpenseDto>>(
+            $"api/payments/petty-cash?days=1&offsetMinutes={OffsetMinutes()}{SellerQuery("userId", userId)}");
+
+    public Task<(PettyCashExpenseDto? Value, System.Net.HttpStatusCode? Status, string? Error)> CreatePettyCashAsync(
+        CreatePettyCashExpenseRequest request)
+        => SendForResultAsync<PettyCashExpenseDto>(HttpMethod.Post, "api/payments/petty-cash", request);
+
+    public async Task<(bool Ok, string? Error)> VoidPettyCashAsync(Guid id)
+    {
+        var message = await BuildAsync(HttpMethod.Post, $"api/payments/petty-cash/{id}/void", null);
+        var response = await http.SendAsync(message);
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
+
+    public Task<PettyCashSettingsDto?> GetPettyCashSettingsAsync()
+        => GetAsync<PettyCashSettingsDto>("api/payments/petty-cash/settings");
+
+    public Task<(PettyCashSettingsDto? Value, System.Net.HttpStatusCode? Status, string? Error)> SetPettyCashSettingsAsync(decimal maxAmount)
+        => SendForResultAsync<PettyCashSettingsDto>(
+            HttpMethod.Put, "api/payments/petty-cash/settings", new PettyCashSettingsDto { MaxAmount = maxAmount });
+
+    public Task<InventoryAlertsDto?> GetInventoryAlertsAsync() => GetAsync<InventoryAlertsDto>("api/inventory/alerts");
+
     /// <summary>Sends a request and keeps the status and reason when it fails (409, 400...).</summary>
     private async Task<(T? Value, System.Net.HttpStatusCode? Status, string? Error)> SendForResultAsync<T>(
         HttpMethod method,

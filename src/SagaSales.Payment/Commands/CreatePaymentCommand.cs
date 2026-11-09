@@ -42,9 +42,9 @@ public sealed class CreatePaymentCommandHandler(
             request.Reference,
             request.PaidAt,
             request.CashReceived,
-            cancellationToken);
+            cancellationToken,
+            currentUser.UserId);
 
-        _ = currentUser;
         return Result<PaymentDto>.Success(payment);
     }
 

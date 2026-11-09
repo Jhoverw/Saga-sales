@@ -38,6 +38,31 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    /// <summary>
+    /// Panel "Mi día" (spec 006): ventas por día local de los últimos <paramref name="days"/> días y
+    /// productos vendidos hoy. El cajero solo recibe lo suyo; dueño y administrador pueden filtrar.
+    /// </summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
+    [HttpGet("seller-summary")]
+    [ProducesResponseType(typeof(SellerSalesSummaryDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SellerSummary(
+        [FromQuery] int days = 15,
+        [FromQuery] int offsetMinutes = 0,
+        [FromQuery] Guid? sellerId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (days is < 1 or > SagaSales.Shared.Time.LocalDayRange.MaxDays || offsetMinutes is < -840 or > 840)
+        {
+            return BadRequest(new { message = "Rango de días o desfase horario fuera de rango." });
+        }
+
+        var range = SagaSales.Shared.Time.LocalDayRange.LastDays(days, offsetMinutes, DateTime.UtcNow);
+        var onlyCaller = !User.IsInRole(SagaSalesRoles.Owner) && !User.IsInRole(SagaSalesRoles.Manager);
+
+        var result = await mediator.Send(new Queries.GetSellerSummaryQuery(range, sellerId, onlyCaller), cancellationToken);
+        return Ok(result.Value);
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
