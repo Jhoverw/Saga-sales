@@ -126,10 +126,16 @@ This principle supersedes any earlier "framework trust" wording that implied an 
 
 ## Scope Boundaries
 
-- **Electronic invoicing (SRI) is out of scope** for this repository. It is delivered as a
-  separate project that consumes this platform's order events. Saga-Sales must only reserve the
-  fiscal fields (`FiscalStatus`, `FiscalDocumentNumber`, `TaxAmount`, per-line `TaxRate`) so no
-  historical migration is needed later.
+- **Electronic invoicing (SRI): signing and submission are delegated to an external provider.**
+  Saga-Sales does not sign the XML, hold the signing certificate, or call the SRI web services.
+  Its job is to store, per tenant, every field the provider needs to issue an SRI invoice (seller
+  and buyer identification, establishment and emission point, sequential, per-line tax codes and
+  rates, totals and payment method) and to record what the provider returns (access key,
+  authorization number and date, status and errors). The field list follows the SRI technical
+  sheet kept in `docs/`.
+- New fiscal columns follow §VIII (versioned scripts under `db/<service>/`) and §V (`p_tenant_id`).
+  The fiscal fields already on orders (`FiscalStatus`, `FiscalDocumentNumber`, `TaxAmount`,
+  per-line `TaxRate`) are kept.
 - Payments in the MVP are recorded **manually** (transfer/deposit). Online gateways arrive in a
   later release behind the `IPaymentGateway` abstraction.
 
@@ -170,5 +176,6 @@ Gates that SHALL block progress:
 | 2.0.0 | 2026-11-04 | §VIII rewritten: stored procedures + Dapper replace the ORM; §V adds database-level tenant enforcement; Technology Constraints and Scope Boundaries added; Quality Gates formalised (analyze + Definition of Done) |
 | 2.1.0 | 2026-11-04 | Runtime moved from .NET 8 to .NET 10: the build host no longer has the .NET 8 targeting pack, and all projects now target `net10.0` |
 | 2.2.0 | 2026-11-04 | **Database corrected to SQL Server 2022 (T-SQL)**. Every earlier reference to PostgreSQL / PL/pgSQL is superseded: driver `Microsoft.Data.SqlClient`, locking with `UPDLOCK`, errors raised with `THROW` |
+| 2.3.0 | 2026-11-08 | **SRI scope clarified**: the database stores every field needed to issue an SRI invoice and the provider's result; XML signing and submission to SRI are delegated to an external provider and are not implemented here. Rationale (project owner, 2026-11-08): signing is contracted to a provider, so the platform only needs to persist the invoice data and the authorization result. Backward compatibility: additive columns only; existing fiscal fields on orders are kept |
 
-**Version**: 2.2.0 | **Ratified**: 2026-11-03 | **Last Amended**: 2026-11-04
+**Version**: 2.3.0 | **Ratified**: 2026-11-03 | **Last Amended**: 2026-11-08
