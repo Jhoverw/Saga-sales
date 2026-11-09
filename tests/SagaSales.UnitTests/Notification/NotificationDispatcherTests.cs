@@ -70,6 +70,18 @@ public class NotificationDispatcherTests
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("provider is down"));
 
+        var logId = Guid.NewGuid();
+        repository
+            .Setup(r => r.CreateNotificationAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<int>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(logId);
+
         var dispatcher = new NotificationDispatcher(repository.Object, sender.Object);
 
         // The order flow must survive a notification failure: no exception expected.
@@ -82,7 +94,8 @@ public class NotificationDispatcherTests
             "<p>Thanks</p>",
             CancellationToken.None);
 
-        Assert.NotEqual(Guid.Empty, result);
+        // The caller still gets the id of the recorded attempt, so the failure can be traced.
+        Assert.Equal(logId, result);
         repository.Verify(
             r => r.CreateNotificationAsync(
                 It.IsAny<Guid>(),
