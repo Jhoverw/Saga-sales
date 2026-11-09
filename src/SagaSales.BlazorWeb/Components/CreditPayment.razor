@@ -30,6 +30,6 @@
 
 <div class="mb-3">
     <label class="form-label">Monto a cobrar a crédito</label>
-    <input type="number" lang="en-US" class="form-control" @bind="amount" disabled />
+    <DecimalInput Value="amount" Disabled="true" />
 </div>
 <button class="btn btn-success" @onclick="Pay" disabled="@isSubmitting">Registrar pago a crédito</button>

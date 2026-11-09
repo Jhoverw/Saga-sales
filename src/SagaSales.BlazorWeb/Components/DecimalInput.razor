@@ -1,0 +1,86 @@
+@typeparam TValue
+@using SagaSales.Shared.Formatting
+
+@*
+    Decimal entry that always shows and accepts the point as decimal separator (constitution v2.4.0),
+    whatever language the browser uses. A type="number" input is formatted by the browser and can
+    show a comma, so money and rates use this instead. A comma is rejected, never read as thousands.
+*@
+<input type="text" inputmode="decimal" autocomplete="off"
+       class="@CssClass" placeholder="@Placeholder" disabled="@Disabled"
+       value="@text" @onchange="OnChangeAsync" @attributes="AdditionalAttributes" />
+@if (invalid)
+{
+    <div class="text-danger small">Usa punto como separador decimal (ej.: 12.50).</div>
+}
+
+@code {
+    private static readonly bool IsNullable = Nullable.GetUnderlyingType(typeof(TValue)) is not null;
+
+    private string text = string.Empty;
+    private bool invalid;
+    private bool initialized;
+    private decimal? shown;
+
+    [Parameter]
+    public TValue? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<TValue> ValueChanged { get; set; }
+
+    [Parameter]
+    public string CssClass { get; set; } = "form-control";
+
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>Display format; no thousands separator so the text can always be read back.</summary>
+    [Parameter]
+    public string Format { get; set; } = "0.00##";
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Re-format only when the value really changed (for example the page set a new total),
+        // so a value being typed is not rewritten under the cashier's fingers.
+        var incoming = Value is decimal number ? number : (decimal?)null;
+        if (!initialized || incoming != shown)
+        {
+            shown = incoming;
+            text = incoming?.ToString(Format, AppCulture.Current) ?? string.Empty;
+            invalid = false;
+            initialized = true;
+        }
+    }
+
+    private async Task OnChangeAsync(ChangeEventArgs e)
+    {
+        var typed = e.Value?.ToString() ?? string.Empty;
+        text = typed;
+
+        if (string.IsNullOrWhiteSpace(typed))
+        {
+            invalid = false;
+            shown = IsNullable ? null : 0m;
+            await ValueChanged.InvokeAsync(IsNullable ? default! : (TValue)(object)0m);
+            return;
+        }
+
+        if (!AppCulture.TryParseDecimal(typed, out var parsed))
+        {
+            // Keep what was typed so it can be corrected; the value stays the last valid one.
+            invalid = true;
+            return;
+        }
+
+        invalid = false;
+        shown = parsed;
+        text = parsed.ToString(Format, AppCulture.Current);
+        await ValueChanged.InvokeAsync((TValue)(object)parsed);
+    }
+}

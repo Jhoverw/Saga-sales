@@ -198,7 +198,7 @@
                         <div class="row g-2 align-items-end">
                             <div class="col-md-4">
                                 <label class="form-label">Importe</label>
-                                <input class="form-control" type="number" lang="en-US" step="0.01" min="0.01" @bind="Amount" />
+                                <DecimalInput @bind-Value="Amount" />
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Medio</label>
@@ -218,7 +218,7 @@
                             <div class="row g-2 align-items-end mt-2">
                                 <div class="col-md-4">
                                     <label class="form-label">Monto recibido</label>
-                                    <input class="form-control" type="number" lang="en-US" step="0.01" min="0" @bind="CashReceived" />
+                                    <DecimalInput @bind-Value="CashReceived" />
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Vuelto</label>

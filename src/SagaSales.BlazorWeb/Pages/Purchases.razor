@@ -102,7 +102,7 @@ else
                                     <input class="form-control form-control-sm" type="number" lang="en-US" min="1" @bind="line.Quantity" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm" type="number" lang="en-US" step="0.01" min="0.01" @bind="line.UnitCost" />
+                                    <DecimalInput @bind-Value="line.UnitCost" CssClass="form-control form-control-sm" />
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm" @bind="line.LotCode" @bind:event="oninput"

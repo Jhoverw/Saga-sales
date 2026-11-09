@@ -39,10 +39,10 @@
 
 <div class="mb-3">
     <label class="form-label">Monto total a pagar</label>
-    <input type="number" lang="en-US" class="form-control" @bind="totalAmount" disabled />
+    <DecimalInput Value="totalAmount" Disabled="true" />
 </div>
 <div class="mb-3">
     <label class="form-label">Monto recibido del cliente</label>
-    <input type="number" lang="en-US" class="form-control" @bind="amountReceived" />
+    <DecimalInput @bind-Value="amountReceived" />
 </div>
 <button class="btn btn-success" @onclick="Pay" disabled="@isSubmitting">Registrar pago en efectivo</button>
