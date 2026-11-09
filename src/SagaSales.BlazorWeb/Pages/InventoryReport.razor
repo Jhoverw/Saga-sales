@@ -1,0 +1,307 @@
+@page "/analytics/inventory"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject IJSRuntime Js
+
+<PageTitle>Control de inventario</PageTitle>
+
+<style>
+    .inv-table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+    .inv-table th { background: #1f3a5f; color: #e5e7eb; font-weight: 600; padding: .45rem .5rem; text-align: center; white-space: nowrap; }
+    .inv-table td { border-bottom: 1px solid #1f2937; padding: .35rem .5rem; vertical-align: middle; }
+    .inv-table tr.is-reorder td { background: rgba(251, 146, 60, .22); }
+    .inv-num { text-align: right; white-space: nowrap; }
+    .inv-mark { font-weight: 700; font-size: .75rem; letter-spacing: .03em; }
+    .inv-mark--reorder { color: #fb923c; }
+    .inv-mark--ok { color: #22c55e; }
+    .inv-edit td { background: #0b1220; }
+    .inv-wrap { overflow-x: auto; }
+</style>
+
+<div class="page-head">
+    <div>
+        <h1>Control de inventario</h1>
+        <div class="page-head__sub">Qué reponer primero · valor del inventario · última venta y proveedor</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="analytics">Volver a Analítica</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+<div class="toolbar">
+    <label class="form-label mb-0">Sucursal</label>
+    <select class="form-select" style="max-width:240px;" @bind="BranchFilter" @bind:after="LoadAsync">
+        <option value="">Todas (stock total)</option>
+        @foreach (var branch in Branches)
+        {
+            <option value="@branch.Id">@branch.Name</option>
+        }
+    </select>
+    <button class="btn btn-outline-primary" @onclick="LoadAsync" disabled="@Busy">Actualizar</button>
+    <button class="btn btn-primary" @onclick="DownloadCsvAsync" disabled="@(Busy || Rows.Count == 0)">Descargar CSV</button>
+</div>
+
+<div class="d-flex flex-wrap gap-3 my-3">
+    <span class="chip">Productos: @Rows.Count</span>
+    <span class="chip">A reponer: @Rows.Count(r => r.NeedsReorder)</span>
+    <span class="chip">Valor del inventario: @Rows.Where(r => r.InventoryValue.HasValue).Sum(r => r.InventoryValue!.Value).ToString("C")</span>
+    @if (Rows.Any(r => !r.UnitCost.HasValue))
+    {
+        <span class="chip" title="Nunca se recibieron en una compra: su costo es desconocido">Sin costo: @Rows.Count(r => !r.UnitCost.HasValue)</span>
+    }
+</div>
+
+<div class="panel">
+    <div class="panel__body p-0 inv-wrap">
+        <table class="inv-table">
+            <thead>
+                <tr>
+                    <th>Reponer</th>
+                    <th>N.º de artículo</th>
+                    <th>Nombre</th>
+                    <th>Fabricante</th>
+                    <th>Descripción</th>
+                    <th>Costo por artículo</th>
+                    <th>Cantidad de existencias</th>
+                    <th>Valor del inventario</th>
+                    <th>Nivel de reposición</th>
+                    <th>Días por reposición</th>
+                    <th>Fecha de última venta</th>
+                    <th>Cantidad de reposición</th>
+                    <th>Notas</th>
+                    <th>Último proveedor</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Rows)
+                {
+                    <tr class="@(row.NeedsReorder ? "is-reorder" : "")">
+                        <td class="text-center">
+                            <span class="inv-mark @(row.NeedsReorder ? "inv-mark--reorder" : "inv-mark--ok")">@(row.NeedsReorder ? "REPONER" : "OK")</span>
+                        </td>
+                        <td>@row.Code</td>
+                        <td>@row.Name</td>
+                        <td>@row.Manufacturer</td>
+                        <td>@row.Description</td>
+                        <td class="inv-num">@(row.UnitCost?.ToString("C") ?? "sin costo")</td>
+                        <td class="inv-num">@row.Stock</td>
+                        <td class="inv-num">@(row.InventoryValue?.ToString("C") ?? "—")</td>
+                        <td class="inv-num">@row.ReorderLevel</td>
+                        <td class="inv-num">@row.LeadTimeDays</td>
+                        <td>@(row.LastSaleAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</td>
+                        <td class="inv-num">@row.ReorderQuantity</td>
+                        <td>@row.Notes</td>
+                        <td>@row.LastSupplier</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(row)" disabled="@Busy">Editar</button>
+                        </td>
+                    </tr>
+                    @if (EditingId == row.ProductId)
+                    {
+                        <tr class="inv-edit">
+                            <td colspan="15">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-2">
+                                        <label class="form-label small">N.º de artículo</label>
+                                        <input class="form-control form-control-sm" maxlength="50" @bind="EditCode" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small">Fabricante</label>
+                                        <input class="form-control form-control-sm" maxlength="150" @bind="EditManufacturer" />
+                                    </div>
+                                    <div class="col-md-1">
+                                        <label class="form-label small">Nivel</label>
+                                        <input class="form-control form-control-sm" type="number" lang="en-US" min="0" @bind="EditReorderLevel" />
+                                    </div>
+                                    <div class="col-md-1">
+                                        <label class="form-label small">Cant. reponer</label>
+                                        <input class="form-control form-control-sm" type="number" lang="en-US" min="0" @bind="EditReorderQuantity" />
+                                    </div>
+                                    <div class="col-md-1">
+                                        <label class="form-label small">Días</label>
+                                        <input class="form-control form-control-sm" type="number" lang="en-US" min="0" @bind="EditLeadTimeDays" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small">Notas</label>
+                                        <input class="form-control form-control-sm" maxlength="500" @bind="EditNotes" />
+                                    </div>
+                                    <div class="col-md-2 d-flex gap-2">
+                                        <button class="btn btn-sm btn-primary w-100" @onclick="SaveAsync" disabled="@Busy">Guardar</button>
+                                        <button class="btn btn-sm btn-outline-secondary w-100" @onclick="CancelEdit" disabled="@Busy">Cancelar</button>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(EditError))
+                                    {
+                                        <div class="col-12 text-danger small">@EditError</div>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                @if (Rows.Count == 0 && !Busy)
+                {
+                    <tr><td colspan="15" class="text-center py-4">No hay productos activos.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private List<InventoryReportRowDto> Rows { get; set; } = [];
+    private List<BranchDto> Branches { get; set; } = [];
+    private string BranchFilter { get; set; } = string.Empty;
+
+    private Guid? EditingId { get; set; }
+    private string? EditCode { get; set; }
+    private string? EditManufacturer { get; set; }
+    private int? EditReorderLevel { get; set; }
+    private int? EditReorderQuantity { get; set; }
+    private int? EditLeadTimeDays { get; set; }
+    private string? EditNotes { get; set; }
+    private string? EditError { get; set; }
+
+    private string? Message { get; set; }
+    private bool Error { get; set; }
+    private bool Busy { get; set; }
+
+    private Guid? SelectedBranch => Guid.TryParse(BranchFilter, out var id) ? id : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Branches = await Api.GetBranchesAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            Message = $"No se pudieron cargar las sucursales: {ex.Message}";
+            Error = true;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Busy = true;
+        try
+        {
+            Rows = await Api.GetInventoryReportAsync(SelectedBranch) ?? [];
+            if (Error && Message?.StartsWith("No se pudo cargar el reporte", StringComparison.Ordinal) == true)
+            {
+                Message = null;
+                Error = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Rows = [];
+            Message = $"No se pudo cargar el reporte: {ex.Message}";
+            Error = true;
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        Busy = true;
+        try
+        {
+            var bytes = await Api.GetInventoryReportCsvAsync(SelectedBranch);
+            if (bytes is null)
+            {
+                Message = "No se pudo generar el CSV.";
+                Error = true;
+                return;
+            }
+
+            var fileName = $"control-inventario-{DateTime.Now:yyyyMMdd}.csv";
+            await Js.InvokeVoidAsync("sagaDownload", fileName, "text/csv", Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex)
+        {
+            Message = $"No se pudo descargar el CSV: {ex.Message}";
+            Error = true;
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private void StartEdit(InventoryReportRowDto row)
+    {
+        EditingId = row.ProductId;
+        EditCode = row.Code;
+        EditManufacturer = row.Manufacturer;
+        EditReorderLevel = row.ReorderLevel;
+        EditReorderQuantity = row.ReorderQuantity;
+        EditLeadTimeDays = row.LeadTimeDays;
+        EditNotes = row.Notes;
+        EditError = null;
+    }
+
+    private void CancelEdit()
+    {
+        EditingId = null;
+        EditError = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (EditingId is not { } productId)
+        {
+            return;
+        }
+
+        if (EditReorderLevel < 0 || EditReorderQuantity < 0 || EditLeadTimeDays < 0)
+        {
+            EditError = "Nivel, cantidad y días no pueden ser negativos.";
+            return;
+        }
+
+        Busy = true;
+        try
+        {
+            var (ok, status, failure) = await Api.SetInventorySettingsAsync(productId, new InventorySettingsRequest
+            {
+                Code = EditCode,
+                Manufacturer = EditManufacturer,
+                ReorderLevel = EditReorderLevel,
+                ReorderQuantity = EditReorderQuantity,
+                LeadTimeDays = EditLeadTimeDays,
+                Notes = EditNotes,
+            });
+
+            if (!ok)
+            {
+                EditError = status == System.Net.HttpStatusCode.Conflict
+                    ? "Ese número de artículo ya lo usa otro producto de la tienda."
+                    : $"No se pudo guardar: {failure}";
+                return;
+            }
+
+            EditingId = null;
+            Message = "Datos de reposición guardados.";
+            Error = false;
+        }
+        catch (Exception ex)
+        {
+            EditError = $"No se pudo guardar: {ex.Message}";
+        }
+        finally
+        {
+            Busy = false;
+        }
+
+        await LoadAsync();
+    }
+}

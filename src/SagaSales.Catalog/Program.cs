@@ -21,6 +21,7 @@ builder.Services.AddScoped<IPriceListRepository, PriceListRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IPurchaseRepository, PurchaseRepository>();
 builder.Services.AddScoped<IBranchRepository, BranchRepository>();
+builder.Services.AddScoped<IInventoryReportRepository, InventoryReportRepository>();
 builder.Services.AddSingleton<IProductImageStorage, ProductImageStorage>();
 
 // Catalog publishes product events; it consumes none of its own.

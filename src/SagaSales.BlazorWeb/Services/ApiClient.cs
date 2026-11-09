@@ -383,4 +383,35 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public Task<List<ExpiringBatchDto>?> GetExpiringAsync(int maxRows = 50)
         => GetAsync<List<ExpiringBatchDto>>($"api/inventory/expiring?maxRows={maxRows}");
+
+    // ── inventory control report (spec 004) ────────────────────────────────
+    public Task<List<InventoryReportRowDto>?> GetInventoryReportAsync(Guid? branchId)
+        => GetAsync<List<InventoryReportRowDto>>("api/inventory/report" + BranchQuery(branchId));
+
+    /// <summary>The report as CSV bytes (with BOM), or null when the server refused it.</summary>
+    public async Task<byte[]?> GetInventoryReportCsvAsync(Guid? branchId)
+    {
+        var message = await BuildAsync(HttpMethod.Get, "api/inventory/report.csv" + BranchQuery(branchId), null);
+        var response = await http.SendAsync(message);
+        return response.IsSuccessStatusCode ? await response.Content.ReadAsByteArrayAsync() : null;
+    }
+
+    /// <summary>Saves a product's reorder data; keeps the reason when it fails (409 repeated code, 400 invalid).</summary>
+    public async Task<(bool Ok, System.Net.HttpStatusCode? Status, string? Error)> SetInventorySettingsAsync(
+        Guid productId,
+        InventorySettingsRequest request)
+    {
+        var message = await BuildAsync(HttpMethod.Put, $"api/inventory/products/{productId}/settings", request);
+        var response = await http.SendAsync(message);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return (true, response.StatusCode, null);
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        return (false, response.StatusCode, ExtractError(body));
+    }
+
+    private static string BranchQuery(Guid? branchId) => branchId is { } id ? $"?branchId={id}" : string.Empty;
 }

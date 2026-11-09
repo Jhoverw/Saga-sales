@@ -109,4 +109,39 @@ public sealed class InventoryController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(new Queries.GetExpiringBatchesQuery(branchId, maxRows), cancellationToken);
         return Ok(result.Value);
     }
+
+    /// <summary>Inventory control report (spec 004): what to restock first, value, last sale, supplier.</summary>
+    [HttpGet("report")]
+    [ProducesResponseType(typeof(IReadOnlyList<InventoryReportRowDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Report([FromQuery] Guid? branchId = null, CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new Queries.GetInventoryReportQuery(branchId), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>The same report as CSV: semicolons, decimal point and UTF-8 BOM so Excel opens it directly.</summary>
+    [HttpGet("report.csv")]
+    [Produces("text/csv")]
+    public async Task<IActionResult> ReportCsv([FromQuery] Guid? branchId = null, CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new Queries.GetInventoryReportQuery(branchId), cancellationToken);
+        var text = Services.InventoryReportCsv.Build(result.Value ?? []);
+        var bytes = System.Text.Encoding.UTF8.GetPreamble()
+            .Concat(System.Text.Encoding.UTF8.GetBytes(text))
+            .ToArray();
+
+        return File(bytes, "text/csv", $"control-inventario-{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    /// <summary>Reorder data of a product; never changes price or stock (spec 004, FR-008).</summary>
+    [HttpPut("products/{productId:guid}/settings")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetSettings(
+        Guid productId,
+        [FromBody] InventorySettingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(new Commands.SetInventorySettingsCommand(productId, request), cancellationToken);
+        return NoContent();
+    }
 }

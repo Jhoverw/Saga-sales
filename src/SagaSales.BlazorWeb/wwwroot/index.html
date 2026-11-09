@@ -137,6 +137,15 @@
         window.sagaPrint = function () { window.print(); };
         // Keeps the cashier's hands on the keyboard: returns the cursor to an element by id.
         window.sagaFocus = function (id) { var el = document.getElementById(id); if (el) el.focus(); };
+        // Saves a file the app built in memory (for example a CSV report).
+        window.sagaDownload = function (fileName, contentType, base64) {
+            var link = document.createElement('a');
+            link.href = 'data:' + contentType + ';base64,' + base64;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        };
     </script>
     <script src="_framework/blazor.webassembly.js" autostart="false"
             onerror="window.sagaBootError('no se pudo cargar _framework/blazor.webassembly.js (404)')"></script>
