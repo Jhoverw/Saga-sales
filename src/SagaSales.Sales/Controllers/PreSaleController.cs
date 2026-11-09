@@ -25,7 +25,7 @@ public class PreSaleController : ControllerBase
             Qty = request.Qty,
             ExpectedDate = request.ExpectedDate,
             Status = PreSaleStatus.Pendiente,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
         };
         _store.Add(pre);
         var dto = new PreSaleDto
@@ -35,7 +35,7 @@ public class PreSaleController : ControllerBase
             CustomerId = pre.CustomerId,
             Qty = pre.Qty,
             ExpectedDate = pre.ExpectedDate,
-            Status = pre.Status.ToString()
+            Status = pre.Status.ToString(),
         };
         return Task.FromResult<ActionResult<PreSaleDto>>(CreatedAtAction(nameof(Get), new { id = pre.Id }, dto));
     }
@@ -44,7 +44,11 @@ public class PreSaleController : ControllerBase
     public Task<ActionResult<PreSaleDto>> Get(Guid id)
     {
         var pre = _store.Find(p => p.Id == id);
-        if (pre == null) return Task.FromResult<ActionResult<PreSaleDto>>(NotFound());
+        if (pre == null)
+        {
+            return Task.FromResult<ActionResult<PreSaleDto>>(NotFound());
+        }
+
         var dto = new PreSaleDto
         {
             Id = pre.Id,
@@ -52,7 +56,7 @@ public class PreSaleController : ControllerBase
             CustomerId = pre.CustomerId,
             Qty = pre.Qty,
             ExpectedDate = pre.ExpectedDate,
-            Status = pre.Status.ToString()
+            Status = pre.Status.ToString(),
         };
         return Task.FromResult<ActionResult<PreSaleDto>>(Ok(dto));
     }

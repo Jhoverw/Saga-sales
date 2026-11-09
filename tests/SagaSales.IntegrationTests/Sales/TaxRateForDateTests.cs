@@ -26,14 +26,14 @@ public class TaxRateForDateTests
         await connection.OpenAsync();
 
         // Jan 2026: 8 %, from Feb 2026 on: 15 %, open-ended.
-        await InsertRateAsync(connection, tenantId, 0.08m, new DateTime(2026, 1, 1), new DateTime(2026, 1, 31));
-        await InsertRateAsync(connection, tenantId, 0.15m, new DateTime(2026, 2, 1), null);
+        await InsertRateAsync(connection, tenantId, 0.08m, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Unspecified), new DateTime(2026, 1, 31, 0, 0, 0, DateTimeKind.Unspecified));
+        await InsertRateAsync(connection, tenantId, 0.15m, new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Unspecified), null);
 
-        Assert.Null(await CurrentAsync(connection, tenantId, new DateTime(2025, 12, 31)));
-        Assert.Equal(0.08m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 1, 1)))!.RatePercentage);
-        Assert.Equal(0.08m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 1, 31)))!.RatePercentage);
-        Assert.Equal(0.15m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 2, 1)))!.RatePercentage);
-        Assert.Equal(0.15m, (await CurrentAsync(connection, tenantId, new DateTime(2099, 12, 31)))!.RatePercentage);
+        Assert.Null(await CurrentAsync(connection, tenantId, new DateTime(2025, 12, 31, 0, 0, 0, DateTimeKind.Unspecified)));
+        Assert.Equal(0.08m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Unspecified)))!.RatePercentage);
+        Assert.Equal(0.08m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 1, 31, 0, 0, 0, DateTimeKind.Unspecified)))!.RatePercentage);
+        Assert.Equal(0.15m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Unspecified)))!.RatePercentage);
+        Assert.Equal(0.15m, (await CurrentAsync(connection, tenantId, new DateTime(2099, 12, 31, 0, 0, 0, DateTimeKind.Unspecified)))!.RatePercentage);
     }
 
     [Fact]
@@ -48,11 +48,11 @@ public class TaxRateForDateTests
         await using var connection = new SqlConnection(TestDatabase.ForService("sales"));
         await connection.OpenAsync();
 
-        await InsertRateAsync(connection, tenantId, 0.15m, new DateTime(2026, 2, 1), null);
-        await InsertRateAsync(connection, tenantId, 0.10m, new DateTime(2026, 3, 1), new DateTime(2026, 3, 31));
+        await InsertRateAsync(connection, tenantId, 0.15m, new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Unspecified), null);
+        await InsertRateAsync(connection, tenantId, 0.10m, new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Unspecified), new DateTime(2026, 3, 31, 0, 0, 0, DateTimeKind.Unspecified));
 
-        Assert.Equal(0.10m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 3, 15)))!.RatePercentage);
-        Assert.Equal(0.15m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 4, 1)))!.RatePercentage);
+        Assert.Equal(0.10m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Unspecified)))!.RatePercentage);
+        Assert.Equal(0.15m, (await CurrentAsync(connection, tenantId, new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Unspecified)))!.RatePercentage);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class TaxRateForDateTests
         await using var connection = new SqlConnection(TestDatabase.ForService("sales"));
         await connection.OpenAsync();
 
-        await InsertRateAsync(connection, tenantId, 0.15m, new DateTime(2000, 1, 1), null);
+        await InsertRateAsync(connection, tenantId, 0.15m, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Unspecified), null);
 
         var lines = JsonSerializer.Serialize(new object[]
         {

@@ -1,7 +1,7 @@
 using SagaSales.Shared.Enums;
 using SagaSales.Shared.Exceptions;
-using PaymentRecord = SagaSales.Payment.Domain.Payment;
 using Xunit;
+using PaymentRecord = SagaSales.Payment.Domain.Payment;
 
 namespace SagaSales.UnitTests.Domain;
 

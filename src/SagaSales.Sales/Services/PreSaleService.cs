@@ -20,7 +20,7 @@ public class PreSaleService
             Qty = request.Qty,
             ExpectedDate = request.ExpectedDate,
             Status = PreSaleStatus.Pendiente,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
         };
         _store.Add(pre);
         var dto = new PreSaleDto
@@ -30,7 +30,7 @@ public class PreSaleService
             CustomerId = pre.CustomerId,
             Qty = pre.Qty,
             ExpectedDate = pre.ExpectedDate,
-            Status = pre.Status.ToString()
+            Status = pre.Status.ToString(),
         };
         return Task.FromResult(dto);
     }
@@ -38,7 +38,11 @@ public class PreSaleService
     public Task<PreSaleDto?> GetAsync(Guid id)
     {
         var pre = _store.Find(p => p.Id == id);
-        if (pre == null) return Task.FromResult<PreSaleDto?>(null);
+        if (pre == null)
+        {
+            return Task.FromResult<PreSaleDto?>(null);
+        }
+
         var dto = new PreSaleDto
         {
             Id = pre.Id,
@@ -46,7 +50,7 @@ public class PreSaleService
             CustomerId = pre.CustomerId,
             Qty = pre.Qty,
             ExpectedDate = pre.ExpectedDate,
-            Status = pre.Status.ToString()
+            Status = pre.Status.ToString(),
         };
         return Task.FromResult<PreSaleDto?>(dto);
     }

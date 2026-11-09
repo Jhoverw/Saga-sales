@@ -23,8 +23,8 @@ public sealed class CreateCustomerCommandHandler(ICustomerRepository repository)
 {
     public async Task<Result<CustomerDto>> Handle(CreateCustomerCommand request, CancellationToken cancellationToken)
     {
-        // Names, business name and identification are checked by CreateCustomerCommandValidator;
-        // duplicates (email or identification) surface from the procedure as CONFLICT → 409.
+        // Names, business name and identification are checked by CreateCustomerCommandValidator.
+        // A repeated email or identification comes back from the procedure as CONFLICT (HTTP 409).
         var customer = await repository.CreateAsync(
             request.FirstName?.Trim() ?? string.Empty,
             request.LastName?.Trim() ?? string.Empty,

@@ -22,16 +22,6 @@ public static class OrderMapping
         Items = order.Items.Select(i => i.ToDto()).ToList(),
     };
 
-    /// <summary>
-    /// Maps an order whose lines were read separately (the order row cannot carry them).
-    /// </summary>
-    public static OrderDto ToDtoWith(this Order order, IEnumerable<OrderItem> lines)
-    {
-        var dto = order.ToDto();
-        dto.Items = lines.Select(l => l.ToDto()).ToList();
-        return dto;
-    }
-
     public static OrderLineDto ToDto(this OrderItem item) => new()
     {
         ProductId = item.ProductId,
@@ -43,4 +33,14 @@ public static class OrderMapping
         // from the product's base price.
         PriceSource = PriceSource.Base,
     };
+
+    /// <summary>
+    /// Maps an order whose lines were read separately (the order row cannot carry them).
+    /// </summary>
+    public static OrderDto ToDtoWith(this Order order, IEnumerable<OrderItem> lines)
+    {
+        var dto = order.ToDto();
+        dto.Items = lines.Select(l => l.ToDto()).ToList();
+        return dto;
+    }
 }

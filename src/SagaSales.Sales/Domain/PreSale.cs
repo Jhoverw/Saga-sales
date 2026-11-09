@@ -17,5 +17,5 @@ public enum PreSaleStatus
 {
     Pendiente = 0,
     Listo = 1,
-    Cancelado = 2
+    Cancelado = 2,
 }

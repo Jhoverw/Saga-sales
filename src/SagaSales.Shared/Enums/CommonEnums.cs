@@ -8,7 +8,7 @@ public enum OrderStatus
     Shipped = 4,
     Delivered = 5,
     Cancelled = 6,
-    Refunded = 7
+    Refunded = 7,
 }
 
 public enum PaymentStatus
@@ -18,7 +18,7 @@ public enum PaymentStatus
     Captured = 3,
     Failed = 4,
     Refunded = 5,
-    PartiallyRefunded = 6
+    PartiallyRefunded = 6,
 }
 
 public enum PaymentMethod
@@ -28,7 +28,7 @@ public enum PaymentMethod
     PayPal = 3,
     BankTransfer = 4,
     CashOnDelivery = 5,
-    Stripe = 6
+    Stripe = 6,
 }
 
 public enum ProductStatus
@@ -37,7 +37,7 @@ public enum ProductStatus
     Active = 2,
     Inactive = 3,
     OutOfStock = 4,
-    Discontinued = 5
+    Discontinued = 5,
 }
 
 public enum CustomerStatus
@@ -45,7 +45,7 @@ public enum CustomerStatus
     Active = 1,
     Inactive = 2,
     Suspended = 3,
-    Deleted = 4
+    Deleted = 4,
 }
 
 public enum TenantStatus
@@ -53,7 +53,7 @@ public enum TenantStatus
     Active = 1,
     Trial = 2,
     Suspended = 3,
-    Cancelled = 4
+    Cancelled = 4,
 }
 
 public enum NotificationType
@@ -61,7 +61,7 @@ public enum NotificationType
     Email = 1,
     SMS = 2,
     Push = 3,
-    InApp = 4
+    InApp = 4,
 }
 
 public enum NotificationStatus
@@ -70,7 +70,7 @@ public enum NotificationStatus
     Sent = 2,
     Failed = 3,
     Delivered = 4,
-    Read = 5
+    Read = 5,
 }
 
 public enum Currency
@@ -82,7 +82,7 @@ public enum Currency
     COP = 170,
     ARS = 32,
     CLP = 152,
-    PEN = 604
+    PEN = 604,
 }
 
 /// <summary>Who the buyer is for pricing purposes (decision D5).</summary>

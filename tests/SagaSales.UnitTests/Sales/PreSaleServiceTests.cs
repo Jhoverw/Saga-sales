@@ -18,7 +18,7 @@ public class PreSaleServiceTests
             ProductId = Guid.NewGuid(),
             CustomerId = Guid.NewGuid(),
             Qty = 5,
-            ExpectedDate = DateTime.UtcNow.AddDays(10)
+            ExpectedDate = DateTime.UtcNow.AddDays(10),
         };
 
         var created = await service.CreateAsync(request);

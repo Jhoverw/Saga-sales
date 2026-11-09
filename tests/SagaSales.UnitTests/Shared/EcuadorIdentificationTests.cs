@@ -22,14 +22,14 @@ public class EcuadorIdentificationTests
     }
 
     [Theory]
-    [InlineData("0102030401")]  // wrong check digit
-    [InlineData("1700000002")]  // wrong check digit
-    [InlineData("2500000000")]  // province 25 does not exist
-    [InlineData("0000000000")]  // province 00 does not exist
-    [InlineData("1770000001")]  // third digit 7 is not a natural person
-    [InlineData("170000000")]   // 9 digits
+    [InlineData("0102030401")] // wrong check digit
+    [InlineData("1700000002")] // wrong check digit
+    [InlineData("2500000000")] // province 25 does not exist
+    [InlineData("0000000000")] // province 00 does not exist
+    [InlineData("1770000001")] // third digit 7 is not a natural person
+    [InlineData("170000000")] // 9 digits
     [InlineData("17000000011")] // 11 digits
-    [InlineData("17000000A1")]  // not only digits
+    [InlineData("17000000A1")] // not only digits
     [InlineData("")]
     [InlineData(null)]
     public void Invalid_cedulas_are_rejected(string? cedula)
@@ -54,7 +54,7 @@ public class EcuadorIdentificationTests
     [InlineData("1760001550000")] // public entity with establishment 0000
     [InlineData("1780012345001")] // third digit 8 is not used
     [InlineData("2590012345001")] // province 25 does not exist
-    [InlineData("179001234500")]  // 12 digits
+    [InlineData("179001234500")] // 12 digits
     [InlineData("")]
     [InlineData(null)]
     public void Invalid_rucs_are_rejected(string? ruc)
@@ -85,7 +85,7 @@ public class EcuadorIdentificationTests
     [Theory]
     [InlineData(IdentificationType.Cedula, "1700000002")]
     [InlineData(IdentificationType.Cedula, "1700000001001")] // a RUC is not a cedula
-    [InlineData(IdentificationType.Ruc, "1700000001")]       // a cedula is not a RUC
+    [InlineData(IdentificationType.Ruc, "1700000001")] // a cedula is not a RUC
     [InlineData(IdentificationType.Passport, "A")]
     [InlineData(IdentificationType.Passport, "AB 123")]
     [InlineData(IdentificationType.FinalConsumer, "1700000001")]

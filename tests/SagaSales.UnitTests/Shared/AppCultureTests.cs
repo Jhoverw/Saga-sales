@@ -47,8 +47,8 @@ public class AppCultureTests
     }
 
     [Theory]
-    [InlineData("1,5")]      // the comma is never a decimal separator
-    [InlineData("1,234.5")]  // no thousands separator in typed input
+    [InlineData("1,5")] // the comma is never a decimal separator
+    [InlineData("1,234.5")] // no thousands separator in typed input
     [InlineData("abc")]
     [InlineData("")]
     [InlineData(null)]

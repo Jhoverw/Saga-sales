@@ -286,7 +286,7 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     // ── tax report (V‑09) ───────────────────────────────────────────────────────
     public Task<IReadOnlyList<TaxPeriodReportDto>?> GetIvaReportAsync(DateTime from, DateTime to)
-        => GetAsync<IReadOnlyList<TaxPeriodReportDto>>( $"api/reports/iva?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}" );
+        => GetAsync<IReadOnlyList<TaxPeriodReportDto>>($"api/reports/iva?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}");
 
 
     public Task<List<TaxRateDto>?> GetTaxRatesAsync()

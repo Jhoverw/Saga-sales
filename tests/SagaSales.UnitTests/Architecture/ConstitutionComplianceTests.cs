@@ -13,7 +13,7 @@ namespace SagaSales.UnitTests.Architecture;
 [Trait("Category", "KnownDebt")]
 public class ConstitutionComplianceTests
 {
-    // Procedures that legitimately run before a tenant is known. Every entry needs a reason;
+    // Procedures that legitimately run before a tenant is known. Every entry needs a reason.
     // an entry here is a documented exception, not a way to silence a finding.
     private static readonly Dictionary<string, string> GlobalProcedureAllowlist = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -63,9 +63,9 @@ public class ConstitutionComplianceTests
 
         // Guard against a scanner that silently matches nothing and passes for the wrong reason.
         Assert.True(scanned >= 50, $"Expected to scan at least 50 procedures, found {scanned}.");
-        Assert.True(violations.Count == 0,
-            "Stored procedures must take p_tenant_id as first parameter (constitution §V):\n" +
-            string.Join("\n", violations));
+        Assert.True(
+            violations.Count == 0,
+            "Stored procedures must take p_tenant_id as first parameter (constitution §V):\n" + string.Join("\n", violations));
     }
 
     [Fact]
@@ -77,7 +77,8 @@ public class ConstitutionComplianceTests
             .Select(p => Path.GetRelativePath(root, p))
             .ToList();
 
-        Assert.True(offenders.Count == 0,
+        Assert.True(
+            offenders.Count == 0,
             "EF Core is forbidden (constitution §VIII). Remove these references:\n" + string.Join("\n", offenders));
     }
 
@@ -90,7 +91,8 @@ public class ConstitutionComplianceTests
             .Select(p => Path.GetRelativePath(root, p))
             .ToList();
 
-        Assert.True(offenders.Count == 0,
+        Assert.True(
+            offenders.Count == 0,
             "All projects must target net10.0 (constitution Technology Constraints):\n" + string.Join("\n", offenders));
     }
 

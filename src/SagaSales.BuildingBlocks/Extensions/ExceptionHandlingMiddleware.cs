@@ -24,6 +24,7 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
             // The field-level reasons are the useful part: without them the client can only say
             // "validation failed" and the operator has no idea which box to fix.
             logger.LogWarning(
+                ex,
                 "Validation error on {Path}: {Errors}",
                 context.Request.Path,
                 string.Join("; ", ex.Errors.Select(e => $"{e.Key}: {string.Join(", ", e.Value)}")));

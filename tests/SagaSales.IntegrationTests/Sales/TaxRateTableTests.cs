@@ -28,7 +28,7 @@ public class TaxRateTableTests
         var owner = Guid.NewGuid();
         var stranger = Guid.NewGuid();
         var description = "IT-" + Guid.NewGuid().ToString("N")[..8];
-        var start = new DateTime(2026, 3, 1);
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
         await connection.ExecuteAsync(
             "INSERT INTO dbo.tax_rates (tenant_id, rate_percentage, start_date, end_date, description) " +

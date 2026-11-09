@@ -82,7 +82,7 @@ public class NotificationDispatcherTests
             "<p>Thanks</p>",
             CancellationToken.None);
 
-        Assert.True(result is Guid);
+        Assert.NotEqual(Guid.Empty, result);
         repository.Verify(
             r => r.CreateNotificationAsync(
                 It.IsAny<Guid>(),

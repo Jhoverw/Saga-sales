@@ -41,8 +41,8 @@ public class Result<T> : Result
     }
 
     public static Result<T> Success(T value) => new(value);
-    public static Result<T> Failure(Error error) => new(error);
-    public static Result<T> Failure(IReadOnlyList<Error> errors) => new(errors);
+    public static new Result<T> Failure(Error error) => new(error);
+    public static new Result<T> Failure(IReadOnlyList<Error> errors) => new(errors);
 
     public static implicit operator Result<T>(T value) => Success(value);
     public static implicit operator Result<T>(Error error) => Failure(error);
