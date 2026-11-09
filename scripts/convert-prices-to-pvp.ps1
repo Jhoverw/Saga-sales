@@ -15,15 +15,23 @@
 .PARAMETER DryRun
     Shows what would change, without changing anything. Run this first.
 
+.PARAMETER MarkOnly
+    Use when the prices typed in Productos already are the PVP (for example Coca-Cola shows 0.40):
+    every product is marked as PVP and NO price changes.
+
 .EXAMPLE
     ./scripts/convert-prices-to-pvp.ps1 -DryRun
 
 .EXAMPLE
     ./scripts/convert-prices-to-pvp.ps1
+
+.EXAMPLE
+    ./scripts/convert-prices-to-pvp.ps1 -MarkOnly -DryRun
 #>
 [CmdletBinding()]
 param(
     [switch]$DryRun,
+    [switch]$MarkOnly,
     [string]$DatabasePrefix = 'saga_',
     [string]$DatabaseSuffix = '',
     [string]$User = 'sa',
@@ -36,6 +44,7 @@ $ErrorActionPreference = 'Stop'
 $catalog = "$DatabasePrefix" + 'catalog' + "$DatabaseSuffix"
 $sales = "$DatabasePrefix" + 'sales' + "$DatabaseSuffix"
 $apply = if ($DryRun) { 0 } else { 1 }
+$markOnly = if ($MarkOnly) { 1 } else { 0 }
 
 $sql = @"
 SET NOCOUNT ON;
@@ -50,6 +59,7 @@ END
 
 DECLARE @today date = CAST(SYSUTCDATETIME() AS date);
 DECLARE @apply bit = $apply;
+DECLARE @mark_only bit = $markOnly;
 
 -- VAT in force today for every store that still has unconverted products.
 SELECT t.tenant_id, r.rate_percentage
@@ -68,9 +78,12 @@ OUTER APPLY
 PRINT '== Tiendas sin IVA vigente (sus productos gravados NO se convierten):';
 SELECT CONCAT('   ', CAST(tenant_id AS varchar(36))) FROM #rates WHERE rate_percentage IS NULL;
 
-PRINT '== Productos gravados a convertir (precio sin IVA -> PVP):';
+IF @mark_only = 1
+    PRINT '== MarkOnly: los precios ya son PVP; se marcan sin cambiar ningun precio:';
+ELSE
+    PRINT '== Productos gravados a convertir (precio sin IVA -> PVP):';
 SELECT CONCAT('   ', p.name, ': ', CAST(p.base_price AS decimal(18,2)), ' -> ',
-              CAST(ROUND(p.base_price * (1 + r.rate_percentage), 2) AS decimal(18,2)),
+              CAST(CASE WHEN @mark_only = 1 THEN p.base_price ELSE ROUND(p.base_price * (1 + r.rate_percentage), 2) END AS decimal(18,2)),
               '  (IVA ', CAST(r.rate_percentage * 100 AS decimal(5,2)), ' %)')
 FROM [$catalog].dbo.products p
 JOIN #rates r ON r.tenant_id = p.tenant_id
@@ -92,7 +105,7 @@ END
 BEGIN TRAN;
 
 UPDATE p
-SET base_price = ROUND(p.base_price * (1 + r.rate_percentage), 2),
+SET base_price = CASE WHEN @mark_only = 1 THEN p.base_price ELSE ROUND(p.base_price * (1 + r.rate_percentage), 2) END,
     price_includes_tax = 1,
     updated_at = SYSUTCDATETIME()
 FROM [$catalog].dbo.products p
@@ -116,7 +129,7 @@ PRINT CONCAT('== LISTO: ', @converted, ' producto(s) gravados convertidos a PVP;
 $file = Join-Path ([System.IO.Path]::GetTempPath()) 'saga-convert-prices-to-pvp.sql'
 Set-Content -Path $file -Value $sql -Encoding UTF8
 
-Write-Host ("Conversión a PVP · catálogo {0} · ventas {1} · {2}" -f $catalog, $sales, $(if ($DryRun) { 'DRY RUN' } else { 'APLICANDO' })) -ForegroundColor Cyan
+Write-Host ("Conversión a PVP · catálogo {0} · ventas {1} · {2}" -f $catalog, $sales, ($(if ($DryRun) { 'DRY RUN' } else { 'APLICANDO' }) + $(if ($MarkOnly) { ' · SOLO MARCAR' } else { '' }))) -ForegroundColor Cyan
 
 Get-Content $file -Raw | docker exec -i $Container /opt/mssql-tools18/bin/sqlcmd `
     -S localhost -U $User -P "$Password" -C -d master -b -I -h -1 -W
