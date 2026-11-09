@@ -36,7 +36,9 @@ public class MyDayContractTests
 
         using (var cashierSale = await cashier.SendAsync(Request(HttpMethod.Post, "api/orders", owner.TenantId, Sale(product.Id, 1))))
         {
-            Assert.Equal(HttpStatusCode.Created, cashierSale.StatusCode);
+            Assert.True(
+                cashierSale.StatusCode == HttpStatusCode.Created,
+                $"Venta del cajero: {(int)cashierSale.StatusCode} {await cashierSale.Content.ReadAsStringAsync()}");
         }
 
         // Aunque pida las ventas del dueño, el cajero recibe solo las suyas (FR-005).

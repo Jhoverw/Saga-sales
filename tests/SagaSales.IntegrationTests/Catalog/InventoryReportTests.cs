@@ -241,13 +241,14 @@ public class InventoryReportTests
         SqlConnection connection, Guid tenantId, Guid productId, string supplier, string receivedAt)
     {
         await connection.ExecuteAsync(
-            "DECLARE @supplier uniqueidentifier = NEWID(), @purchase uniqueidentifier = NEWID();" +
-            "INSERT INTO dbo.suppliers (id, tenant_id, name) VALUES (@supplier, @TenantId, @Supplier);" +
+            // T-SQL variable names ignore case: the local ids must not be called like the Dapper parameters.
+            "DECLARE @new_supplier_id uniqueidentifier = NEWID(), @new_purchase_id uniqueidentifier = NEWID();" +
+            "INSERT INTO dbo.suppliers (id, tenant_id, name) VALUES (@new_supplier_id, @TenantId, @SupplierName);" +
             "INSERT INTO dbo.purchases (id, tenant_id, supplier_id, status, received_at, created_by) " +
-            "VALUES (@purchase, @TenantId, @supplier, 2, @ReceivedAt, NEWID());" +
+            "VALUES (@new_purchase_id, @TenantId, @new_supplier_id, 2, @ReceivedAt, NEWID());" +
             "INSERT INTO dbo.purchase_lines (tenant_id, purchase_id, product_id, product_name, quantity, unit_cost, effective_unit_cost, line_total) " +
-            "VALUES (@TenantId, @purchase, @ProductId, N'Coca Cola', 10, 0.30, 0.30, 3.00);",
-            new { TenantId = tenantId, Supplier = supplier, ReceivedAt = receivedAt, ProductId = productId });
+            "VALUES (@TenantId, @new_purchase_id, @ProductId, N'Coca Cola', 10, 0.30, 0.30, 3.00);",
+            new { TenantId = tenantId, SupplierName = supplier, ReceivedAt = receivedAt, ProductId = productId });
     }
 
     private static async Task<List<ReportRow>> ReportAsync(SqlConnection connection, Guid tenantId, Guid? branchId = null)

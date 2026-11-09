@@ -93,6 +93,26 @@ public class TenantProceduresTests
     }
 
     [Fact]
+    public async Task A_second_store_cannot_register_with_an_email_already_in_use()
+    {
+        if (TestDatabase.TryAnnounceSkip(nameof(A_second_store_cannot_register_with_an_email_already_in_use)))
+        {
+            return;
+        }
+
+        // Spec 005: login is by email only, so an active email belongs to one store.
+        var shared = $"shared-{Guid.NewGuid():N}@integration.local";
+
+        await using var connection = new SqlConnection(TestDatabase.ForService("identity"));
+        await connection.OpenAsync();
+
+        await RegisterAsync(connection, NewSlug(), shared);
+
+        var exception = await Assert.ThrowsAsync<SqlException>(() => RegisterAsync(connection, NewSlug(), shared));
+        Assert.Contains("CONFLICT", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Find_by_email_reports_ambiguity_instead_of_guessing()
     {
         if (TestDatabase.TryAnnounceSkip(nameof(Find_by_email_reports_ambiguity_instead_of_guessing)))
@@ -100,21 +120,20 @@ public class TenantProceduresTests
             return;
         }
 
-        // The same address in two different stores must not authenticate silently.
+        // Rows written before spec 005 can still share an email: login must refuse to guess.
         var shared = $"shared-{Guid.NewGuid():N}@integration.local";
 
         await using var connection = new SqlConnection(TestDatabase.ForService("identity"));
         await connection.OpenAsync();
 
-        foreach (var slug in new[] { NewSlug(), NewSlug() })
-        {
-            await connection.QuerySingleAsync<TenantRegistrationRow>(
-                "dbo.sp_tenant_create",
-                new DynamicParameters()
-                    .WithSlug(slug)
-                    .WithEmail(shared),
-                commandType: CommandType.StoredProcedure);
-        }
+        var first = await RegisterAsync(connection, NewSlug(), shared);
+        var second = await RegisterAsync(connection, NewSlug(), $"other-{Guid.NewGuid():N}@integration.local");
+
+        await connection.ExecuteAsync(
+            "INSERT INTO dbo.users (id, tenant_id, email, password_hash, role, display_name, is_active) " +
+            "SELECT NEWID(), @SecondTenant, email, password_hash, role, display_name, 1 " +
+            "FROM dbo.users WHERE tenant_id = @FirstTenant AND email = @Email;",
+            new { FirstTenant = first.Id, SecondTenant = second.Id, Email = shared });
 
         var exception = await Assert.ThrowsAsync<SqlException>(() =>
             connection.QueryAsync<object>(
@@ -124,6 +143,14 @@ public class TenantProceduresTests
 
         Assert.Contains("CONFLICT", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static Task<TenantRegistrationRow> RegisterAsync(SqlConnection connection, string slug, string email) =>
+        connection.QuerySingleAsync<TenantRegistrationRow>(
+            "dbo.sp_tenant_create",
+            new DynamicParameters()
+                .WithSlug(slug)
+                .WithEmail(email),
+            commandType: CommandType.StoredProcedure);
 
     private sealed class TenantRegistrationRow
     {

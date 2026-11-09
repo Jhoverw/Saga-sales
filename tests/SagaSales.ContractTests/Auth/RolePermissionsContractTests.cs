@@ -37,7 +37,9 @@ public class RolePermissionsContractTests
             ShippingAddress = "Mostrador",
             Items = [new OrderItemRequest { ProductId = product.Id, Quantity = 1 }],
         }));
-        Assert.Equal(HttpStatusCode.Created, sale.StatusCode);
+        Assert.True(
+            sale.StatusCode == HttpStatusCode.Created,
+            $"Venta del cajero: {(int)sale.StatusCode} {await sale.Content.ReadAsStringAsync()}");
 
         // Forbidden: refund, prices, analytics, users.
         using var refund = await cashier.SendAsync(Request(HttpMethod.Post, $"api/payments/{Guid.NewGuid()}/refund", owner.TenantId, new { amount = 1m }));
