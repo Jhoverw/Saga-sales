@@ -121,14 +121,14 @@ else
                             }
                             <table class="table table-sm mb-2">
                                 <tbody>
-                                    @foreach (var code in Barcodes)
+                                    @foreach (var item in Barcodes)
                                     {
                                         <tr>
-                                            <td class="font-monospace">@code.Barcode</td>
-                                            <td>@(code.Units > 1 ? $"caja x{code.Units}" : "unidad")</td>
-                                            <td>@(code.IsPrimary ? "principal" : "")</td>
+                                            <td class="font-monospace">@item.Barcode</td>
+                                            <td>@(item.Units > 1 ? $"caja x{item.Units}" : "unidad")</td>
+                                            <td>@(item.IsPrimary ? "principal" : "")</td>
                                             <td class="text-end">
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveBarcodeAsync(code)">Quitar</button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveBarcodeAsync(item)">Quitar</button>
                                             </td>
                                         </tr>
                                     }
