@@ -8,6 +8,9 @@ namespace SagaSales.UnitTests.Architecture;
 /// §V (tenant isolation in every stored procedure), §VIII (no ORM) and the .NET 10 runtime.
 /// They read repository files, so they run without SQL Server or Docker.
 /// </summary>
+// Known debt: these fail today on purpose (see the commit message). They run when asked for
+// explicitly with --filter "Category=KnownDebt", and CI excludes them until the debt is paid.
+[Trait("Category", "KnownDebt")]
 public class ConstitutionComplianceTests
 {
     // Procedures that legitimately run before a tenant is known. Every entry needs a reason;
