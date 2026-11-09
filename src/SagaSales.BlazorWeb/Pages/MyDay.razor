@@ -8,13 +8,6 @@
 <style>
     .myday-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
     .myday-kpi--strong .kpi__value { color: var(--ok); }
-    .myday-chart { width: 100%; height: auto; display: block; }
-    .myday-chart .grid { stroke: var(--line); stroke-width: 1; }
-    .myday-chart .axis { fill: var(--text-faint); font-size: 11px; }
-    .myday-chart .line { fill: none; stroke: var(--cyan); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
-    .myday-chart .area { fill: rgba(45, 212, 255, .10); stroke: none; }
-    .myday-chart .dot { fill: var(--ink); stroke: var(--cyan); stroke-width: 2; }
-    .myday-chart .dot--today { fill: var(--cyan); }
     .myday-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
     .myday-table th { color: var(--text-muted); font-weight: 600; text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line-strong); }
     .myday-table td { padding: .35rem .5rem; border-bottom: 1px solid var(--line); }
@@ -98,27 +91,7 @@
                 }
                 else
                 {
-                    <svg class="myday-chart" viewBox="0 0 @ChartWidth @ChartHeight" role="img" aria-label="Ventas por día">
-                        @foreach (var tick in YTicks())
-                        {
-                            <line class="grid" x1="@N(PadLeft)" x2="@N(ChartWidth - PadRight)" y1="@N(Y(tick))" y2="@N(Y(tick))" />
-                            <g><text class="axis" x="@N(PadLeft - 6)" y="@N(Y(tick) + 4)" text-anchor="end">@tick.ToString("0.##", CultureInfo.InvariantCulture)</text></g>
-                        }
-                        <path class="area" d="@AreaPath()" />
-                        <polyline class="line" points="@LinePoints()" />
-                        @for (var i = 0; i < Days.Count; i++)
-                        {
-                            var day = Days[i];
-                            var isToday = i == Days.Count - 1;
-                            <circle class="dot @(isToday ? "dot--today" : "")" cx="@N(X(i))" cy="@N(Y(day.Total))" r="@(isToday ? "4.5" : "3.5")">
-                                <title>@day.Day.ToString("ddd dd/MM", CultureInfo.CurrentCulture): @Money(day.Total) · @day.Orders ventas</title>
-                            </circle>
-                            @if (i % 2 == 0 || isToday)
-                            {
-                                <g><text class="axis" x="@N(X(i))" y="@N(ChartHeight - 8)" text-anchor="middle">@day.Day.ToString("dd/MM", CultureInfo.InvariantCulture)</text></g>
-                            }
-                        }
-                    </svg>
+                    <SalesChart Days="Days" />
                 }
             </div>
         </div>
@@ -290,12 +263,6 @@
 
 @code {
     private const int ChartDays = 15;
-    private const double ChartWidth = 720;
-    private const double ChartHeight = 240;
-    private const double PadLeft = 52;
-    private const double PadRight = 16;
-    private const double PadTop = 14;
-    private const double PadBottom = 28;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
@@ -470,7 +437,6 @@
 
     private static string Money(decimal value) => "$" + value.ToString("#,##0.00", CultureInfo.InvariantCulture);
 
-    private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
     private static string CategoryLabel(PettyCashCategory category) => category switch
     {
@@ -480,54 +446,4 @@
         _ => "Otro",
     };
 
-    // ── gráfico de líneas sin librerías ─────────────────────────────────────
-    private decimal ChartMax()
-    {
-        var max = Days.Count == 0 ? 0 : Days.Max(d => d.Total);
-        return NiceCeiling(max <= 0 ? 10 : max);
-    }
-
-    private static decimal NiceCeiling(decimal value)
-    {
-        var magnitude = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)value)));
-        foreach (var step in new[] { 1m, 2m, 2.5m, 5m, 10m })
-        {
-            if (value <= step * magnitude)
-            {
-                return step * magnitude;
-            }
-        }
-
-        return 10m * magnitude;
-    }
-
-    private IEnumerable<decimal> YTicks()
-    {
-        var max = ChartMax();
-        for (var i = 0; i <= 4; i++)
-        {
-            yield return max * i / 4;
-        }
-    }
-
-    private double X(int index) => Days.Count <= 1
-        ? PadLeft
-        : PadLeft + (index * (ChartWidth - PadLeft - PadRight) / (Days.Count - 1));
-
-    private double Y(decimal value) =>
-        ChartHeight - PadBottom - ((double)(value / ChartMax()) * (ChartHeight - PadTop - PadBottom));
-
-    private string LinePoints() => string.Join(' ', Days.Select((d, i) => $"{N(X(i))},{N(Y(d.Total))}"));
-
-    private string AreaPath()
-    {
-        if (Days.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var baseline = N(ChartHeight - PadBottom);
-        var line = string.Join(' ', Days.Select((d, i) => $"L {N(X(i))} {N(Y(d.Total))}"));
-        return $"M {N(X(0))} {baseline} {line} L {N(X(Days.Count - 1))} {baseline} Z";
-    }
 }

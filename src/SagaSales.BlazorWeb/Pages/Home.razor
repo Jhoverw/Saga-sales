@@ -1,48 +1,37 @@
 @page "/"
 @attribute [AllowAnonymous]
+@inject ApiClient Api
+@using System.Globalization
 
-<div class="page-head">
-    <div>
-        <h1>Panel</h1>
-        <div class="page-head__sub">Resumen de la tienda</div>
-    </div>
-</div>
+<PageTitle>Panel</PageTitle>
+
+<style>
+    .home-head { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+    .home-head__title { flex: 1 1 280px; }
+    .home-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+    .home-delta { font-size: .8rem; font-weight: 600; margin-left: .35rem; }
+    .home-delta--up { color: var(--ok); }
+    .home-delta--down { color: var(--danger); }
+    .todo { list-style: none; margin: 0; padding: 0; }
+    .todo li { display: flex; align-items: center; gap: .75rem; padding: .6rem .25rem; border-bottom: 1px solid var(--line); }
+    .todo li:last-child { border-bottom: none; }
+    .todo__dot { width: .55rem; height: .55rem; border-radius: 50%; flex: none; }
+    .todo__dot--danger { background: var(--danger); }
+    .todo__dot--warn { background: var(--warn); }
+    .todo__dot--info { background: var(--info); }
+    .todo__text { flex: 1; }
+    .todo__text small { display: block; color: var(--text-muted); }
+    .home-top td { padding: .3rem .25rem; border-bottom: 1px solid var(--line); font-size: .88rem; }
+</style>
 
 <AuthorizeView>
-    <Authorized>
-        <div class="row g-3 mb-4">
-            <div class="col-12 col-md-4">
-                <div class="kpi">
-                    <div class="kpi__label">Sesión</div>
-                    <div class="kpi__value" style="font-size:1.05rem;font-weight:600;">
-                        @(context.User.FindFirst(ClaimTypes.Email)?.Value ?? "—")
-                    </div>
-                    <div class="kpi__meta">
-                        Rol <strong>@context.User.FindFirst(ClaimTypes.Role)?.Value</strong>
-                    </div>
-                </div>
-            </div>
-            <div class="col-12 col-md-4">
-                <div class="kpi">
-                    <div class="kpi__label">Tienda</div>
-                    <div class="kpi__value" style="font-size:1.05rem;font-weight:600;word-break:break-all;">
-                        @context.User.FindFirst(SagaSalesConstants.Claims.TenantId)?.Value
-                    </div>
-                    <div class="kpi__meta">Identificador del tenant</div>
-                </div>
-            </div>
-            <div class="col-12 col-md-4">
-                <div class="kpi">
-                    <div class="kpi__label">Estado</div>
-                    <div class="kpi__value" style="font-size:1.05rem;">
-                        <span class="chip chip--ok">Activo</span>
-                    </div>
-                    <div class="kpi__meta">Sesión válida y tienda resuelta</div>
-                </div>
+    <NotAuthorized>
+        <div class="page-head">
+            <div>
+                <h1>Saga-Sales</h1>
+                <div class="page-head__sub">Caja, pedidos e inventario para tu tienda</div>
             </div>
         </div>
-    </Authorized>
-    <NotAuthorized>
         <div class="panel mb-4">
             <div class="panel__body d-flex flex-wrap align-items-center gap-3">
                 <div style="flex:1 1 260px;">
@@ -54,55 +43,281 @@
             </div>
         </div>
     </NotAuthorized>
+    <Authorized>
+        <div class="home-head">
+            <div class="home-head__title">
+                <h1 class="mb-0">Hola, @FirstName(context.User)</h1>
+                <div class="page-head__sub">
+                    @DateTime.Now.ToString("dddd d 'de' MMMM", CultureInfo.CurrentCulture) ·
+                    @(context.User.FindFirst("tenant_name")?.Value ?? "tu tienda") ·
+                    @(IsManager ? "toda la tienda" : "tus ventas")
+                </div>
+            </div>
+            <a class="btn btn-success btn-lg" href="/caja"><i class="fa-solid fa-cash-register me-2"></i>Vender</a>
+            <a class="btn btn-outline-primary btn-lg" href="/orders"><i class="fa-solid fa-truck-fast me-2"></i>Pedidos</a>
+        </div>
+
+        @if (Loading)
+        {
+            <div class="panel"><div class="empty">Cargando el resumen del día…</div></div>
+        }
+        else
+        {
+            <div class="home-kpis">
+                <div class="kpi">
+                    <div class="kpi__label">Vendido hoy</div>
+                    <div class="kpi__value">
+                        @Money(Today?.Total ?? 0)
+                        @if (DeltaPercent is { } delta)
+                        {
+                            <span class="home-delta @(delta >= 0 ? "home-delta--up" : "home-delta--down")">
+                                @(delta >= 0 ? "▲" : "▼") @Math.Abs(delta).ToString("0", CultureInfo.InvariantCulture) %
+                            </span>
+                        }
+                    </div>
+                    <div class="kpi__meta" title="Hoy comparado con el día completo de ayer">Ayer en total: @Money(Yesterday?.Total ?? 0)</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi__label">Ventas</div>
+                    <div class="kpi__value">@(Today?.Orders ?? 0)</div>
+                    <div class="kpi__meta">Ticket promedio @Money(AverageTicket)</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi__label">Efectivo en caja</div>
+                    <div class="kpi__value">@Money(Payments?.ExpectedCash ?? 0)</div>
+                    <div class="kpi__meta">Efectivo @Money(Payments?.Cash ?? 0) − caja chica @Money(Payments?.PettyCash ?? 0)</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi__label">Pedidos por verificar</div>
+                    <div class="kpi__value">@ToVerify.Count</div>
+                    <div class="kpi__meta">@(ReadyToShip.Count) listos para enviar</div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-xl-5">
+                    <div class="panel h-100">
+                        <div class="panel__head">
+                            <div class="panel__title">Lo que hay que hacer</div>
+                            <span class="chip @(Todos.Any(t => t.Level == "danger") ? "chip--danger" : Todos.Count > 0 ? "chip--warn" : "chip--ok")">
+                                @(Todos.Count == 0 ? "Al día" : $"{Todos.Count} pendientes")
+                            </span>
+                        </div>
+                        <div class="panel__body">
+                            @if (Todos.Count == 0)
+                            {
+                                <div class="empty">Nada pendiente. Buen trabajo.</div>
+                            }
+                            else
+                            {
+                                <ul class="todo">
+                                    @foreach (var todo in Todos)
+                                    {
+                                        <li>
+                                            <span class="todo__dot todo__dot--@todo.Level"></span>
+                                            <span class="todo__text">@todo.Title<small>@todo.Detail</small></span>
+                                            <a class="btn btn-sm btn-outline-primary" href="@todo.Href">@todo.Action</a>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-xl-7">
+                    <div class="panel h-100">
+                        <div class="panel__head">
+                            <div>
+                                <div class="panel__title">Ventas de los últimos 15 días</div>
+                                <div class="page-head__sub">@Money(Sales?.Days.Sum(d => d.Total) ?? 0) en el período</div>
+                            </div>
+                        </div>
+                        <div class="panel__body">
+                            <SalesChart Days="@(Sales?.Days ?? [])" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel__head">
+                    <div class="panel__title">Lo más vendido hoy</div>
+                    <a class="btn btn-sm btn-outline-secondary" href="/mi-dia">Ver mi día</a>
+                </div>
+                <div class="panel__body">
+                    @if ((Sales?.TodayProducts.Count ?? 0) == 0)
+                    {
+                        <div class="empty">Todavía no hay ventas hoy.</div>
+                    }
+                    else
+                    {
+                        <table class="w-100 home-top">
+                            @foreach (var product in Sales!.TodayProducts.Take(5))
+                            {
+                                <tr>
+                                    <td>@product.ProductName</td>
+                                    <td class="text-end">@product.Quantity u.</td>
+                                    <td class="text-end">@Money(product.Total)</td>
+                                </tr>
+                            }
+                        </table>
+                    }
+                </div>
+            </div>
+        }
+    </Authorized>
 </AuthorizeView>
 
-<div class="row g-3">
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="panel h-100">
-            <div class="panel__body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <span class="chip chip--info">Catálogo</span>
-                </div>
-                <div class="panel__title mb-1">Productos y stock</div>
-                <p class="page-head__sub mb-3">Publica el surtido, define precios por tipo de cliente y controla existencias.</p>
-                <a class="btn btn-outline-primary btn-sm" href="/products">Abrir</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="panel h-100">
-            <div class="panel__body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <span class="chip chip--info">Pedidos</span>
-                </div>
-                <div class="panel__title mb-1">Órdenes y estados</div>
-                <p class="page-head__sub mb-3">Crea pedidos, registra el cobro y mueve cada orden por su ciclo.</p>
-                <a class="btn btn-outline-primary btn-sm" href="/orders">Abrir</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="panel h-100">
-            <div class="panel__body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <span class="chip chip--info">Clientes</span>
-                </div>
-                <div class="panel__title mb-1">Compradores</div>
-                <p class="page-head__sub mb-3">Alta, tipo de cliente y búsqueda por email o teléfono.</p>
-                <a class="btn btn-outline-primary btn-sm" href="/customers">Abrir</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-6 col-xl-3">
-        <div class="panel h-100">
-            <div class="panel__body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <span class="chip chip--info">Analítica</span>
-                </div>
-                <div class="panel__title mb-1">Resultados</div>
-                <p class="page-head__sub mb-3">Ingresos, pedidos y productos que tiran del negocio.</p>
-                <a class="btn btn-outline-primary btn-sm" href="/analytics">Abrir</a>
-            </div>
-        </div>
-    </div>
-</div>
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private bool Loading { get; set; } = true;
+
+    private bool IsManager { get; set; }
+
+    private SellerSalesSummaryDto? Sales { get; set; }
+
+    private PaymentDaySummaryDto? Payments { get; set; }
+
+    private List<RemoteOrderDto> Remote { get; set; } = [];
+
+    private List<Todo> Todos { get; set; } = [];
+
+    private DailySalesDto? Today => Sales?.Days.LastOrDefault();
+
+    private DailySalesDto? Yesterday => Sales is { Days.Count: > 1 } s ? s.Days[^2] : null;
+
+    private decimal AverageTicket => Today is { Orders: > 0 } t ? t.Total / t.Orders : 0;
+
+    /// <summary>Hoy contra el día completo de ayer: al final del día compara lo mismo con lo mismo.</summary>
+    private decimal? DeltaPercent => Yesterday is { Total: > 0 } y && Today is { } t ? (t.Total - y.Total) * 100 / y.Total : null;
+
+    private List<RemoteOrderDto> ToVerify => Remote.Where(o => o.Stage == "PorVerificar").ToList();
+
+    private List<RemoteOrderDto> ReadyToShip => Remote.Where(o => o.Stage == "EnPreparacion").ToList();
+
+    private sealed record Todo(string Level, string Title, string Detail, string Action, string Href);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return;
+        }
+
+        var user = (await AuthenticationStateTask).User;
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        IsManager = user.IsInRole(SagaSalesRoles.Owner) || user.IsInRole(SagaSalesRoles.Manager);
+
+        try
+        {
+            var salesTask = Api.GetSellerSummaryAsync(15);
+            var paymentsTask = Api.GetPaymentDaySummaryAsync();
+            var remoteTask = Api.GetRemoteOrdersAsync();
+            var alertsTask = Api.GetInventoryAlertsAsync();
+            var taxTask = Api.GetCurrentTaxAsync(DateTime.Now);
+            var branchesTask = IsManager ? Api.GetBranchesAsync() : Task.FromResult<List<BranchDto>?>(null);
+            var productsTask = IsManager ? Api.GetProductsAsync(1, 1) : Task.FromResult<PagedResult<ProductDto>?>(null);
+
+            Sales = await salesTask;
+            Payments = await paymentsTask;
+            Remote = await remoteTask ?? [];
+            var alerts = await alertsTask;
+            var tax = await taxTask;
+            var branches = await branchesTask;
+            var products = await productsTask;
+
+            Todos = BuildTodos(alerts, tax, branches, products);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private List<Todo> BuildTodos(
+        InventoryAlertsDto? alerts,
+        TaxRateDto? tax,
+        List<BranchDto>? branches,
+        PagedResult<ProductDto>? products)
+    {
+        var todos = new List<Todo>();
+
+        // Setting up: without these the first sale fails.
+        if (tax is null)
+        {
+            todos.Add(new("danger", "No hay tasa de IVA vigente", "Sin IVA no se puede vender.", IsManager ? "Configurar" : "Avisar", IsManager ? "/taxes" : "/"));
+        }
+
+        if (IsManager && branches is { Count: 0 })
+        {
+            todos.Add(new("danger", "La tienda no tiene sucursal", "El stock vive en una sucursal; créala primero.", "Crear", "/branches"));
+        }
+
+        if (IsManager && products is { TotalCount: 0 })
+        {
+            todos.Add(new("warn", "Todavía no hay productos", "Carga el catálogo para empezar a vender.", "Agregar", "/products"));
+        }
+
+        // Pedidos: what expires first goes first.
+        var expiring = ToVerify.Where(o => o.HoldUntil is { } h && h < DateTime.Now.AddHours(6)).ToList();
+        if (expiring.Count > 0)
+        {
+            var first = expiring.Min(o => o.HoldUntil!.Value);
+            todos.Add(new("danger", $"{expiring.Count} pedido(s) se anulan pronto", $"El primero vence a las {first:HH:mm} si no se verifica el pago.", "Verificar", "/orders"));
+        }
+
+        var waiting = ToVerify.Count - expiring.Count;
+        if (waiting > 0)
+        {
+            todos.Add(new("warn", $"{waiting} pedido(s) con pago por verificar", "Revisa el comprobante y confirma que el dinero llegó.", "Verificar", "/orders"));
+        }
+
+        if (ReadyToShip.Count > 0)
+        {
+            todos.Add(new("info", $"{ReadyToShip.Count} pedido(s) listos para enviar", "Pagados y verificados: prepara y registra la guía.", "Enviar", "/orders"));
+        }
+
+        // Inventario.
+        var outOfStock = alerts?.LowStock.Count(p => p.Stock <= 0) ?? 0;
+        var low = (alerts?.LowStock.Count ?? 0) - outOfStock;
+        var stockHref = IsManager ? "/analytics/inventory" : "/mi-dia";
+
+        if (outOfStock > 0)
+        {
+            todos.Add(new("danger", $"{outOfStock} producto(s) agotados", Names(alerts!.LowStock.Where(p => p.Stock <= 0).Select(p => p.Name)), "Ver", stockHref));
+        }
+
+        if (low > 0)
+        {
+            todos.Add(new("warn", $"{low} producto(s) en su nivel de reposición", Names(alerts!.LowStock.Where(p => p.Stock > 0).Select(p => p.Name)), IsManager ? "Reponer" : "Ver", stockHref));
+        }
+
+        if (alerts is { Expiring.Count: > 0 })
+        {
+            todos.Add(new("warn", $"{alerts.Expiring.Count} lote(s) por vencer", Names(alerts.Expiring.Select(b => b.ProductName)), "Ver", "/mi-dia"));
+        }
+
+        return todos;
+    }
+
+    private static string Names(IEnumerable<string> names)
+    {
+        var list = names.Distinct().ToList();
+        return list.Count <= 3 ? string.Join(", ", list) : $"{string.Join(", ", list.Take(3))} y {list.Count - 3} más";
+    }
+
+    private static string FirstName(System.Security.Claims.ClaimsPrincipal user)
+    {
+        var name = user.FindFirst(ClaimTypes.Name)?.Value ?? user.FindFirst(ClaimTypes.Email)?.Value ?? "";
+        var first = name.Split(' ', '@').FirstOrDefault(part => part.Length > 0);
+        return string.IsNullOrEmpty(first) ? "de nuevo" : first;
+    }
+
+    private static string Money(decimal value) => "$" + value.ToString("#,##0.00", CultureInfo.InvariantCulture);
+}
