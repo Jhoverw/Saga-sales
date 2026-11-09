@@ -1,0 +1,52 @@
+# CI de Saga-Sales: compila y ejecuta la suite de pruebas en cada push y PR.
+#
+# Las pruebas de integración y de contrato se omiten solas cuando no hay SQL Server ni
+# gateway (ver TestDatabase.cs y Gateway.cs); las unitarias son la puerta dura.
+# Para correr las tres capas contra servicios reales, usar scripts/test.ps1 en local.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore SagaSales.sln
+
+      - name: Build
+        run: dotnet build SagaSales.sln -c Release --no-restore
+
+      - name: Unit tests (hard gate)
+        run: >
+          dotnet test tests/SagaSales.UnitTests/SagaSales.UnitTests.csproj
+          -c Release --no-build
+          --logger "trx;LogFileName=unit.trx"
+          --results-directory TestResults
+
+      - name: Integration and contract tests (skip without services)
+        run: >
+          dotnet test SagaSales.sln
+          -c Release --no-build
+          --logger "trx;LogFileName=all.trx"
+          --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
