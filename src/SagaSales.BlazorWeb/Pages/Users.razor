@@ -62,7 +62,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var user in Users)
+                @foreach (var user in UserList)
                 {
                     <tr class="@(user.IsActive ? "" : "opacity-50")">
                         @if (EditingId == user.Id)
@@ -120,7 +120,7 @@
 </div>
 
 @code {
-    private List<UserDto> Users { get; set; } = [];
+    private List<UserDto> UserList { get; set; } = [];
 
     private string NewName { get; set; } = string.Empty;
     private string NewEmail { get; set; } = string.Empty;
@@ -145,7 +145,7 @@
     {
         try
         {
-            Users = await Api.GetUsersAsync() ?? [];
+            UserList = await Api.GetUsersAsync() ?? [];
         }
         catch (Exception ex)
         {
