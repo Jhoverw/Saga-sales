@@ -58,6 +58,25 @@ if (-not $DryRun) {
     }
 }
 
+# Accents must survive the trip PowerShell -> sqlcmd -> SQL Server; a script applied with "?" in its
+# messages is recorded as done and never re-run. Same path as the scripts, so a broken pipe is caught here.
+function Assert-Utf8Pipeline {
+    $probe = Join-Path ([System.IO.Path]::GetTempPath()) 'saga-utf8-probe.sql'
+    [System.IO.File]::WriteAllText(
+        $probe,
+        "SET NOCOUNT ON; IF UNICODE(N'" + [char]0x00FA + "') <> 250 THROW 50000, 'UTF8_PROBE: accents arrive broken', 1;",
+        (New-Object System.Text.UTF8Encoding($false)))
+    try {
+        Invoke-SqlFile -Database 'master' -Path $probe
+    }
+    catch {
+        throw 'Los scripts no llegan en UTF-8 a sqlcmd: las tildes se perderian. Nada se aplico.'
+    }
+    finally {
+        Remove-Item $probe -ErrorAction SilentlyContinue
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($Password)) {
     throw 'No password supplied. Pass -Password or set MSSQL_SA_PASSWORD.'
 }
@@ -66,7 +85,7 @@ function Invoke-Sql {
     param([string]$Database, [string]$Query)
 
     if ($useDocker) {
-        $result = & docker exec $Container /opt/mssql-tools18/bin/sqlcmd `
+        $result = & docker exec -e LC_ALL=C.UTF-8 -e LANG=C.UTF-8 $Container /opt/mssql-tools18/bin/sqlcmd `
             -S localhost -U $User -P "$Password" -C -d $Database -b -I -h -1 -W -Q $Query 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($result -join [Environment]::NewLine) }
         return ($result -join "`n").Trim()
@@ -89,8 +108,10 @@ function Invoke-SqlFile {
         $previousEncoding = $OutputEncoding
         $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
         try {
-            Get-Content $Path -Raw -Encoding UTF8 | docker exec -i $Container /opt/mssql-tools18/bin/sqlcmd `
-                -S localhost -U $User -P "$Password" -C -d $Database -b -I -f 65001
+            # LC_ALL: sqlcmd on Linux hands the batch to the ODBC driver as text in the locale's charset;
+            # the container's default locale is ASCII and every accent became "?".
+            Get-Content $Path -Raw -Encoding UTF8 | docker exec -i -e LC_ALL=C.UTF-8 -e LANG=C.UTF-8 $Container `
+                /opt/mssql-tools18/bin/sqlcmd -S localhost -U $User -P "$Password" -C -d $Database -b -I -f 65001
         }
         finally {
             $OutputEncoding = $previousEncoding
@@ -103,6 +124,10 @@ function Invoke-SqlFile {
     if ($TrustServerCertificate) { $arguments += @('-C') }
     & sqlcmd @arguments
     if ($LASTEXITCODE -ne 0) { throw "Script failed: $Path" }
+}
+
+if (-not $DryRun) {
+    Assert-Utf8Pipeline
 }
 
 $services = if ($Service) { @($Service) } else {
