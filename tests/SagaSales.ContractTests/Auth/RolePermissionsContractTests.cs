@@ -117,6 +117,27 @@ public class RolePermissionsContractTests
         Assert.Equal(HttpStatusCode.Unauthorized, users.StatusCode);
     }
 
+    [Fact]
+    public async Task A_session_cannot_name_another_store_in_the_header()
+    {
+        if (Gateway.TryAnnounceSkip(nameof(A_session_cannot_name_another_store_in_the_header)))
+        {
+            return;
+        }
+
+        using var storeA = await ContractSession.CreateAsync();
+        using var storeB = await ContractSession.CreateAsync();
+
+        // Store A's token with store B's id in X-Tenant-Id.
+        var request = storeA.Request(HttpMethod.Get, "api/orders");
+        request.Headers.Remove("X-Tenant-Id");
+        request.Headers.TryAddWithoutValidation("X-Tenant-Id", storeB.TenantId.ToString());
+
+        using var response = await storeA.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private static async Task<(UserDto User, string Email)> CreateCashierAsync(ContractSession owner)
     {
         var email = $"cajera-{Guid.NewGuid():N}@contract.local";
