@@ -44,7 +44,7 @@ $ErrorActionPreference = 'Stop'
 $catalog = "$DatabasePrefix" + 'catalog' + "$DatabaseSuffix"
 $sales = "$DatabasePrefix" + 'sales' + "$DatabaseSuffix"
 $apply = if ($DryRun) { 0 } else { 1 }
-$markOnly = if ($MarkOnly) { 1 } else { 0 }
+$markOnlyFlag = if ($MarkOnly) { 1 } else { 0 }
 
 $sql = @"
 SET NOCOUNT ON;
@@ -59,7 +59,7 @@ END
 
 DECLARE @today date = CAST(SYSUTCDATETIME() AS date);
 DECLARE @apply bit = $apply;
-DECLARE @mark_only bit = $markOnly;
+DECLARE @mark_only bit = $markOnlyFlag;
 
 -- VAT in force today for every store that still has unconverted products.
 SELECT t.tenant_id, r.rate_percentage
