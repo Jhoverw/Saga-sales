@@ -7,7 +7,8 @@ using SagaSales.BlazorWeb.Services;
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
 // One number format everywhere: the point is the decimal separator (constitution v2.4.0).
-SagaSales.Shared.Formatting.AppCulture.Apply();
+// Keeps the culture name Blazor started with (es-EC, see index.html): changing it aborts the app.
+SagaSales.Shared.Formatting.AppCulture.ApplyToCurrent();
 
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");

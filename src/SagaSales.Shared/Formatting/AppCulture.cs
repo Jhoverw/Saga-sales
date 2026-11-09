@@ -45,13 +45,31 @@ public static class AppCulture
         return culture;
     }
 
-    /// <summary>Makes <see cref="Current"/> the culture of the process and of every new thread.</summary>
-    public static void Apply()
+    /// <summary>Makes <see cref="Current"/> the culture of the process and of every new thread (services).</summary>
+    public static void Apply() => Set(Current, Current);
+
+    /// <summary>
+    /// Applies the point-decimal rule to the culture the host already started with, keeping its name.
+    /// Blazor WebAssembly only loads culture data for the culture it starts with and aborts when the
+    /// name changes, so the browser app uses this instead of <see cref="Apply"/>; index.html starts it
+    /// in es-EC.
+    /// </summary>
+    public static void ApplyToCurrent()
     {
-        CultureInfo.DefaultThreadCurrentCulture = Current;
-        CultureInfo.DefaultThreadCurrentUICulture = Current;
-        CultureInfo.CurrentCulture = Current;
-        CultureInfo.CurrentUICulture = Current;
+        var culture = CultureInfo.ReadOnly(Create(CultureInfo.CurrentCulture.Name));
+        var uiCulture = CultureInfo.CurrentUICulture.Name == culture.Name
+            ? culture
+            : CultureInfo.ReadOnly(Create(CultureInfo.CurrentUICulture.Name));
+
+        Set(culture, uiCulture);
+    }
+
+    private static void Set(CultureInfo culture, CultureInfo uiCulture)
+    {
+        CultureInfo.DefaultThreadCurrentCulture = culture;
+        CultureInfo.DefaultThreadCurrentUICulture = uiCulture;
+        CultureInfo.CurrentCulture = culture;
+        CultureInfo.CurrentUICulture = uiCulture;
     }
 
     /// <summary>

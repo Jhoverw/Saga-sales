@@ -138,8 +138,16 @@
         // Keeps the cashier's hands on the keyboard: returns the cursor to an element by id.
         window.sagaFocus = function (id) { var el = document.getElementById(id); if (el) el.focus(); };
     </script>
-    <script src="_framework/blazor.webassembly.js"
+    <script src="_framework/blazor.webassembly.js" autostart="false"
             onerror="window.sagaBootError('no se pudo cargar _framework/blazor.webassembly.js (404)')"></script>
+    <script>
+        // Every browser starts in es-EC: Ecuadorian dates, and only the culture data the app needs.
+        // Program.cs then sets the point as decimal separator without renaming the culture.
+        if (window.Blazor) {
+            Blazor.start({ applicationCulture: 'es-EC' })
+                .catch(function (e) { window.sagaBootError('Blazor.start: ' + ((e && e.message) || e)); });
+        }
+    </script>
 <footer class="build-footer" style="position:fixed;bottom:0;width:100%;text-align:center;background:#0008;color:white;font-size:0.8rem;">Build: <span id="build-stamp">…</span></footer>
 <script>
   // One source for every build label on screen: the file written by the image build (scripts/build-label.ps1).

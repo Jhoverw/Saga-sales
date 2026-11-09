@@ -58,6 +58,32 @@ public class AppCultureTests
     }
 
     [Fact]
+    public void ApplyToCurrent_keeps_the_culture_name_and_uses_the_point()
+    {
+        var before = CultureInfo.CurrentCulture;
+        var beforeUi = CultureInfo.CurrentUICulture;
+        try
+        {
+            // Blazor WebAssembly aborts when the culture name changes after start-up.
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-EC");
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("es-EC");
+
+            AppCulture.ApplyToCurrent();
+
+            Assert.Equal("es-EC", CultureInfo.CurrentCulture.Name);
+            Assert.Equal("es-EC", CultureInfo.CurrentUICulture.Name);
+            Assert.Equal("1,234.50", 1234.5m.ToString("N2"));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = before;
+            CultureInfo.CurrentUICulture = beforeUi;
+            CultureInfo.DefaultThreadCurrentCulture = null;
+            CultureInfo.DefaultThreadCurrentUICulture = null;
+        }
+    }
+
+    [Fact]
     public void Apply_sets_the_culture_of_the_current_thread()
     {
         var before = CultureInfo.CurrentCulture;
