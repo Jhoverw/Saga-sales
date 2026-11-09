@@ -446,6 +446,33 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
             : null;
     }
 
+    // ── compras como factura y cuentas por pagar (spec 009) ─────────────────
+    public Task<(PurchaseDto? Value, System.Net.HttpStatusCode? Status, string? Error)> CreatePurchaseInvoiceAsync(
+        PurchaseInvoiceRequest request)
+        => SendForResultAsync<PurchaseDto>(HttpMethod.Post, "api/purchases/invoice", request);
+
+    public Task<List<PurchaseProductDto>?> FindPurchaseProductsAsync(string term)
+        => GetAsync<List<PurchaseProductDto>>($"api/purchases/products?term={Uri.EscapeDataString(term)}");
+
+    public Task<(PurchaseProductDto? Value, System.Net.HttpStatusCode? Status, string? Error)> CreatePurchaseProductAsync(
+        CreatePurchaseProductRequest request)
+        => SendForResultAsync<PurchaseProductDto>(HttpMethod.Post, "api/purchases/products", request);
+
+    public Task<List<PayableDto>?> GetPayablesAsync(bool includePaid = false)
+        => GetAsync<List<PayableDto>>($"api/purchases/payables?includePaid={includePaid.ToString().ToLowerInvariant()}");
+
+    public Task<List<PayablePaymentDto>?> GetPayablePaymentsAsync(Guid payableId)
+        => GetAsync<List<PayablePaymentDto>>($"api/purchases/payables/{payableId}/payments");
+
+    public async Task<(bool Ok, string? Error)> PayPayableAsync(Guid payableId, PayablePaymentRequest request)
+    {
+        var message = await BuildAsync(HttpMethod.Post, $"api/purchases/payables/{payableId}/payments", request);
+        var response = await http.SendAsync(message);
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
+
     public async Task<PurchaseDto?> ReceivePurchaseAsync(Guid id)
     {
         var response = await http.PostAsync($"api/purchases/{id}/receive", null);

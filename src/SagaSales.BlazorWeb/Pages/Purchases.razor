@@ -1,12 +1,17 @@
 @page "/purchases"
 @attribute [Authorize(Roles = SagaSalesRoles.ManagerOrOwner)]
+@using System.Globalization
+@using System.Text
+@using SagaSales.Shared.Purchasing
 @inject ApiClient Api
+@inject IJSRuntime Js
 
 <div class="page-head">
     <div>
         <h1>Compras</h1>
-        <div class="page-head__sub">Un documento por pedido, con muchas líneas y lote por línea</div>
+        <div class="page-head__sub">Ingresa la factura del proveedor tal como viene: código, empaque, cantidad y precio sin IVA</div>
     </div>
+    <a class="btn btn-outline-secondary btn-sm ms-auto" href="payables">Cuentas por pagar</a>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(Message))
@@ -26,7 +31,7 @@
 else
 {
     <div class="panel">
-        <div class="panel__head">Nueva compra</div>
+        <div class="panel__head">Comprobante</div>
         <div class="panel__body">
             <div class="row g-2 align-items-end">
                 <div class="col-md-3">
@@ -35,11 +40,42 @@ else
                         <option value="@Guid.Empty">— elige —</option>
                         @foreach (var s in Suppliers)
                         {
-                            <option value="@s.Id">@s.Name</option>
+                            <option value="@s.Id">@s.Name@(string.IsNullOrWhiteSpace(s.TaxId) ? "" : $" · {s.TaxId}")</option>
                         }
                     </select>
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" @bind="DocumentType">
+                        <option value="1">Factura</option>
+                        <option value="2">Nota de venta</option>
+                        <option value="3">Liquidación de compra</option>
+                    </select>
+                </div>
                 <div class="col-md-3">
+                    <label class="form-label">Número</label>
+                    <input class="form-control" @bind="DocumentNumber" @bind:event="oninput" placeholder="001-001-000000123" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Autorización SRI</label>
+                    <input class="form-control" @bind="AuthorizationNumber" @bind:event="oninput" placeholder="clave de acceso o n.º de autorización" />
+                </div>
+            </div>
+
+            <div class="row g-2 align-items-end mt-1">
+                <div class="col-md-2">
+                    <label class="form-label">Emisión</label>
+                    <input class="form-control" type="date" @bind="IssuedAt" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Ingreso a bodega</label>
+                    <input class="form-control" type="date" @bind="ReceivedAt" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Caducidad doc.</label>
+                    <input class="form-control" type="date" @bind="DocumentExpiresAt" />
+                </div>
+                <div class="col-md-2">
                     <label class="form-label">Sucursal</label>
                     <select class="form-select" @bind="BranchId">
                         @foreach (var b in Branches)
@@ -48,95 +84,241 @@ else
                         }
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Factura del proveedor</label>
-                    <input class="form-control" @bind="InvoiceNumber" @bind:event="oninput" placeholder="opcional" />
+                <div class="col-md-4">
+                    <label class="form-label">Forma de pago (SRI)</label>
+                    <select class="form-select" @bind="PaymentMethod">
+                        <option value="1">01 · Sin utilización del sistema financiero</option>
+                        <option value="16">16 · Tarjeta de débito</option>
+                        <option value="17">17 · Dinero electrónico</option>
+                        <option value="18">18 · Tarjeta prepago</option>
+                        <option value="19">19 · Tarjeta de crédito</option>
+                        <option value="20">20 · Otros con utilización del sistema financiero</option>
+                        <option value="21">21 · Endoso de títulos</option>
+                    </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Fecha</label>
-                    <input class="form-control" type="date" @bind="PurchasedAt" />
+            </div>
+
+            <div class="row g-2 align-items-end mt-1">
+                <div class="col-md-4">
+                    <label class="form-label d-block">Pago</label>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm @(IsCredit ? "btn-outline-secondary" : "btn-primary")" @onclick="() => SetCredit(false)">Contado</button>
+                        <button type="button" class="btn btn-sm @(IsCredit ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SetCredit(true)">Crédito</button>
+                    </div>
                 </div>
-                <div class="col-md-1">
-                    <div class="form-check">
+                @if (IsCredit)
+                {
+                    <div class="col-md-2">
+                        <label class="form-label">Plazo (días)</label>
+                        <input class="form-control" type="number" min="1" value="@CreditDays" @onchange="OnCreditDaysChanged" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Vence</label>
+                        <input class="form-control" type="date" @bind="CreditDueAt" />
+                    </div>
+                }
+                <div class="col-md-4">
+                    <div class="form-check mt-3">
                         <input class="form-check-input" type="checkbox" @bind="ReceiveNow" id="receiveNow" />
-                        <label class="form-check-label" for="receiveNow">Recibir</label>
+                        <label class="form-check-label" for="receiveNow">Recibir ahora (el stock entra al guardar)</label>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <div class="row g-2 mt-1">
-                <div class="col-md-12">
-                    <label class="form-label">Notas</label>
-                    <input class="form-control" @bind="Notes" @bind:event="oninput"
-                           placeholder="Condiciones, transporte, observaciones del pedido…" />
-                </div>
-            </div>
-
-            <div class="table-responsive mt-3">
-                <table class="table align-middle mb-0">
+    <div class="panel mt-3">
+        <div class="panel__head">
+            <span>Detalle</span>
+            <span class="page-head__sub ms-3 mb-0">Escribe el código o parte del nombre y pulsa Enter</span>
+        </div>
+        <div class="panel__body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
                     <thead>
                         <tr>
+                            <th style="width:130px;">Código</th>
                             <th style="min-width:220px;">Producto</th>
+                            <th style="width:150px;">Empaque</th>
                             <th style="width:90px;">Cant.</th>
-                            <th style="width:110px;">Costo</th>
-                            <th style="width:140px;">Lote</th>
-                            <th style="width:160px;">Caduca</th>
-                            <th class="text-end" style="width:110px;">Total</th>
-                            <th style="width:150px;"></th>
+                            <th style="width:110px;">P. unit. s/IVA</th>
+                            <th style="width:60px;" class="text-center">IVA</th>
+                            <th class="text-end" style="width:100px;">Subtotal</th>
+                            <th class="text-end" style="width:100px;" title="Costo real por unidad de stock con descuentos, ICE, IVA y otros">Costo/u</th>
+                            <th style="width:40px;"></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var line in Lines)
+                        @for (var i = 0; i < Lines.Count; i++)
                         {
+                            var line = Lines[i];
+                            var computed = LineResult(line);
                             <tr>
                                 <td>
-                                    <select class="form-select form-select-sm" @bind="line.ProductId">
-                                        <option value="@Guid.Empty">— elige —</option>
-                                        @foreach (var p in Products)
+                                    <input class="form-control form-control-sm" @ref="line.CodeRef"
+                                           @bind="line.Term" @bind:event="oninput"
+                                           @onkeydown="e => OnTermKeyAsync(e, line)" placeholder="código" />
+                                </td>
+                                <td>
+                                    @if (line.ProductId != Guid.Empty)
+                                    {
+                                        <div>@line.ProductName</div>
+                                        @if (line.TracksBatches)
                                         {
-                                            <option value="@p.Id">@p.Name@(p.TracksBatches ? " · lleva lote" : "")</option>
+                                            <div class="d-flex gap-1 mt-1">
+                                                <input class="form-control form-control-sm" @bind="line.LotCode" @bind:event="oninput" placeholder="lote" />
+                                                <input class="form-control form-control-sm" type="date" @bind="line.ExpiresAt" title="caduca" />
+                                            </div>
                                         }
-                                    </select>
+                                    }
+                                    else if (line.Candidates.Count > 0)
+                                    {
+                                        <select class="form-select form-select-sm" @onchange="e => PickCandidate(line, e.Value?.ToString())">
+                                            <option value="">— @line.Candidates.Count coincidencia(s), elige —</option>
+                                            @foreach (var c in line.Candidates)
+                                            {
+                                                <option value="@c.Id">@(c.Code is null ? "" : $"{c.Code} · ")@c.Name</option>
+                                            }
+                                        </select>
+                                    }
+                                    else if (line.NotFound)
+                                    {
+                                        <span class="text-muted small">No existe.</span>
+                                        <button class="btn btn-link btn-sm p-0 ms-1" @onclick="() => OpenNewProduct(line)">+ Crear producto</button>
+                                    }
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm" type="number" lang="en-US" min="1" @bind="line.Quantity" />
+                                    <div class="d-flex gap-1">
+                                        <select class="form-select form-select-sm" value="@line.Package" @onchange="e => OnPackageChanged(line, e.Value?.ToString())">
+                                            <option value="unidad">Unidad</option>
+                                            <option value="caja">Caja</option>
+                                        </select>
+                                        @if (line.IsBox)
+                                        {
+                                            <input class="form-control form-control-sm" style="width:60px;" type="number" min="2"
+                                                   @bind="line.UnitsPerPackage" title="unidades por caja" />
+                                        }
+                                    </div>
                                 </td>
                                 <td>
-                                    <DecimalInput @bind-Value="line.UnitCost" CssClass="form-control form-control-sm" />
+                                    <DecimalInput @bind-Value="line.Quantity" CssClass="form-control form-control-sm" Format="0.###" />
                                 </td>
+                                <td @onkeydown="e => OnPriceKey(e, line)">
+                                    <DecimalInput @bind-Value="line.UnitPrice" CssClass="form-control form-control-sm" Format="0.00####"
+                                                  Placeholder="@PricePlaceholder(line)" />
+                                </td>
+                                <td class="text-center">
+                                    <input class="form-check-input" type="checkbox" @bind="line.Taxable" />
+                                </td>
+                                <td class="text-end">@(computed?.Net.ToString("N2", Money) ?? "—")</td>
+                                <td class="text-end">@(computed?.EffectiveUnitCost.ToString("N4", Money) ?? "—")</td>
                                 <td>
-                                    <input class="form-control form-control-sm" @bind="line.LotCode" @bind:event="oninput"
-                                           placeholder="@(TracksBatches(line.ProductId) ? "obligatorio" : "opcional")" />
-                                </td>
-                                <td>
-                                    <input class="form-control form-control-sm" type="date" @bind="line.ExpiresAt" />
-                                </td>
-                                <td class="text-end">@LineTotal(line).ToString("C")</td>
-                                <td class="text-end text-nowrap">
-                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Duplicate(line)" title="Repetir producto para otro lote">Duplicar</button>
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => Remove(line)" disabled="@(Lines.Count <= 1)" title="Quitar línea">×</button>
+                                    <button class="btn btn-sm btn-outline-danger" title="Quitar" @onclick="() => RemoveLine(line)">×</button>
                                 </td>
                             </tr>
+                            if (NewProductLine == line)
+                            {
+                                <tr class="table-active">
+                                    <td colspan="9">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-2">
+                                                <label class="form-label small">Código</label>
+                                                <input class="form-control form-control-sm" @bind="NewProduct.Code" @bind:event="oninput" />
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Nombre</label>
+                                                <input class="form-control form-control-sm" @bind="NewProduct.Name" @bind:event="oninput" />
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small">PVP (venta)</label>
+                                                <DecimalInput @bind-Value="NewProduct.SalePrice" CssClass="form-control form-control-sm" />
+                                            </div>
+                                            <div class="col-md-1">
+                                                <label class="form-label small">Und/caja</label>
+                                                <input class="form-control form-control-sm" type="number" min="1" @bind="NewProductUnits" />
+                                            </div>
+                                            <div class="col-md-1">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="npTax" @bind="NewProduct.IsTaxable" />
+                                                    <label class="form-check-label small" for="npTax">IVA</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="npLot" @bind="NewProduct.TracksBatches" />
+                                                    <label class="form-check-label small" for="npLot">Lote</label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2 text-nowrap">
+                                                <button class="btn btn-sm btn-primary" disabled="@Busy" @onclick="CreateProductAsync">Crear</button>
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => NewProductLine = null">Cancelar</button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
             </div>
+            <div class="p-2">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="AddLineAndFocus">+ Línea</button>
+                <span class="page-head__sub ms-2 mb-0">Enter en el precio agrega otra línea.</span>
+            </div>
+        </div>
+    </div>
 
-            <div class="d-flex justify-content-between align-items-center mt-2">
-                <button class="btn btn-outline-secondary btn-sm" @onclick="AddLine">+ Añadir línea</button>
-                <div>
-                    <span class="page-head__sub">@Lines.Count línea(s)</span>
-                    <span class="ms-3">Total: <strong>@Total.ToString("C")</strong></span>
+    <div class="row g-3 mt-0">
+        <div class="col-lg-7">
+            <div class="panel h-100">
+                <div class="panel__head">Notas</div>
+                <div class="panel__body">
+                    <textarea class="form-control" rows="4" @bind="Notes" @bind:event="oninput"
+                              placeholder="Condiciones, transporte, observaciones…"></textarea>
+                    @if (TotalsError is not null)
+                    {
+                        <div class="alert alert-warning mt-2 mb-0">@TotalsError</div>
+                    }
                 </div>
             </div>
-
-            <div class="mt-3">
-                <button class="btn btn-primary" @onclick="RegisterAsync" disabled="@Busy">
-                    @(Busy ? "Guardando..." : (ReceiveNow ? "Registrar y recibir" : "Guardar borrador"))
-                </button>
-                <span class="page-head__sub mb-0 ms-2">
-                    @(ReceiveNow ? "El stock entra en el mismo paso." : "Queda en borrador; recíbelo cuando llegue.")
-                </span>
+        </div>
+        <div class="col-lg-5">
+            <div class="panel">
+                <div class="panel__head">Totales</div>
+                <div class="panel__body">
+                    <table class="table table-sm mb-2">
+                        <tbody>
+                            <tr><td>Subtotal 0 %</td><td class="text-end">@Show(Totals?.SubtotalZero)</td></tr>
+                            <tr><td>Subtotal IVA @((VatRate * 100).ToString("0.##", Money)) %</td><td class="text-end">@Show(Totals?.SubtotalTaxed)</td></tr>
+                            <tr>
+                                <td>Descuento 0 %</td>
+                                <td style="width:130px;"><DecimalInput @bind-Value="DiscountZero" CssClass="form-control form-control-sm text-end" /></td>
+                            </tr>
+                            <tr>
+                                <td>Descuento IVA</td>
+                                <td><DecimalInput @bind-Value="DiscountTaxed" CssClass="form-control form-control-sm text-end" /></td>
+                            </tr>
+                            <tr>
+                                <td>ICE</td>
+                                <td><DecimalInput @bind-Value="Ice" CssClass="form-control form-control-sm text-end" /></td>
+                            </tr>
+                            <tr><td>IVA</td><td class="text-end">@Show(Totals?.Tax)</td></tr>
+                            <tr>
+                                <td>Otros (flete…)</td>
+                                <td><DecimalInput @bind-Value="OtherCharges" CssClass="form-control form-control-sm text-end" /></td>
+                            </tr>
+                            <tr class="fw-bold"><td>Total</td><td class="text-end">@Show(Totals?.Total)</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary" @onclick="ExportAsync" disabled="@(Totals is null)">Exportar Excel</button>
+                        <button class="btn btn-primary ms-auto" @onclick="RegisterAsync" disabled="@(Busy || Totals is null)">
+                            @(Busy ? "Guardando..." : (ReceiveNow ? "Registrar y recibir" : "Guardar borrador"))
+                        </button>
+                    </div>
+                    @if (IsCredit && Totals is not null)
+                    {
+                        <div class="page-head__sub mt-2 mb-0">Queda por pagar @Totals.Total.ToString("C") hasta el @CreditDueAt.ToString("dd/MM/yyyy").</div>
+                    }
+                </div>
             </div>
         </div>
     </div>
@@ -151,7 +333,7 @@ else
                     <th>Fecha</th>
                     <th>Proveedor</th>
                     <th>Sucursal</th>
-                    <th>Factura</th>
+                    <th>Comprobante</th>
                     <th class="text-end">Total</th>
                     <th>Estado</th>
                     <th></th>
@@ -197,8 +379,8 @@ else
                 <thead>
                     <tr>
                         <th>Producto</th>
-                        <th class="text-end">Cant.</th>
-                        <th class="text-end">Costo</th>
+                        <th class="text-end">Cant. (unid.)</th>
+                        <th class="text-end">Costo/u</th>
                         <th>Lote</th>
                         <th>Caduca</th>
                         <th class="text-end">Total</th>
@@ -223,44 +405,126 @@ else
 }
 
 @code {
+    private static readonly CultureInfo Money = CultureInfo.InvariantCulture;
+
     private List<BranchDto> Branches { get; set; } = [];
     private List<SupplierDto> Suppliers { get; set; } = [];
-    private List<ProductDto> Products { get; set; } = [];
     private List<PurchaseDto> PurchaseList { get; set; } = [];
 
     private Guid SupplierId { get; set; } = Guid.Empty;
     private Guid BranchId { get; set; } = Guid.Empty;
-    private string InvoiceNumber { get; set; } = string.Empty;
-    private DateTime PurchasedAt { get; set; } = DateTime.Today;
-    private string Notes { get; set; } = string.Empty;
+    private int DocumentType { get; set; } = 1;
+    private string DocumentNumber { get; set; } = string.Empty;
+    private string AuthorizationNumber { get; set; } = string.Empty;
+    private DateTime IssuedAt { get; set; } = DateTime.Today;
+    private DateTime ReceivedAt { get; set; } = DateTime.Today;
+    private DateTime? DocumentExpiresAt { get; set; }
+    private int PaymentMethod { get; set; } = 20;
+    private bool IsCredit { get; set; }
+    private int CreditDays { get; set; } = 30;
+    private DateTime CreditDueAt { get; set; } = DateTime.Today.AddDays(30);
     private bool ReceiveNow { get; set; } = true;
+    private string Notes { get; set; } = string.Empty;
+
+    private decimal VatRate { get; set; } = 0.15m;
+    private decimal DiscountZero { get; set; }
+    private decimal DiscountTaxed { get; set; }
+    private decimal Ice { get; set; }
+    private decimal OtherCharges { get; set; }
 
     private List<LineDraft> Lines { get; set; } = [new()];
+    private LineDraft? FocusLine { get; set; }
+    private LineDraft? NewProductLine { get; set; }
+    private CreatePurchaseProductRequest NewProduct { get; set; } = new();
+    private int NewProductUnits { get; set; } = 1;
     private PurchaseDto? SelectedPurchase { get; set; }
 
     private string? Message { get; set; }
     private bool Error { get; set; }
     private bool Busy { get; set; }
+    private string? TotalsError { get; set; }
 
-    private decimal Total => Lines.Sum(LineTotal);
+    private List<LineDraft> ReadyLines => Lines.Where(l => l.ProductId != Guid.Empty && l.Quantity > 0 && l.UnitPrice > 0).ToList();
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    /// <summary>Los mismos totales que calculará el servidor (cálculo compartido).</summary>
+    private InvoiceTotals? Totals
+    {
+        get
+        {
+            var ready = ReadyLines;
+            if (ready.Count == 0)
+            {
+                TotalsError = null;
+                return null;
+            }
+
+            try
+            {
+                TotalsError = null;
+                return PurchaseInvoiceCalculator.Compute(
+                    ready.Select(l => new InvoiceLineInput(l.Quantity, l.EffectiveUnits, l.UnitPrice, l.Taxable)).ToList(),
+                    VatRate, DiscountZero, DiscountTaxed, Ice, OtherCharges);
+            }
+            catch (ArgumentException ex)
+            {
+                TotalsError = ex.Message;
+                return null;
+            }
+        }
+    }
+
+    private InvoiceLineResult? LineResult(LineDraft line)
+    {
+        var totals = Totals;
+        if (totals is null)
+        {
+            return null;
+        }
+
+        var index = ReadyLines.IndexOf(line);
+        return index < 0 ? null : totals.Lines[index];
+    }
+
+    private static string? PricePlaceholder(LineDraft line)
+        => line.LastCost is { } cost ? "últ. " + (cost * line.EffectiveUnits).ToString("0.00", Money) : null;
+
+    private static string Show(decimal? value) => value?.ToString("N2", Money) ?? "—";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+
+        if (await Api.GetCurrentTaxAsync(DateTime.Today) is { } tax && tax.RatePercentage > 0)
+        {
+            VatRate = tax.RatePercentage / 100m;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (FocusLine is { } line)
+        {
+            FocusLine = null;
+            try
+            {
+                await line.CodeRef.FocusAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                // El elemento todavía no está en pantalla; no pasa nada.
+            }
+        }
+    }
 
     private async Task LoadAsync()
     {
         Branches = await Api.GetBranchesAsync() ?? [];
         Suppliers = await Api.GetSuppliersAsync() ?? [];
-        Products = await Api.GetProductsAsync(1, 100) is { } page ? page.Items.ToList() : [];
         PurchaseList = await Api.GetPurchasesAsync(1, 20) is { } purchases ? purchases.Items.ToList() : [];
 
         if (BranchId == Guid.Empty && Branches.Count > 0)
         {
-            BranchId = Branches.First(b => b.IsDefault).Id;
-        }
-
-        if (SupplierId == Guid.Empty && Suppliers.Count > 0)
-        {
-            SupplierId = Suppliers[0].Id;
+            BranchId = (Branches.FirstOrDefault(b => b.IsDefault) ?? Branches[0]).Id;
         }
     }
 
@@ -277,122 +541,347 @@ else
         await LoadAsync();
     }
 
-    private void AddLine() => Lines.Add(new LineDraft());
-
-    private void Duplicate(LineDraft line) => Lines.Add(new LineDraft
+    private void SetCredit(bool credit)
     {
-        ProductId = line.ProductId,
-        Quantity = line.Quantity,
-        UnitCost = line.UnitCost,
-        LotCode = line.LotCode,
-        ExpiresAt = line.ExpiresAt,
-    });
-
-    private void Remove(LineDraft line)
-    {
-        if (Lines.Count > 1)
+        IsCredit = credit;
+        if (credit)
         {
-            Lines.Remove(line);
+            CreditDueAt = IssuedAt.AddDays(CreditDays);
         }
     }
 
-    private decimal LineTotal(LineDraft line) => line.Quantity * line.UnitCost;
+    private void OnCreditDaysChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var days) && days > 0)
+        {
+            CreditDays = days;
+            CreditDueAt = IssuedAt.AddDays(days);
+        }
+    }
 
-    private bool TracksBatches(Guid productId)
-        => Products.FirstOrDefault(p => p.Id == productId)?.TracksBatches ?? false;
+    private void AddLineAndFocus()
+    {
+        var line = new LineDraft();
+        Lines.Add(line);
+        FocusLine = line;
+    }
+
+    private void RemoveLine(LineDraft line)
+    {
+        Lines.Remove(line);
+        if (NewProductLine == line)
+        {
+            NewProductLine = null;
+        }
+
+        if (Lines.Count == 0)
+        {
+            AddLineAndFocus();
+        }
+    }
+
+    private async Task OnTermKeyAsync(KeyboardEventArgs e, LineDraft line)
+    {
+        if (e.Key is not ("Enter" or "NumpadEnter"))
+        {
+            return;
+        }
+
+        var term = line.Term.Trim();
+        if (term.Length == 0)
+        {
+            return;
+        }
+
+        line.Candidates = [];
+        line.NotFound = false;
+        var found = await Api.FindPurchaseProductsAsync(term) ?? [];
+        var exact = found.Where(p => string.Equals(p.Code, term, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (exact.Count == 1)
+        {
+            Assign(line, exact[0]);
+        }
+        else if (found.Count == 1)
+        {
+            Assign(line, found[0]);
+        }
+        else if (found.Count > 1)
+        {
+            line.ProductId = Guid.Empty;
+            line.Candidates = found;
+        }
+        else
+        {
+            line.ProductId = Guid.Empty;
+            line.NotFound = true;
+        }
+    }
+
+    private void PickCandidate(LineDraft line, string? value)
+    {
+        if (Guid.TryParse(value, out var id) && line.Candidates.FirstOrDefault(c => c.Id == id) is { } product)
+        {
+            Assign(line, product);
+        }
+    }
+
+    private void Assign(LineDraft line, PurchaseProductDto product)
+    {
+        if (Lines.FirstOrDefault(l => l != line && l.ProductId == product.Id) is { } existing && !product.TracksBatches)
+        {
+            Message = $"«{product.Name}» ya está en el detalle; se suma ahí la cantidad.";
+            Error = false;
+            existing.Quantity += line.Quantity > 0 ? line.Quantity : 1;
+            line.Term = string.Empty;
+            line.Candidates = [];
+            line.NotFound = false;
+            FocusLine = line;
+            return;
+        }
+
+        line.ProductId = product.Id;
+        line.ProductName = product.Name;
+        line.Term = product.Code ?? line.Term;
+        line.Taxable = product.IsTaxable;
+        line.TracksBatches = product.TracksBatches;
+        line.LastCost = product.Cost;
+        line.Candidates = [];
+        line.NotFound = false;
+
+        if (product.UnitsPerPackage is > 1)
+        {
+            line.Package = "caja";
+            line.UnitsPerPackage = product.UnitsPerPackage.Value;
+        }
+        else
+        {
+            line.Package = "unidad";
+            line.UnitsPerPackage = 1;
+        }
+
+        if (line.Quantity <= 0)
+        {
+            line.Quantity = 1;
+        }
+    }
+
+    private static void OnPackageChanged(LineDraft line, string? value)
+    {
+        line.Package = value == "caja" ? "caja" : "unidad";
+        if (line.IsBox && line.UnitsPerPackage < 2)
+        {
+            line.UnitsPerPackage = 12;
+        }
+    }
+
+    private void OnPriceKey(KeyboardEventArgs e, LineDraft line)
+    {
+        if (e.Key is ("Enter" or "NumpadEnter") && Lines[^1] == line)
+        {
+            AddLineAndFocus();
+        }
+    }
+
+    private void OpenNewProduct(LineDraft line)
+    {
+        var term = line.Term.Trim();
+        var looksLikeCode = term.Length > 0 && !term.Contains(' ');
+        NewProduct = new CreatePurchaseProductRequest
+        {
+            Code = looksLikeCode ? term : null,
+            Name = looksLikeCode ? string.Empty : term,
+            IsTaxable = true,
+        };
+        NewProductUnits = line.IsBox ? line.UnitsPerPackage : 1;
+        NewProductLine = line;
+    }
+
+    private async Task CreateProductAsync()
+    {
+        if (NewProductLine is not { } line)
+        {
+            return;
+        }
+
+        Busy = true;
+        try
+        {
+            NewProduct.UnitsPerPackage = NewProductUnits > 1 ? NewProductUnits : null;
+            var (created, _, error) = await Api.CreatePurchaseProductAsync(NewProduct);
+            if (created is null)
+            {
+                Message = error ?? "No se pudo crear el producto.";
+                Error = true;
+                return;
+            }
+
+            Assign(line, created);
+            NewProductLine = null;
+            Message = $"Producto «{created.Name}» creado; el stock entra con esta compra.";
+            Error = false;
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
 
     private async Task RegisterAsync()
     {
         Message = null;
         Error = false;
 
-        if (SupplierId == Guid.Empty || BranchId == Guid.Empty)
+        if (SupplierId == Guid.Empty)
         {
-            Message = "Elige proveedor y sucursal.";
+            Message = "Elige el proveedor.";
             Error = true;
             return;
         }
 
-        var valid = Lines.Where(l => l.ProductId != Guid.Empty).ToList();
-
-        if (valid.Count == 0)
+        var pending = Lines.Where(l => l.ProductId == Guid.Empty && !string.IsNullOrWhiteSpace(l.Term)).ToList();
+        if (pending.Count > 0)
         {
-            Message = "Añade al menos una línea con producto.";
+            Message = $"Hay {pending.Count} línea(s) con código sin producto. Pulsa Enter en el código o créalo.";
             Error = true;
             return;
         }
 
-        foreach (var line in valid)
+        var noPrice = Lines.FirstOrDefault(l => l.ProductId != Guid.Empty && (l.Quantity <= 0 || l.UnitPrice <= 0));
+        if (noPrice is not null)
         {
-            var name = Products.FirstOrDefault(p => p.Id == line.ProductId)?.Name ?? "línea";
+            Message = $"«{noPrice.ProductName}» necesita cantidad y precio.";
+            Error = true;
+            return;
+        }
 
-            if (line.Quantity <= 0)
-            {
-                Message = $"«{name}»: la cantidad debe ser mayor que cero.";
-                Error = true;
-                return;
-            }
+        var missingLot = ReadyLines.FirstOrDefault(l => l.TracksBatches && ReceiveNow && string.IsNullOrWhiteSpace(l.LotCode));
+        if (missingLot is not null)
+        {
+            Message = $"«{missingLot.ProductName}» lleva lote: escribe el lote y la caducidad.";
+            Error = true;
+            return;
+        }
 
-            if (line.UnitCost <= 0)
-            {
-                Message = $"«{name}»: el costo debe ser mayor que cero.";
-                Error = true;
-                return;
-            }
-
-            if (TracksBatches(line.ProductId) && string.IsNullOrWhiteSpace(line.LotCode))
-            {
-                Message = $"«{name}» lleva lote: escribe el código.";
-                Error = true;
-                return;
-            }
+        if (Totals is null)
+        {
+            Message = TotalsError ?? "Agrega al menos un producto con cantidad.";
+            Error = true;
+            return;
         }
 
         Busy = true;
-
         try
         {
-            var request = new CreatePurchaseRequest
+            var request = new PurchaseInvoiceRequest
             {
                 SupplierId = SupplierId,
-                BranchId = BranchId,
+                BranchId = BranchId == Guid.Empty ? null : BranchId,
                 ReceiveNow = ReceiveNow,
-                SupplierInvoiceNumber = string.IsNullOrWhiteSpace(InvoiceNumber) ? null : InvoiceNumber.Trim(),
-                PurchasedAt = PurchasedAt.Date,
+                DocumentType = DocumentType,
+                DocumentNumber = DocumentNumber.Trim(),
+                AuthorizationNumber = string.IsNullOrWhiteSpace(AuthorizationNumber) ? null : AuthorizationNumber.Trim(),
+                IssuedAt = DateOnly.FromDateTime(IssuedAt),
+                ReceivedAt = ReceivedAt.Date == DateTime.Today ? null : ReceivedAt.Date.AddHours(12),
+                DocumentExpiresAt = DocumentExpiresAt is { } expires ? DateOnly.FromDateTime(expires) : null,
+                PaymentMethod = PaymentMethod,
+                IsCredit = IsCredit,
+                CreditDueAt = IsCredit ? DateOnly.FromDateTime(CreditDueAt) : null,
+                VatRate = VatRate,
+                DiscountZero = DiscountZero,
+                DiscountTaxed = DiscountTaxed,
+                Ice = Ice,
+                OtherCharges = OtherCharges,
                 Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim(),
-                Lines = valid.Select(line => new PurchaseLineRequest
+                Lines = ReadyLines.Select(l => new PurchaseInvoiceLineRequest
                 {
-                    ProductId = line.ProductId,
-                    Quantity = line.Quantity,
-                    UnitCost = line.UnitCost,
-                    CostIncludesTax = true,
-                    LotCode = string.IsNullOrWhiteSpace(line.LotCode) ? null : line.LotCode.Trim(),
-                    ExpiresAt = line.ExpiresAt,
+                    ProductId = l.ProductId,
+                    ProductName = l.ProductName,
+                    Quantity = l.Quantity,
+                    Package = l.Package,
+                    UnitsPerPackage = l.EffectiveUnits,
+                    UnitPrice = l.UnitPrice,
+                    Taxable = l.Taxable,
+                    LotCode = string.IsNullOrWhiteSpace(l.LotCode) ? null : l.LotCode.Trim(),
+                    ExpiresAt = l.ExpiresAt,
                 }).ToList(),
             };
 
-            var created = await Api.CreatePurchaseAsync(request);
-
+            var (created, _, error) = await Api.CreatePurchaseInvoiceAsync(request);
             if (created is null)
             {
-                Message = "No se pudo registrar la compra. Revisa cantidades, costos y lotes.";
+                Message = error ?? "No se pudo registrar la compra.";
                 Error = true;
                 return;
             }
 
-            Message = created.Status == 2
-                ? $"Compra recibida: {created.Total:C} en {created.Lines.Count} línea(s). El stock ya entró."
-                : $"Compra guardada en borrador: {created.Total:C} en {created.Lines.Count} línea(s).";
+            Message = (created.Status == 2
+                    ? $"Compra {DocumentNumber} registrada y recibida: {created.Total:C}. El stock ya entró."
+                    : $"Compra {DocumentNumber} guardada en borrador: {created.Total:C}.")
+                + (IsCredit ? $" Cuenta por pagar hasta el {CreditDueAt:dd/MM/yyyy}." : string.Empty);
 
             Lines = [new()];
-            InvoiceNumber = string.Empty;
+            DocumentNumber = string.Empty;
+            AuthorizationNumber = string.Empty;
             Notes = string.Empty;
+            DiscountZero = DiscountTaxed = Ice = OtherCharges = 0;
+            DocumentExpiresAt = null;
             await LoadAsync();
+            FocusLine = Lines[0];
         }
         finally
         {
             Busy = false;
         }
+    }
+
+    /// <summary>CSV con ";" y punto decimal (constitución): abre directo en Excel.</summary>
+    private async Task ExportAsync()
+    {
+        var totals = Totals;
+        if (totals is null)
+        {
+            return;
+        }
+
+        static string Cell(string? value) => '"' + (value ?? string.Empty).Replace("\"", "\"\"") + '"';
+        string Num(decimal value, string format = "0.00") => value.ToString(format, Money);
+
+        var csv = new StringBuilder();
+        var docLabel = DocumentType switch { 2 => "Nota de venta", 3 => "Liquidación de compra", _ => "Factura" };
+        csv.AppendLine($"Proveedor;{Cell(SupplierName(SupplierId))}");
+        csv.AppendLine($"Comprobante;{Cell(docLabel)};{Cell(DocumentNumber)}");
+        csv.AppendLine($"Autorización;{Cell(AuthorizationNumber)}");
+        csv.AppendLine($"Emisión;{IssuedAt:yyyy-MM-dd};Ingreso;{ReceivedAt:yyyy-MM-dd}");
+        csv.AppendLine($"Pago;{(IsCredit ? $"Crédito hasta {CreditDueAt:yyyy-MM-dd}" : "Contado")}");
+        csv.AppendLine();
+        csv.AppendLine("Código;Producto;Empaque;Unid. por empaque;Cantidad;P. unit. s/IVA;IVA;Subtotal;Descuento;ICE;Otros;Impuesto;Total línea;Unid. stock;Costo/u");
+
+        var ready = ReadyLines;
+        for (var i = 0; i < ready.Count; i++)
+        {
+            var l = ready[i];
+            var r = totals.Lines[i];
+            csv.AppendLine(string.Join(';',
+                Cell(l.Term), Cell(l.ProductName), Cell(l.Package), l.EffectiveUnits.ToString(Money),
+                Num(l.Quantity, "0.###"), Num(l.UnitPrice, "0.00####"), l.Taxable ? "S" : "N",
+                Num(r.Net), Num(r.Discount), Num(r.Ice), Num(r.Others), Num(r.Tax), Num(r.LineTotal),
+                r.StockQuantity.ToString(Money), Num(r.EffectiveUnitCost, "0.0000")));
+        }
+
+        csv.AppendLine();
+        csv.AppendLine($"Subtotal 0 %;{Num(totals.SubtotalZero)}");
+        csv.AppendLine($"Subtotal IVA;{Num(totals.SubtotalTaxed)}");
+        csv.AppendLine($"Descuento 0 %;{Num(totals.DiscountZero)}");
+        csv.AppendLine($"Descuento IVA;{Num(totals.DiscountTaxed)}");
+        csv.AppendLine($"ICE;{Num(totals.Ice)}");
+        csv.AppendLine($"IVA;{Num(totals.Tax)}");
+        csv.AppendLine($"Otros;{Num(totals.Others)}");
+        csv.AppendLine($"Total;{Num(totals.Total)}");
+
+        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();
+        var name = string.IsNullOrWhiteSpace(DocumentNumber) ? "compra" : $"compra-{DocumentNumber.Trim()}";
+        await Js.InvokeVoidAsync("sagaDownload", $"{name}.csv", "text/csv", Convert.ToBase64String(bytes));
     }
 
     private async Task OpenAsync(PurchaseDto purchase)
@@ -441,11 +930,35 @@ else
 
     private sealed class LineDraft
     {
+        public ElementReference CodeRef { get; set; }
+
+        public string Term { get; set; } = string.Empty;
+
         public Guid ProductId { get; set; }
 
-        public int Quantity { get; set; } = 1;
+        public string ProductName { get; set; } = string.Empty;
 
-        public decimal UnitCost { get; set; }
+        public bool TracksBatches { get; set; }
+
+        public decimal? LastCost { get; set; }
+
+        public List<PurchaseProductDto> Candidates { get; set; } = [];
+
+        public bool NotFound { get; set; }
+
+        public string Package { get; set; } = "unidad";
+
+        public int UnitsPerPackage { get; set; } = 1;
+
+        public bool IsBox => Package == "caja";
+
+        public int EffectiveUnits => IsBox ? Math.Max(UnitsPerPackage, 1) : 1;
+
+        public decimal Quantity { get; set; } = 1;
+
+        public decimal UnitPrice { get; set; }
+
+        public bool Taxable { get; set; } = true;
 
         public string LotCode { get; set; } = string.Empty;
 

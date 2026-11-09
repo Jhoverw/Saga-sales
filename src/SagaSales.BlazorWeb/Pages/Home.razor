@@ -223,6 +223,7 @@
             var taxTask = Api.GetCurrentTaxAsync(DateTime.Now);
             var branchesTask = IsManager ? Api.GetBranchesAsync() : Task.FromResult<List<BranchDto>?>(null);
             var productsTask = IsManager ? Api.GetProductsAsync(1, 1) : Task.FromResult<PagedResult<ProductDto>?>(null);
+            var payablesTask = IsManager ? Api.GetPayablesAsync() : Task.FromResult<List<PayableDto>?>(null);
 
             Sales = await salesTask;
             Payments = await paymentsTask;
@@ -231,8 +232,9 @@
             var tax = await taxTask;
             var branches = await branchesTask;
             var products = await productsTask;
+            var payables = await payablesTask;
 
-            Todos = BuildTodos(alerts, tax, branches, products);
+            Todos = BuildTodos(alerts, tax, branches, products, payables);
         }
         finally
         {
@@ -244,7 +246,8 @@
         InventoryAlertsDto? alerts,
         TaxRateDto? tax,
         List<BranchDto>? branches,
-        PagedResult<ProductDto>? products)
+        PagedResult<ProductDto>? products,
+        List<PayableDto>? payables = null)
     {
         var todos = new List<Todo>();
 
@@ -301,6 +304,20 @@
         if (alerts is { Expiring.Count: > 0 })
         {
             todos.Add(new("warn", $"{alerts.Expiring.Count} lote(s) por vencer", Names(alerts.Expiring.Select(b => b.ProductName)), "Ver", "/mi-dia"));
+        }
+
+        // Cuentas por pagar (spec 009): lo vencido y lo que vence esta semana.
+        var openPayables = payables?.Where(p => p.Status == 1).ToList() ?? [];
+        var overdue = openPayables.Where(p => p.DueAt.Date < DateTime.Today).ToList();
+        if (overdue.Count > 0)
+        {
+            todos.Add(new("danger", $"{overdue.Count} cuenta(s) por pagar vencidas", $"{Money(overdue.Sum(p => p.Balance))} a {Names(overdue.Select(p => p.SupplierName))}.", "Pagar", "/payables"));
+        }
+
+        var dueSoon = openPayables.Where(p => p.DueAt.Date >= DateTime.Today && p.DueAt.Date <= DateTime.Today.AddDays(7)).ToList();
+        if (dueSoon.Count > 0)
+        {
+            todos.Add(new("warn", $"{dueSoon.Count} pago(s) a proveedores esta semana", $"{Money(dueSoon.Sum(p => p.Balance))}; el primero vence el {dueSoon.Min(p => p.DueAt):dd/MM}.", "Ver", "/payables"));
         }
 
         return todos;

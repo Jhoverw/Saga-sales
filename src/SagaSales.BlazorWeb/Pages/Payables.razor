@@ -1,0 +1,311 @@
+@page "/payables"
+@attribute [Authorize(Roles = SagaSalesRoles.ManagerOrOwner)]
+@using System.Globalization
+@inject ApiClient Api
+
+<div class="page-head">
+    <div>
+        <h1>Cuentas por pagar</h1>
+        <div class="page-head__sub">Compras a crédito: saldo por proveedor, abonos y vencimientos</div>
+    </div>
+    <div class="form-check ms-auto">
+        <input class="form-check-input" type="checkbox" id="includePaid" checked="@IncludePaid" @onchange="ToggleIncludePaidAsync" />
+        <label class="form-check-label" for="includePaid">Ver también las pagadas</label>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="panel h-100"><div class="panel__body">
+            <div class="page-head__sub mb-1">Total por pagar</div>
+            <div class="fs-3 fw-bold">@OpenBalance.ToString("C")</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="panel h-100"><div class="panel__body">
+            <div class="page-head__sub mb-1">Vencido</div>
+            <div class="fs-3 fw-bold @(Overdue > 0 ? "text-danger" : "")">@Overdue.ToString("C")</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="panel h-100"><div class="panel__body">
+            <div class="page-head__sub mb-1">Vence en 7 días</div>
+            <div class="fs-3 fw-bold">@DueSoon.ToString("C")</div>
+        </div></div>
+    </div>
+</div>
+
+@if (BySupplier.Count > 0)
+{
+    <div class="panel mt-3">
+        <div class="panel__head">Saldo por proveedor</div>
+        <div class="panel__body p-0">
+            <table class="table mb-0">
+                <thead>
+                    <tr><th>Proveedor</th><th class="text-end">Documentos</th><th class="text-end">Vencido</th><th class="text-end">Saldo</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var group in BySupplier)
+                    {
+                        <tr>
+                            <td>@group.Name</td>
+                            <td class="text-end">@group.Count</td>
+                            <td class="text-end @(group.Overdue > 0 ? "text-danger" : "")">@group.Overdue.ToString("C")</td>
+                            <td class="text-end fw-bold">@group.Balance.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<div class="panel mt-3">
+    <div class="panel__head">Documentos</div>
+    <div class="panel__body p-0">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Proveedor</th>
+                    <th>Comprobante</th>
+                    <th>Emisión</th>
+                    <th>Vence</th>
+                    <th class="text-end">Monto</th>
+                    <th class="text-end">Saldo</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Items)
+                {
+                    <tr class="@(Selected?.Id == item.Id ? "table-active" : "")">
+                        <td>@item.SupplierName</td>
+                        <td>@(item.DocumentNumber ?? "—")</td>
+                        <td>@(item.IssuedAt?.ToString("dd/MM/yyyy") ?? "—")</td>
+                        <td>@item.DueAt.ToString("dd/MM/yyyy")</td>
+                        <td class="text-end">@item.Amount.ToString("C")</td>
+                        <td class="text-end fw-bold">@item.Balance.ToString("C")</td>
+                        <td><span class="chip @StatusChip(item)">@StatusLabel(item)</span></td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectAsync(item)">Abonos</button>
+                            @if (item.Status == 1)
+                            {
+                                <button class="btn btn-sm btn-primary" @onclick="() => StartPay(item)">Abonar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Items.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center py-3">@(Loading ? "Cargando…" : "No hay cuentas por pagar.")</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (Selected is not null)
+{
+    <div class="panel mt-3">
+        <div class="panel__head">
+            <span>@Selected.SupplierName · @(Selected.DocumentNumber ?? "—") · saldo @Selected.Balance.ToString("C")</span>
+            <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="() => Selected = null">Cerrar</button>
+        </div>
+        <div class="panel__body">
+            @if (Paying)
+            {
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-2">
+                        <label class="form-label">Monto</label>
+                        <DecimalInput @bind-Value="PayAmount" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Fecha</label>
+                        <input class="form-control" type="date" @bind="PayDate" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Forma</label>
+                        <select class="form-select" @bind="PayMethod">
+                            <option value="1">Efectivo</option>
+                            <option value="2">Transferencia</option>
+                            <option value="3">Cheque</option>
+                            <option value="9">Otro</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Referencia</label>
+                        <input class="form-control" @bind="PayReference" @bind:event="oninput" placeholder="n.º de transferencia o cheque" />
+                    </div>
+                    <div class="col-md-2 text-nowrap">
+                        <button class="btn btn-primary" disabled="@Busy" @onclick="PayAsync">Registrar</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => Paying = false">×</button>
+                    </div>
+                </div>
+            }
+
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Fecha</th><th>Forma</th><th>Referencia</th><th class="text-end">Monto</th></tr></thead>
+                <tbody>
+                    @foreach (var payment in Payments)
+                    {
+                        <tr>
+                            <td>@payment.PaidAt.ToString("dd/MM/yyyy")</td>
+                            <td>@MethodLabel(payment.Method)</td>
+                            <td>@(payment.Reference ?? "—")</td>
+                            <td class="text-end">@payment.Amount.ToString("C")</td>
+                        </tr>
+                    }
+                    @if (Payments.Count == 0)
+                    {
+                        <tr><td colspan="4" class="text-center py-2">Sin abonos todavía.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PayableDto> Items { get; set; } = [];
+    private List<PayablePaymentDto> Payments { get; set; } = [];
+    private PayableDto? Selected { get; set; }
+    private bool IncludePaid { get; set; }
+    private bool Loading { get; set; } = true;
+    private bool Busy { get; set; }
+    private bool Paying { get; set; }
+    private string? Message { get; set; }
+    private bool Error { get; set; }
+
+    private decimal PayAmount { get; set; }
+    private DateTime PayDate { get; set; } = DateTime.Today;
+    private int PayMethod { get; set; } = 2;
+    private string PayReference { get; set; } = string.Empty;
+
+    private IEnumerable<PayableDto> Open => Items.Where(i => i.Status == 1);
+
+    private decimal OpenBalance => Open.Sum(i => i.Balance);
+
+    private decimal Overdue => Open.Where(IsOverdue).Sum(i => i.Balance);
+
+    private decimal DueSoon => Open.Where(i => !IsOverdue(i) && i.DueAt.Date <= DateTime.Today.AddDays(7)).Sum(i => i.Balance);
+
+    private List<SupplierGroup> BySupplier => Open
+        .GroupBy(i => i.SupplierName)
+        .Select(g => new SupplierGroup(g.Key, g.Count(), g.Where(IsOverdue).Sum(i => i.Balance), g.Sum(i => i.Balance)))
+        .OrderByDescending(g => g.Balance)
+        .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Loading = true;
+        Items = await Api.GetPayablesAsync(IncludePaid) ?? [];
+        Loading = false;
+
+        if (Selected is not null)
+        {
+            Selected = Items.FirstOrDefault(i => i.Id == Selected.Id);
+        }
+    }
+
+    private async Task ToggleIncludePaidAsync(ChangeEventArgs e)
+    {
+        IncludePaid = e.Value is true;
+        await LoadAsync();
+    }
+
+    private async Task SelectAsync(PayableDto item)
+    {
+        Selected = item;
+        Paying = false;
+        Payments = await Api.GetPayablePaymentsAsync(item.Id) ?? [];
+    }
+
+    private async Task StartPay(PayableDto item)
+    {
+        await SelectAsync(item);
+        PayAmount = item.Balance;
+        PayDate = DateTime.Today;
+        PayReference = string.Empty;
+        Paying = true;
+    }
+
+    private async Task PayAsync()
+    {
+        if (Selected is null)
+        {
+            return;
+        }
+
+        if (PayAmount <= 0 || PayAmount > Selected.Balance)
+        {
+            Message = $"El abono va entre 0.01 y el saldo ({Selected.Balance:C}).";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+        try
+        {
+            var (ok, error) = await Api.PayPayableAsync(Selected.Id, new PayablePaymentRequest
+            {
+                Amount = PayAmount,
+                PaidAt = DateOnly.FromDateTime(PayDate),
+                Method = PayMethod,
+                Reference = string.IsNullOrWhiteSpace(PayReference) ? null : PayReference.Trim(),
+            });
+
+            Message = ok ? $"Abono de {PayAmount:C} registrado." : error ?? "No se pudo registrar el abono.";
+            Error = !ok;
+
+            if (ok)
+            {
+                Paying = false;
+                var id = Selected.Id;
+                await LoadAsync();
+                Payments = await Api.GetPayablePaymentsAsync(id) ?? [];
+            }
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private static bool IsOverdue(PayableDto item) => item.Status == 1 && item.DueAt.Date < DateTime.Today;
+
+    private static string StatusLabel(PayableDto item) => item.Status switch
+    {
+        2 => "Pagada",
+        3 => "Anulada",
+        _ when IsOverdue(item) => $"Vencida {(DateTime.Today - item.DueAt.Date).Days} d",
+        _ when item.DueAt.Date <= DateTime.Today.AddDays(7) => "Por vencer",
+        _ => "Al día",
+    };
+
+    private static string StatusChip(PayableDto item) => item.Status switch
+    {
+        2 => "chip--ok",
+        3 => "chip--neutral",
+        _ when IsOverdue(item) => "chip--danger",
+        _ when item.DueAt.Date <= DateTime.Today.AddDays(7) => "chip--warn",
+        _ => "chip--info",
+    };
+
+    private static string MethodLabel(int method) => method switch
+    {
+        1 => "Efectivo",
+        2 => "Transferencia",
+        3 => "Cheque",
+        _ => "Otro",
+    };
+
+    private sealed record SupplierGroup(string Name, int Count, decimal Overdue, decimal Balance);
+}

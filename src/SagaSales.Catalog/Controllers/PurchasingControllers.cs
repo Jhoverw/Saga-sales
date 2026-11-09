@@ -96,6 +96,71 @@ public sealed class PurchasesController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    /// <summary>Registra la compra como viene la factura del proveedor (spec 009). Comprobante repetido → 409.</summary>
+    [HttpPost("invoice")]
+    [ProducesResponseType(typeof(PurchaseDto), StatusCodes.Status201Created)]
+    public async Task<IActionResult> CreateInvoice(
+        [FromBody] PurchaseInvoiceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Commands.CreatePurchaseInvoiceCommand(request), cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
+    }
+
+    /// <summary>Busca productos por código o nombre para el detalle de la compra.</summary>
+    [HttpGet("products")]
+    [ProducesResponseType(typeof(IReadOnlyList<PurchaseProductDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> FindProducts(
+        [FromQuery] string? term,
+        [FromQuery] int max = 15,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new Queries.FindPurchaseProductsQuery(term ?? string.Empty, max), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>Crea un producto nuevo desde la línea de la compra (sin stock; lo pone la compra).</summary>
+    [HttpPost("products")]
+    [ProducesResponseType(typeof(PurchaseProductDto), StatusCodes.Status201Created)]
+    public async Task<IActionResult> CreateProduct(
+        [FromBody] CreatePurchaseProductRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Commands.CreatePurchaseProductCommand(request), cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    /// <summary>Cuentas por pagar a proveedores; por defecto solo las que tienen saldo.</summary>
+    [HttpGet("payables")]
+    [ProducesResponseType(typeof(IReadOnlyList<PayableDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Payables(
+        [FromQuery] bool includePaid = false,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new Queries.GetPayablesQuery(includePaid), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    [HttpGet("payables/{id:guid}/payments")]
+    [ProducesResponseType(typeof(IReadOnlyList<PayablePaymentDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> PayablePayments(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Queries.GetPayablePaymentsQuery(id), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>Abono a la cuenta por pagar. Más que el saldo o ya pagada → 409.</summary>
+    [HttpPost("payables/{id:guid}/payments")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Pay(
+        Guid id,
+        [FromBody] PayablePaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(new Commands.PayPayableCommand(id, request), cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>
     /// Receives the purchase: stock in, weighted average cost recalculated and kardex written.
     /// A second call returns 409.
