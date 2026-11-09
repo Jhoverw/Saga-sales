@@ -339,8 +339,26 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     }
 
     // ── product lookup (V‑01) ────────────────────────────────────────────────
-    public Task<IReadOnlyList<ProductLookupDto>?> LookupProductsAsync(string term)
-        => GetAsync<IReadOnlyList<ProductLookupDto>>("api/catalog/products/lookup?term=" + Uri.EscapeDataString(term));
+    /// <summary>Buscador único (spec 010): código de barras, código interno o nombre.</summary>
+    public Task<List<ProductSearchResultDto>?> SearchProductsAsync(string term, bool forPurchase = false, int max = 10)
+        => GetAsync<List<ProductSearchResultDto>>(
+            $"api/products/search?term={Uri.EscapeDataString(term)}&purpose={(forPurchase ? "purchase" : "sale")}&max={max}");
+
+    public Task<List<ProductBarcodeDto>?> GetProductBarcodesAsync(Guid productId)
+        => GetAsync<List<ProductBarcodeDto>>($"api/products/{productId}/barcodes");
+
+    public Task<(ProductBarcodeDto? Value, System.Net.HttpStatusCode? Status, string? Error)> AddProductBarcodeAsync(
+        Guid productId, AddProductBarcodeRequest request)
+        => SendForResultAsync<ProductBarcodeDto>(HttpMethod.Post, $"api/products/{productId}/barcodes", request);
+
+    public async Task<(bool Ok, string? Error)> RemoveProductBarcodeAsync(Guid productId, Guid barcodeId)
+    {
+        var message = await BuildAsync(HttpMethod.Delete, $"api/products/{productId}/barcodes/{barcodeId}", null);
+        var response = await http.SendAsync(message);
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
 
     // ── pre‑sale (V‑02, V‑08) ────────────────────────────────────────────────
     public Task<PreSaleDto?> CreatePreSaleAsync(CreatePreSaleRequest request)

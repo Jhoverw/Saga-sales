@@ -8,6 +8,58 @@ using SagaSales.Catalog.Services;
 [Route("api/products")]
 public sealed class ProductsController(IMediator mediator, IProductImageStorage imageStorage) : ControllerBase
 {
+    /// <summary>
+    /// Buscador único (spec 010): código de barras, código interno o nombre, desde 2 caracteres. Un código exacto
+    /// viene con <c>IsExactMatch</c> y las unidades del código (la caja). <c>purpose=purchase</c> deja solo bienes.
+    /// </summary>
+    [Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(IReadOnlyList<ProductSearchResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? term,
+        [FromQuery] string? purpose = null,
+        [FromQuery] int max = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var showCost = User.IsInRole(SagaSales.Shared.Constants.SagaSalesRoles.Owner)
+                       || User.IsInRole(SagaSales.Shared.Constants.SagaSalesRoles.Manager);
+        var forPurchase = string.Equals(purpose, "purchase", StringComparison.OrdinalIgnoreCase);
+        var result = await mediator.Send(
+            new Queries.SearchProductsQuery(term ?? string.Empty, forPurchase, showCost, max), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    [Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
+    [HttpGet("{id:guid}/barcodes")]
+    [ProducesResponseType(typeof(IReadOnlyList<ProductBarcodeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Barcodes(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Queries.GetProductBarcodesQuery(id), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>Agrega un código de barras al producto. Código de otro producto → 409.</summary>
+    [Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
+    [HttpPost("{id:guid}/barcodes")]
+    [ProducesResponseType(typeof(ProductBarcodeDto), StatusCodes.Status201Created)]
+    public async Task<IActionResult> AddBarcode(
+        Guid id,
+        [FromBody] AddProductBarcodeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Commands.AddProductBarcodeCommand(id, request), cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
+    [HttpDelete("{id:guid}/barcodes/{barcodeId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RemoveBarcode(Guid id, Guid barcodeId, CancellationToken cancellationToken)
+    {
+        await mediator.Send(new Commands.RemoveProductBarcodeCommand(id, barcodeId), cancellationToken);
+        return NoContent();
+    }
+
     [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<ProductDto>), StatusCodes.Status200OK)]

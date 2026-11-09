@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = SagaSalesRoles.ManagerOrOwner)]
 @inject ApiClient Api
 @using System.Globalization
+@using SagaSales.Shared.Catalog
 
 <div class="page-head">
     <div>
@@ -39,11 +40,15 @@
                     </div>
                 }
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label class="form-label small fw-bold text-muted">Stock inicial</label>
                 <input class="form-control" type="number" lang="en-US" placeholder="0" @bind="NewStock" />
             </div>
-            <div class="col-md-3 d-flex align-items-center gap-2">
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted">Código de barras</label>
+                <input class="form-control" placeholder="escanea aquí" autocomplete="off" @bind="NewBarcode" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2 d-flex align-items-center gap-2">
                 <div class="form-check mt-4">
                     <input class="form-check-input" type="checkbox" id="isTaxable" @bind="NewIsTaxable">
                     <label class="form-check-label small fw-bold text-muted" for="isTaxable">
@@ -72,6 +77,7 @@ else
                 <th>PVP</th>
                 <th>Stock</th>
                 <th>Estado</th>
+                <th style="width:90px;"></th>
                 <th style="width:110px;"></th>
             </tr>
         </thead>
@@ -95,10 +101,59 @@ else
                     <td>
                         <span class="chip @(product.Status switch { ProductStatus.Active => "chip--ok", ProductStatus.OutOfStock => "chip--danger", ProductStatus.Discontinued => "chip--neutral", ProductStatus.Draft => "chip--neutral", _ => "chip--info" })">@product.Status</span>
                     </td>
+                    <td>
+                        <button class="btn btn-sm @(BarcodeProduct?.Id == product.Id ? "btn-primary" : "btn-outline-secondary")"
+                                @onclick="() => OpenBarcodesAsync(product)">Códigos</button>
+                    </td>
                     <td class="text-end">
                         <InputFile class="form-control form-control-sm" OnChange="args => UploadImageAsync(product, args)" title="Subir imagen" />
                     </td>
                 </tr>
+                @if (BarcodeProduct?.Id == product.Id)
+                {
+                    <tr>
+                        <td></td>
+                        <td colspan="6">
+                            <div class="fw-bold mb-2">Códigos de barras de @product.Name</div>
+                            @if (BarcodeMessage is not null)
+                            {
+                                <div class="alert @(BarcodeError ? "alert-warning" : "alert-info") py-1 px-2 small">@BarcodeMessage</div>
+                            }
+                            <table class="table table-sm mb-2">
+                                <tbody>
+                                    @foreach (var code in Barcodes)
+                                    {
+                                        <tr>
+                                            <td class="font-monospace">@code.Barcode</td>
+                                            <td>@(code.Units > 1 ? $"caja x{code.Units}" : "unidad")</td>
+                                            <td>@(code.IsPrimary ? "principal" : "")</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveBarcodeAsync(code)">Quitar</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (Barcodes.Count == 0)
+                                    {
+                                        <tr><td colspan="4" class="text-muted small">Sin códigos todavía. Escanea uno abajo.</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                            <div class="d-flex gap-2 align-items-center">
+                                <input class="form-control form-control-sm" style="max-width:220px;" placeholder="escanea o escribe y Enter"
+                                       autocomplete="off" @bind="BarcodeInput" @bind:event="oninput" @onkeydown="OnBarcodeKeyAsync" />
+                                <select class="form-select form-select-sm" style="width:auto;" @bind="BarcodeIsBox">
+                                    <option value="false">de la unidad</option>
+                                    <option value="true">de la caja de</option>
+                                </select>
+                                @if (BarcodeIsBox)
+                                {
+                                    <input class="form-control form-control-sm" style="width:70px;" type="number" min="2" @bind="BarcodeUnits" />
+                                }
+                                <button class="btn btn-sm btn-primary" disabled="@Busy" @onclick="AddBarcodeAsync">Agregar</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
             }
         </tbody>
     </table>
@@ -120,6 +175,15 @@ else
     private string PriceError { get; set; } = string.Empty;
     private int NewStock { get; set; } = 10;
     private bool NewIsTaxable { get; set; } = true;
+    private string NewBarcode { get; set; } = string.Empty;
+
+    private ProductDto? BarcodeProduct { get; set; }
+    private List<ProductBarcodeDto> Barcodes { get; set; } = [];
+    private string BarcodeInput { get; set; } = string.Empty;
+    private bool BarcodeIsBox { get; set; }
+    private int BarcodeUnits { get; set; } = 12;
+    private string? BarcodeMessage { get; set; }
+    private bool BarcodeError { get; set; }
 
     private string? Error { get; set; }
     private bool Busy { get; set; }
@@ -196,7 +260,17 @@ else
             }
             else
             {
+                if (!string.IsNullOrWhiteSpace(NewBarcode))
+                {
+                    var (saved, _, barcodeError) = await Api.AddProductBarcodeAsync(
+                        created.Id, new AddProductBarcodeRequest { Barcode = NewBarcode.Trim(), Units = 1 });
+                    Error = saved is null
+                        ? $"Producto creado, pero el código de barras no se guardó: {barcodeError}"
+                        : saved.Warning;
+                }
+
                 // Reset form
+                NewBarcode = string.Empty;
                 NewName = string.Empty;
                 NewPriceString = "0.00";
                 PriceError = string.Empty;
@@ -248,6 +322,82 @@ else
         {
             Busy = false;
         }
+    }
+
+    private async Task OpenBarcodesAsync(ProductDto product)
+    {
+        if (BarcodeProduct?.Id == product.Id)
+        {
+            BarcodeProduct = null;
+            return;
+        }
+
+        BarcodeProduct = product;
+        BarcodeMessage = null;
+        BarcodeInput = string.Empty;
+        BarcodeIsBox = false;
+        Barcodes = await Api.GetProductBarcodesAsync(product.Id) ?? [];
+    }
+
+    private async Task OnBarcodeKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter")
+        {
+            await AddBarcodeAsync();
+        }
+    }
+
+    private async Task AddBarcodeAsync()
+    {
+        if (BarcodeProduct is null)
+        {
+            return;
+        }
+
+        var code = BarcodeRules.Normalize(BarcodeInput);
+        if (!BarcodeRules.IsAcceptable(code))
+        {
+            BarcodeMessage = "El código va sin espacios, de 3 a 30 caracteres.";
+            BarcodeError = true;
+            return;
+        }
+
+        Busy = true;
+        try
+        {
+            var units = BarcodeIsBox ? Math.Max(BarcodeUnits, 2) : 1;
+            var (saved, _, error) = await Api.AddProductBarcodeAsync(
+                BarcodeProduct.Id, new AddProductBarcodeRequest { Barcode = code, Units = units });
+
+            if (saved is null)
+            {
+                BarcodeMessage = error ?? "No se pudo guardar el código.";
+                BarcodeError = true;
+                return;
+            }
+
+            BarcodeMessage = saved.Warning ?? $"Código {code} guardado.";
+            BarcodeError = saved.Warning is not null;
+            BarcodeInput = string.Empty;
+            Barcodes = await Api.GetProductBarcodesAsync(BarcodeProduct.Id) ?? [];
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task RemoveBarcodeAsync(ProductBarcodeDto code)
+    {
+        if (BarcodeProduct is null)
+        {
+            return;
+        }
+
+        var (ok, error) = await Api.RemoveProductBarcodeAsync(BarcodeProduct.Id, code.Id);
+        BarcodeMessage = ok ? $"Código {code.Barcode} quitado." : error ?? "No se pudo quitar.";
+        BarcodeError = !ok;
+        Barcodes = await Api.GetProductBarcodesAsync(BarcodeProduct.Id) ?? [];
     }
 
     private static string Initial(string name)

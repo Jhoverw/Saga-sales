@@ -3,6 +3,7 @@
 @using System.Globalization
 @using System.Text
 @using SagaSales.Shared.Purchasing
+@using SagaSales.Shared.Catalog
 @inject ApiClient Api
 @inject IJSRuntime Js
 
@@ -130,7 +131,7 @@ else
     <div class="panel mt-3">
         <div class="panel__head">
             <span>Detalle</span>
-            <span class="page-head__sub ms-3 mb-0">Escribe el código o parte del nombre y pulsa Enter</span>
+            <span class="page-head__sub ms-3 mb-0">Escanea el código de barras o escribe parte del nombre: la lista aparece sola</span>
         </div>
         <div class="panel__body p-0">
             <div class="table-responsive">
@@ -154,15 +155,14 @@ else
                             var line = Lines[i];
                             var computed = LineResult(line);
                             <tr>
-                                <td>
-                                    <input class="form-control form-control-sm" @ref="line.CodeRef"
-                                           @bind="line.Term" @bind:event="oninput"
-                                           @onkeydown="e => OnTermKeyAsync(e, line)" placeholder="código" />
-                                </td>
+                                <td class="small text-break">@(line.DisplayCode ?? "")</td>
                                 <td>
                                     @if (line.ProductId != Guid.Empty)
                                     {
-                                        <div>@line.ProductName</div>
+                                        <div class="d-flex align-items-start gap-2">
+                                            <span class="flex-grow-1">@line.ProductName</span>
+                                            <button class="btn btn-link btn-sm p-0" title="Cambiar producto" @onclick="() => ResetLine(line)">cambiar</button>
+                                        </div>
                                         @if (line.TracksBatches)
                                         {
                                             <div class="d-flex gap-1 mt-1">
@@ -171,20 +171,34 @@ else
                                             </div>
                                         }
                                     }
-                                    else if (line.Candidates.Count > 0)
+                                    else if (line.UnknownCode is { } unknown)
                                     {
-                                        <select class="form-select form-select-sm" @onchange="e => PickCandidate(line, e.Value?.ToString())">
-                                            <option value="">— @line.Candidates.Count coincidencia(s), elige —</option>
-                                            @foreach (var c in line.Candidates)
-                                            {
-                                                <option value="@c.Id">@(c.Code is null ? "" : $"{c.Code} · ")@c.Name</option>
-                                            }
-                                        </select>
+                                        <div class="small mb-1">
+                                            <strong>@unknown</strong> no está registrado.
+                                            <button class="btn btn-link btn-sm p-0 ms-1" @onclick="() => ResetLine(line)">buscar otra vez</button>
+                                        </div>
+                                        @if (BarcodeRules.IsAcceptable(unknown))
+                                        {
+                                            <div class="d-flex gap-1 align-items-center mb-1">
+                                                <select class="form-select form-select-sm" style="width:auto;" value="@(line.AssociateBox ? "caja" : "unidad")"
+                                                        @onchange="e => SetAssociateBox(line, e)">
+                                                    <option value="unidad">es de 1 unidad</option>
+                                                    <option value="caja">es de una caja de</option>
+                                                </select>
+                                                @if (line.AssociateBox)
+                                                {
+                                                    <input class="form-control form-control-sm" style="width:60px;" type="number" min="2" @bind="line.AssociateUnits" />
+                                                }
+                                            </div>
+                                            <ProductPicker ForPurchase="true" ShowCost="true" Placeholder="Asociar a: busca el producto por nombre"
+                                                           OnPicked="p => AssociateAsync(line, p)" OnNotFound="_ => OpenNewProduct(line)" />
+                                        }
+                                        <button class="btn btn-sm btn-outline-primary mt-1" @onclick="() => OpenNewProduct(line)">+ Crear producto nuevo</button>
                                     }
-                                    else if (line.NotFound)
+                                    else
                                     {
-                                        <span class="text-muted small">No existe.</span>
-                                        <button class="btn btn-link btn-sm p-0 ms-1" @onclick="() => OpenNewProduct(line)">+ Crear producto</button>
+                                        <ProductPicker @ref="line.Picker" ForPurchase="true" ShowCost="true"
+                                                       OnPicked="p => Assign(line, p)" OnNotFound="c => OnUnknownCode(line, c)" />
                                     }
                                 </td>
                                 <td>
@@ -222,15 +236,24 @@ else
                                     <td colspan="9">
                                         <div class="row g-2 align-items-end">
                                             <div class="col-md-2">
-                                                <label class="form-label small">Código</label>
+                                                <label class="form-label small">Código de barras</label>
+                                                <input class="form-control form-control-sm" @bind="NewProduct.Barcode" @bind:event="oninput" />
+                                                <select class="form-select form-select-sm mt-1" value="@(NewProduct.BarcodeUnits > 1 ? "caja" : "unidad")"
+                                                        @onchange="SetNewBarcodeUnits">
+                                                    <option value="unidad">de la unidad</option>
+                                                    <option value="caja">de la caja</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-1">
+                                                <label class="form-label small">Cód. interno</label>
                                                 <input class="form-control form-control-sm" @bind="NewProduct.Code" @bind:event="oninput" />
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label class="form-label small">Nombre</label>
                                                 <input class="form-control form-control-sm" @bind="NewProduct.Name" @bind:event="oninput" />
                                             </div>
-                                            <div class="col-md-2">
-                                                <label class="form-label small">PVP (venta)</label>
+                                            <div class="col-md-1">
+                                                <label class="form-label small">PVP</label>
                                                 <DecimalInput @bind-Value="NewProduct.SalePrice" CssClass="form-control form-control-sm" />
                                             </div>
                                             <div class="col-md-1">
@@ -247,7 +270,7 @@ else
                                                     <label class="form-check-label small" for="npLot">Lote</label>
                                                 </div>
                                             </div>
-                                            <div class="col-md-2 text-nowrap">
+                                            <div class="col-md-1 text-nowrap">
                                                 <button class="btn btn-sm btn-primary" disabled="@Busy" @onclick="CreateProductAsync">Crear</button>
                                                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => NewProductLine = null">Cancelar</button>
                                             </div>
@@ -507,7 +530,10 @@ else
             FocusLine = null;
             try
             {
-                await line.CodeRef.FocusAsync();
+                if (line.Picker is { } picker)
+                {
+                    await picker.FocusAsync();
+                }
             }
             catch (InvalidOperationException)
             {
@@ -580,76 +606,91 @@ else
         }
     }
 
-    private async Task OnTermKeyAsync(KeyboardEventArgs e, LineDraft line)
+    private void ResetLine(LineDraft line)
     {
-        if (e.Key is not ("Enter" or "NumpadEnter"))
+        line.ProductId = Guid.Empty;
+        line.ProductName = string.Empty;
+        line.DisplayCode = null;
+        line.UnknownCode = null;
+        if (NewProductLine == line)
+        {
+            NewProductLine = null;
+        }
+
+        FocusLine = line;
+    }
+
+    private static void SetAssociateBox(LineDraft line, ChangeEventArgs e) => line.AssociateBox = e.Value?.ToString() == "caja";
+
+    private void SetNewBarcodeUnits(ChangeEventArgs e)
+        => NewProduct.BarcodeUnits = e.Value?.ToString() == "caja" ? Math.Max(NewProductUnits, 2) : 1;
+
+    private void OnUnknownCode(LineDraft line, string code)
+    {
+        line.UnknownCode = code;
+        line.AssociateBox = false;
+        line.AssociateUnits = Math.Max(line.UnitsPerPackage, 12);
+    }
+
+    /// <summary>HU-10.3: el código escaneado que no existía queda guardado en el producto elegido.</summary>
+    private async Task AssociateAsync(LineDraft line, ProductSearchResultDto product)
+    {
+        if (line.UnknownCode is not { } code)
         {
             return;
         }
 
-        var term = line.Term.Trim();
-        if (term.Length == 0)
+        var units = line.AssociateBox ? Math.Max(line.AssociateUnits, 2) : 1;
+        var (saved, _, error) = await Api.AddProductBarcodeAsync(product.Id, new AddProductBarcodeRequest { Barcode = code, Units = units });
+        if (saved is null)
         {
+            Message = error ?? "No se pudo asociar el código.";
+            Error = true;
             return;
         }
 
-        line.Candidates = [];
-        line.NotFound = false;
-        var found = await Api.FindPurchaseProductsAsync(term) ?? [];
-        var exact = found.Where(p => string.Equals(p.Code, term, StringComparison.OrdinalIgnoreCase)).ToList();
+        Message = $"Código {code} guardado en «{product.Name}»" + (units > 1 ? $" como caja de {units}." : ".")
+                  + (saved.Warning is null ? string.Empty : " " + saved.Warning);
+        Error = saved.Warning is not null;
+        product.Barcode = code;
+        product.MatchedUnits = units;
+        if (units > 1)
+        {
+            product.UnitsPerPackage = units;
+        }
 
-        if (exact.Count == 1)
-        {
-            Assign(line, exact[0]);
-        }
-        else if (found.Count == 1)
-        {
-            Assign(line, found[0]);
-        }
-        else if (found.Count > 1)
-        {
-            line.ProductId = Guid.Empty;
-            line.Candidates = found;
-        }
-        else
-        {
-            line.ProductId = Guid.Empty;
-            line.NotFound = true;
-        }
+        Assign(line, product);
     }
 
-    private void PickCandidate(LineDraft line, string? value)
+    private void Assign(LineDraft line, ProductSearchResultDto product)
     {
-        if (Guid.TryParse(value, out var id) && line.Candidates.FirstOrDefault(c => c.Id == id) is { } product)
-        {
-            Assign(line, product);
-        }
-    }
+        line.UnknownCode = null;
+        var boxUnits = product.MatchedUnits is > 1 ? product.MatchedUnits.Value : 0;
 
-    private void Assign(LineDraft line, PurchaseProductDto product)
-    {
         if (Lines.FirstOrDefault(l => l != line && l.ProductId == product.Id) is { } existing && !product.TracksBatches)
         {
-            Message = $"«{product.Name}» ya está en el detalle; se suma ahí la cantidad.";
+            // Mismo producto otra vez (se escaneó de nuevo): suma en su línea, en el empaque de esa línea.
+            var add = boxUnits > 0 && !existing.IsBox ? boxUnits : 1;
+            existing.Quantity += add;
+            Message = $"«{product.Name}» ya está en el detalle: ahora van {existing.Quantity:0.###}.";
             Error = false;
-            existing.Quantity += line.Quantity > 0 ? line.Quantity : 1;
-            line.Term = string.Empty;
-            line.Candidates = [];
-            line.NotFound = false;
             FocusLine = line;
             return;
         }
 
         line.ProductId = product.Id;
         line.ProductName = product.Name;
-        line.Term = product.Code ?? line.Term;
+        line.DisplayCode = product.Barcode ?? product.Code;
         line.Taxable = product.IsTaxable;
         line.TracksBatches = product.TracksBatches;
         line.LastCost = product.Cost;
-        line.Candidates = [];
-        line.NotFound = false;
 
-        if (product.UnitsPerPackage is > 1)
+        if (boxUnits > 0)
+        {
+            line.Package = "caja";
+            line.UnitsPerPackage = boxUnits;
+        }
+        else if (product.UnitsPerPackage is > 1)
         {
             line.Package = "caja";
             line.UnitsPerPackage = product.UnitsPerPackage.Value;
@@ -663,6 +704,12 @@ else
         if (line.Quantity <= 0)
         {
             line.Quantity = 1;
+        }
+
+        // Listo para el siguiente escaneo.
+        if (Lines[^1] == line)
+        {
+            AddLineAndFocus();
         }
     }
 
@@ -685,12 +732,15 @@ else
 
     private void OpenNewProduct(LineDraft line)
     {
-        var term = line.Term.Trim();
-        var looksLikeCode = term.Length > 0 && !term.Contains(' ');
+        var term = (line.UnknownCode ?? string.Empty).Trim();
+        var scanned = BarcodeRules.LooksScanned(term);
+        var shortCode = !scanned && term.Length is > 0 and <= 20 && !term.Contains(' ') && term.Any(char.IsDigit);
         NewProduct = new CreatePurchaseProductRequest
         {
-            Code = looksLikeCode ? term : null,
-            Name = looksLikeCode ? string.Empty : term,
+            Barcode = scanned ? term : null,
+            BarcodeUnits = scanned && line.AssociateBox ? Math.Max(line.AssociateUnits, 2) : 1,
+            Code = shortCode ? term : null,
+            Name = scanned || shortCode ? string.Empty : term,
             IsTaxable = true,
         };
         NewProductUnits = line.IsBox ? line.UnitsPerPackage : 1;
@@ -708,6 +758,11 @@ else
         try
         {
             NewProduct.UnitsPerPackage = NewProductUnits > 1 ? NewProductUnits : null;
+            if (NewProduct.BarcodeUnits > 1)
+            {
+                NewProduct.BarcodeUnits = Math.Max(NewProductUnits, 2);
+                NewProduct.UnitsPerPackage = NewProduct.BarcodeUnits;
+            }
             var (created, _, error) = await Api.CreatePurchaseProductAsync(NewProduct);
             if (created is null)
             {
@@ -716,8 +771,19 @@ else
                 return;
             }
 
-            Assign(line, created);
             NewProductLine = null;
+            Assign(line, new ProductSearchResultDto
+            {
+                Id = created.Id,
+                Code = created.Code,
+                Name = created.Name,
+                IsTaxable = created.IsTaxable,
+                UnitsPerPackage = created.UnitsPerPackage,
+                TracksBatches = created.TracksBatches,
+                BasePrice = created.BasePrice,
+                Barcode = string.IsNullOrWhiteSpace(NewProduct.Barcode) ? null : NewProduct.Barcode.Trim(),
+                MatchedUnits = NewProduct.BarcodeUnits,
+            });
             Message = $"Producto «{created.Name}» creado; el stock entra con esta compra.";
             Error = false;
         }
@@ -739,10 +805,10 @@ else
             return;
         }
 
-        var pending = Lines.Where(l => l.ProductId == Guid.Empty && !string.IsNullOrWhiteSpace(l.Term)).ToList();
+        var pending = Lines.Where(l => l.ProductId == Guid.Empty && l.UnknownCode is not null).ToList();
         if (pending.Count > 0)
         {
-            Message = $"Hay {pending.Count} línea(s) con código sin producto. Pulsa Enter en el código o créalo.";
+            Message = $"Hay {pending.Count} línea(s) con un código sin producto: asócialo o crea el producto.";
             Error = true;
             return;
         }
@@ -863,7 +929,7 @@ else
             var l = ready[i];
             var r = totals.Lines[i];
             csv.AppendLine(string.Join(';',
-                Cell(l.Term), Cell(l.ProductName), Cell(l.Package), l.EffectiveUnits.ToString(Money),
+                Cell(l.DisplayCode), Cell(l.ProductName), Cell(l.Package), l.EffectiveUnits.ToString(Money),
                 Num(l.Quantity, "0.###"), Num(l.UnitPrice, "0.00####"), l.Taxable ? "S" : "N",
                 Num(r.Net), Num(r.Discount), Num(r.Ice), Num(r.Others), Num(r.Tax), Num(r.LineTotal),
                 r.StockQuantity.ToString(Money), Num(r.EffectiveUnitCost, "0.0000")));
@@ -930,9 +996,17 @@ else
 
     private sealed class LineDraft
     {
-        public ElementReference CodeRef { get; set; }
+        public ProductPicker? Picker { get; set; }
 
-        public string Term { get; set; } = string.Empty;
+        /// <summary>Código de barras o interno que se muestra y exporta.</summary>
+        public string? DisplayCode { get; set; }
+
+        /// <summary>Lo escaneado o escrito que no existe: se asocia a un producto o se crea uno.</summary>
+        public string? UnknownCode { get; set; }
+
+        public bool AssociateBox { get; set; }
+
+        public int AssociateUnits { get; set; } = 12;
 
         public Guid ProductId { get; set; }
 
@@ -942,9 +1016,6 @@ else
 
         public decimal? LastCost { get; set; }
 
-        public List<PurchaseProductDto> Candidates { get; set; } = [];
-
-        public bool NotFound { get; set; }
 
         public string Package { get; set; } = "unidad";
 

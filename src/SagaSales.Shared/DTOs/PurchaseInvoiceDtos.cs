@@ -106,6 +106,12 @@ public class CreatePurchaseProductRequest
     public int? UnitsPerPackage { get; set; }
 
     public bool TracksBatches { get; set; }
+
+    /// <summary>Código de barras escaneado en la línea (spec 010, HU-10.3); se guarda en el producto.</summary>
+    public string? Barcode { get; set; }
+
+    /// <summary>Unidades que representa ese código: 1 la unidad, más de 1 la caja.</summary>
+    public int BarcodeUnits { get; set; } = 1;
 }
 
 /// <summary>Lo que se debe a un proveedor por una compra a crédito.</summary>

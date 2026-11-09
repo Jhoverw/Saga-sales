@@ -121,6 +121,8 @@ public record CreatePurchaseProductCommand(CreatePurchaseProductRequest Request)
 
 public sealed class CreatePurchaseProductCommandHandler(
     IPurchaseInvoiceRepository repository,
+    IProductCodeRepository codes,
+    ICurrentUser currentUser,
     IMediator mediator) : ICommandHandler<CreatePurchaseProductCommand, PurchaseProductDto>
 {
     public async Task<Result<PurchaseProductDto>> Handle(CreatePurchaseProductCommand command, CancellationToken cancellationToken)
@@ -149,6 +151,22 @@ public sealed class CreatePurchaseProductCommandHandler(
             throw new ConflictException($"El código {code} ya es de otro producto.");
         }
 
+        var barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : SagaSales.Shared.Catalog.BarcodeRules.Normalize(request.Barcode);
+        if (barcode is not null)
+        {
+            if (!SagaSales.Shared.Catalog.BarcodeRules.IsAcceptable(barcode))
+            {
+                throw new ValidationException("El código de barras va sin espacios, de 3 a 30 caracteres.");
+            }
+
+            var owner = (await codes.SearchAsync(barcode, 5, 1, cancellationToken))
+                .FirstOrDefault(p => p.IsExactMatch && string.Equals(p.Barcode, barcode, StringComparison.Ordinal));
+            if (owner is not null)
+            {
+                throw new ConflictException($"Ese código de barras ya es de «{owner.Name}».");
+            }
+        }
+
         var created = await mediator.Send(
             new CreateProductCommand(
                 name, null, request.SalePrice, "USD", 0, null, request.TracksBatches, request.IsTaxable),
@@ -160,13 +178,19 @@ public sealed class CreatePurchaseProductCommandHandler(
             await repository.SetPurchaseInfoAsync(product.Id, code, request.UnitsPerPackage, cancellationToken);
         }
 
+        if (barcode is not null)
+        {
+            var units = Math.Max(request.BarcodeUnits, 1);
+            await codes.AddBarcodeAsync(product.Id, barcode, units, units == 1, currentUser.UserId, cancellationToken);
+        }
+
         return Result<PurchaseProductDto>.Success(new PurchaseProductDto
         {
             Id = product.Id,
             Code = code,
             Name = product.Name,
             IsTaxable = request.IsTaxable,
-            UnitsPerPackage = request.UnitsPerPackage,
+            UnitsPerPackage = request.BarcodeUnits > 1 ? request.BarcodeUnits : request.UnitsPerPackage,
             TracksBatches = request.TracksBatches,
             BasePrice = product.BasePrice,
         });

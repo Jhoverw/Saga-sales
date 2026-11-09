@@ -48,13 +48,17 @@
             {
                 <div class="row g-2 align-items-end mb-2">
                     <div class="col-md-6">
-                        <select class="form-select" @bind="line.ProductId">
-                            <option value="@Guid.Empty">— elige producto —</option>
-                            @foreach (var product in Products)
-                            {
-                                <option value="@product.Id">@product.Name · @product.BasePrice.ToString("C") · stock @product.StockQuantity</option>
-                            }
-                        </select>
+                        @if (line.Product is { } chosen)
+                        {
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="form-control bg-transparent">@chosen.Name · @chosen.BasePrice.ToString("C")@(chosen.Kind == 2 ? "" : $" · stock {chosen.StockQuantity}")</span>
+                                <button class="btn btn-sm btn-outline-secondary" title="Cambiar producto" @onclick="() => line.Product = null">Cambiar</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <ProductPicker CssClass="form-control" OnPicked="p => PickProduct(line, p)" OnNotFound="OnUnknownCode" />
+                        }
                     </div>
                     <div class="col-md-2">
                         <input class="form-control" type="number" lang="en-US" min="1" @bind="line.Quantity" placeholder="Cant." />
@@ -445,7 +449,6 @@
 @code {
     private List<OrderDto> OrderList { get; set; } = [];
     private List<CustomerDto> Customers { get; set; } = [];
-    private List<ProductDto> Products { get; set; } = [];
 
     private OrderDto? Selected { get; set; }
     private List<PaymentDto> PaymentList { get; set; } = [];
@@ -512,12 +515,35 @@
     /// <summary>One product line of the order being typed. Quantity and product are edited in place.</summary>
     private sealed class LineDraft
     {
-        public Guid ProductId { get; set; } = Guid.Empty;
+        public ProductSearchResultDto? Product { get; set; }
+
+        public Guid ProductId => Product?.Id ?? Guid.Empty;
 
         public int Quantity { get; set; } = 1;
     }
 
     private void AddLine() => Lines.Add(new LineDraft());
+
+    /// <summary>Buscador único (spec 010): el código de la caja trae sus unidades; repetir suma.</summary>
+    private void PickProduct(LineDraft line, ProductSearchResultDto product)
+    {
+        var units = Math.Max(product.MatchedUnits ?? 1, 1);
+        var existing = Lines.FirstOrDefault(l => l != line && l.ProductId == product.Id);
+        if (existing is not null)
+        {
+            existing.Quantity += units;
+            return;
+        }
+
+        line.Product = product;
+        line.Quantity = units;
+    }
+
+    private void OnUnknownCode(string code)
+    {
+        Message = $"El código {code} no está registrado. Búscalo por nombre o asócialo en Catálogo.";
+        Error = true;
+    }
 
     private void RemoveLine(LineDraft line)
     {
@@ -528,7 +554,7 @@
     // a product not yet converted shows its base and the server adds the VAT.
     private string LinePreviewText(LineDraft line)
     {
-        var product = Products.FirstOrDefault(p => p.Id == line.ProductId);
+        var product = line.Product;
         if (product is null)
         {
             return 0m.ToString("C");
@@ -568,7 +594,6 @@
     protected override async Task OnInitializedAsync()
     {
         Customers = await Api.GetCustomersAsync(1, 100) is { } customers ? customers.Items.ToList() : [];
-        Products = await Api.GetProductsAsync(1, 100) is { } products ? products.Items.ToList() : [];
         HoldHours = (await Api.GetSalesSettingsAsync())?.OrderHoldHours ?? 48;
         await LoadOrdersAsync();
     }

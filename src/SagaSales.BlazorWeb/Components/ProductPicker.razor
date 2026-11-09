@@ -1,0 +1,239 @@
+@* Buscador único de productos (spec 010): escribe parte del nombre, el código interno o escanea el código de
+   barras. Desde 2 caracteres muestra coincidencias; ↑↓ para moverse, Enter elige, Esc cierra. Un código exacto
+   (lo que manda el lector USB, que escribe y pulsa Enter) se elige solo. *@
+@using System.Globalization
+@inject ApiClient Api
+@implements IDisposable
+
+<div class="picker">
+    <input @ref="input" id="@Id" class="@CssClass" autocomplete="off" spellcheck="false"
+           value="@text" @oninput="OnInputAsync" @onkeydown="OnKeyDownAsync"
+           placeholder="@Placeholder" disabled="@Disabled" />
+    @if (open && results.Count > 0)
+    {
+        <div class="picker__list">
+            @for (var i = 0; i < results.Count; i++)
+            {
+                var item = results[i];
+                var index = i;
+                <button type="button" class="picker__item @(index == active ? "is-active" : "")"
+                        @onmousedown="() => PickAsync(item)" @onmousedown:preventDefault>
+                    <span class="picker__name">@item.Name@(item.Kind == 2 ? " · servicio" : "")</span>
+                    <small>@Detail(item)</small>
+                </button>
+            }
+        </div>
+    }
+    else if (open && searched && results.Count == 0 && text.Trim().Length >= 2)
+    {
+        <div class="picker__empty">Sin coincidencias. Enter para @(ForPurchase ? "crearlo o asociar el código" : "avisar").</div>
+    }
+</div>
+
+<style>
+    .picker { position: relative; }
+    .picker__list, .picker__empty { margin-top: .25rem; border: 1px solid var(--line, #2a3446); border-radius: .4rem; background: var(--panel, #111827); max-height: 16rem; overflow-y: auto; }
+    .picker__empty { padding: .4rem .6rem; font-size: .8rem; color: var(--text-muted, #94a3b8); }
+    .picker__item { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: inherit; padding: .35rem .6rem; border-bottom: 1px solid var(--line, #2a3446); }
+    .picker__item:last-child { border-bottom: 0; }
+    .picker__item.is-active, .picker__item:hover { background: rgba(31, 111, 235, .18); }
+    .picker__name { display: block; font-size: .85rem; }
+    .picker__item small { color: var(--text-muted, #94a3b8); font-size: .75rem; }
+</style>
+
+@code {
+    private static readonly CultureInfo Money = CultureInfo.InvariantCulture;
+
+    private ElementReference input;
+    private string text = string.Empty;
+    private List<ProductSearchResultDto> results = [];
+    private int active;
+    private bool open;
+    private bool searched;
+    private int version;
+    private CancellationTokenSource? debounce;
+
+    [Parameter] public string? Id { get; set; }
+
+    [Parameter] public bool ForPurchase { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "Producto: nombre, código o escanea";
+
+    [Parameter] public string CssClass { get; set; } = "form-control form-control-sm";
+
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Muestra el costo en la lista (solo en compras, para quien lo puede ver).</summary>
+    [Parameter] public bool ShowCost { get; set; }
+
+    [Parameter] public EventCallback<ProductSearchResultDto> OnPicked { get; set; }
+
+    /// <summary>Enter sin coincidencias: recibe lo escrito (puede ser un código de barras nuevo).</summary>
+    [Parameter] public EventCallback<string> OnNotFound { get; set; }
+
+    public async Task FocusAsync()
+    {
+        try
+        {
+            await input.FocusAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            // Todavía no está en pantalla.
+        }
+    }
+
+    public void Clear()
+    {
+        text = string.Empty;
+        results = [];
+        open = false;
+        searched = false;
+        version++;
+    }
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        text = e.Value?.ToString() ?? string.Empty;
+        var term = text.Trim();
+        var mine = ++version;
+
+        debounce?.Cancel();
+        if (term.Length < 2)
+        {
+            results = [];
+            open = false;
+            searched = false;
+            return;
+        }
+
+        debounce = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(180, debounce.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        var found = await Api.SearchProductsAsync(term, ForPurchase) ?? [];
+        if (mine != version)
+        {
+            return; // llegó tarde: ya se escribió otra cosa o se eligió un producto
+        }
+
+        results = found;
+        active = 0;
+        open = true;
+        searched = true;
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                active = Math.Min(active + 1, Math.Max(0, results.Count - 1));
+                break;
+            case "ArrowUp":
+                active = Math.Max(active - 1, 0);
+                break;
+            case "Escape":
+                open = false;
+                break;
+            case "Enter" or "NumpadEnter":
+                await OnEnterAsync();
+                break;
+        }
+    }
+
+    private async Task OnEnterAsync()
+    {
+        var term = text.Trim();
+        if (term.Length == 0)
+        {
+            return;
+        }
+
+        // Si la lista ya está abierta y el usuario se movió con las flechas, respeta su elección.
+        if (open && results.Count > 0 && active > 0)
+        {
+            await PickAsync(results[active]);
+            return;
+        }
+
+        // El lector escribe rápido y pulsa Enter: busca ya, sin esperar.
+        debounce?.Cancel();
+        var mine = ++version;
+        var found = await Api.SearchProductsAsync(term, ForPurchase) ?? [];
+        if (mine != version)
+        {
+            return;
+        }
+
+        if (found.Count > 0 && (found[0].IsExactMatch || found.Count == 1))
+        {
+            await PickAsync(found[0]);
+            return;
+        }
+
+        if (found.Count == 0)
+        {
+            var typed = term;
+            Clear();
+            await OnNotFound.InvokeAsync(typed);
+            return;
+        }
+
+        results = found;
+        active = 0;
+        open = true;
+        searched = true;
+    }
+
+    private async Task PickAsync(ProductSearchResultDto item)
+    {
+        Clear();
+        await OnPicked.InvokeAsync(item);
+    }
+
+    private string Detail(ProductSearchResultDto item)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(item.Barcode))
+        {
+            parts.Add(item.MatchedUnits is > 1 ? $"{item.Barcode} (caja x{item.MatchedUnits})" : item.Barcode);
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Code))
+        {
+            parts.Add("cód. " + item.Code);
+        }
+
+        if (ForPurchase)
+        {
+            if (item.UnitsPerPackage is > 1)
+            {
+                parts.Add($"caja x{item.UnitsPerPackage}");
+            }
+
+            if (ShowCost && item.Cost is { } cost)
+            {
+                parts.Add("últ. costo " + cost.ToString("0.00##", Money));
+            }
+        }
+        else
+        {
+            parts.Add("$" + item.BasePrice.ToString("0.00", Money));
+            if (item.Kind != 2)
+            {
+                parts.Add("stock " + item.StockQuantity);
+            }
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    public void Dispose() => debounce?.Cancel();
+}

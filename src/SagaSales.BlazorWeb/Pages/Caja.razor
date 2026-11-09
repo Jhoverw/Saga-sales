@@ -187,24 +187,9 @@
                         }
                         <tr class="is-entry">
                             <td colspan="2" class="caja__search">
-                                <input id="caja-search" class="form-control form-control-sm" autocomplete="off"
-                                       @bind="SearchText" @bind:event="oninput" @bind:after="OnSearchChangedAsync" @onkeydown="SearchKeyDown"
-                                       placeholder="Agregar producto: escribe 3 letras o más · Enter agrega" />
-                                @if (Results.Count > 0)
-                                {
-                                    <div class="caja__results">
-                                        @for (var i = 0; i < Results.Count; i++)
-                                        {
-                                            var product = Results[i];
-                                            var index = i;
-                                            <button type="button" class="@(index == ActiveResult ? "is-active" : "")"
-                                                    @onclick="() => AddProduct(product)">
-                                                <span>@product.Name</span>
-                                                <small>@UnitWithTax(product).ToString("C") · stock @product.StockQuantity</small>
-                                            </button>
-                                        }
-                                    </div>
-                                }
+                                <ProductPicker @ref="Picker" Id="caja-search"
+                                               Placeholder="Escanea o escribe nombre / código · Enter agrega"
+                                               OnPicked="AddPicked" OnNotFound="OnUnknownCode" />
                             </td>
                             <td colspan="5" class="caja__hint">
                                 @(Cart.Count == 0 ? "Busca un producto para empezar." : $"{Cart.Count} línea(s)")
@@ -287,9 +272,7 @@
     // Kept so a store whose consumer was created before spec 002 is still found.
     private const string ConsumerEmail = "consumidor.final@caja.local";
 
-    private string SearchText { get; set; } = string.Empty;
-    private List<ProductDto> Results { get; set; } = [];
-    private int ActiveResult { get; set; } = 0;
+    private ProductPicker? Picker { get; set; }
     private List<CartLine> Cart { get; set; } = [];
     private TaxRateDto? TaxRate { get; set; }
 
@@ -576,47 +559,14 @@
     }
 
     // ── products ───────────────────────────────────────────────────────────
-    private async Task OnSearchChangedAsync()
+    /// <summary>Del buscador único (spec 010): el código de la caja agrega sus unidades.</summary>
+    private void AddPicked(ProductSearchResultDto product) => AddProduct(product, product.MatchedUnits ?? 1);
+
+    private void OnUnknownCode(string code)
     {
-        if (SearchText.Trim().Length < 3)
-        {
-            Results = [];
-            return;
-        }
-
-        // Search is by name until the barcode lookup (V-01) is built.
-        try
-        {
-            var page = await Api.GetProductsAsync(1, 8, SearchText.Trim());
-            Results = page?.Items.ToList() ?? [];
-            ActiveResult = 0;
-        }
-        catch (Exception ex)
-        {
-            Results = [];
-            Message = $"No se pudo buscar el producto: {ex.Message}";
-            Error = true;
-        }
-    }
-
-    private void SearchKeyDown(KeyboardEventArgs e)
-    {
-        switch (e.Key)
-        {
-            case "Enter":
-                if (Results.Count > 0)
-                {
-                    AddProduct(Results[Math.Clamp(ActiveResult, 0, Results.Count - 1)]);
-                }
-
-                break;
-            case "ArrowDown":
-                ActiveResult = Math.Min(ActiveResult + 1, Math.Max(0, Results.Count - 1));
-                break;
-            case "ArrowUp":
-                ActiveResult = Math.Max(ActiveResult - 1, 0);
-                break;
-        }
+        Message = $"El código {code} no está registrado. Búscalo por nombre; el administrador lo asocia en Catálogo o en Compras.";
+        Error = true;
+        _ = Js.InvokeVoidAsync("sagaFocus", "caja-search");
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
@@ -639,12 +589,13 @@
         }
     }
 
-    private void AddProduct(ProductDto product)
+    private void AddProduct(ProductDto product, int units = 1)
     {
+        units = Math.Max(units, 1);
         var existing = Cart.FirstOrDefault(l => l.ProductId == product.Id);
         if (existing is not null)
         {
-            existing.Quantity++;
+            existing.Quantity += units;
         }
         else
         {
@@ -657,11 +608,11 @@
                 IsTaxable = product.IsTaxable,
                 PriceIncludesTax = product.PriceIncludesTax,
                 Stock = product.StockQuantity,
+                Quantity = units,
             });
         }
 
-        SearchText = string.Empty;
-        Results = [];
+        Picker?.Clear();
         Amount = GrossTotal;
         Message = null;
         _ = Js.InvokeVoidAsync("sagaFocus", "caja-search");
@@ -690,8 +641,7 @@
         Reference = string.Empty;
         Amount = 0;
         Message = null;
-        Results = [];
-        SearchText = string.Empty;
+        Picker?.Clear();
         return Js.InvokeVoidAsync("sagaFocus", "caja-search").AsTask();
     }
 
