@@ -77,3 +77,41 @@ public class SalesSettingsDto
     /// <summary>Horas que un pedido aparta el stock sin pago verificado (1 a 720).</summary>
     public int OrderHoldHours { get; set; } = 48;
 }
+
+/// <summary>Unidades apartadas por pedidos que todavía no salen: siguen en la bodega (spec 008).</summary>
+public class ReservedStockDto
+{
+    public Guid ProductId { get; set; }
+
+    public string ProductName { get; set; } = string.Empty;
+
+    public int Quantity { get; set; }
+
+    public int Orders { get; set; }
+}
+
+/// <summary>Un pedido que aparta unidades de un producto.</summary>
+public class ReservedOrderDto
+{
+    public Guid OrderId { get; set; }
+
+    public string? OrderNumber { get; set; }
+
+    public Guid CustomerId { get; set; }
+
+    public string Status { get; set; } = string.Empty;
+
+    public int Quantity { get; set; }
+
+    public DateTime? HoldUntil { get; set; }
+
+    public bool CashOnDelivery { get; set; }
+
+    public DateTime OrderDate { get; set; }
+
+    public decimal VerifiedAmount { get; set; }
+
+    public decimal Total { get; set; }
+
+    public bool PaymentVerified => VerifiedAmount >= Total;
+}

@@ -134,6 +134,30 @@ public class RemoteOrderTests
         Assert.Equal(12, hours);
     }
 
+    [Fact]
+    public async Task Reserved_stock_counts_only_pedidos_that_have_not_left()
+    {
+        if (TestDatabase.TryAnnounceSkip(nameof(Reserved_stock_counts_only_pedidos_that_have_not_left)))
+        {
+            return;
+        }
+
+        await using var connection = await OpenAsync();
+        var (tenantId, waiting, _) = await PedidoAsync(connection, cod: false);
+        var (_, cancelled, _) = await PedidoAsync(connection, cod: false, tenantId);
+        await OrderAsync(connection, tenantId);
+        await ChangeStatusAsync(connection, tenantId, cancelled, 6);
+
+        var reserved = (await connection.QueryAsync<ReservedRow>(
+            "dbo.sp_order_reserved_stock", new { p_tenant_id = tenantId }, commandType: CommandType.StoredProcedure)).ToList();
+
+        // Every test order has its own product with 2 units: only the waiting pedido reserves.
+        var row = Assert.Single(reserved);
+        Assert.Equal(2, row.Quantity);
+        Assert.Equal(1, row.Orders);
+        Assert.NotEqual(Guid.Empty, waiting);
+    }
+
     private static async Task<SqlConnection> OpenAsync()
     {
         var connection = new SqlConnection(TestDatabase.ForService("sales"));
@@ -211,6 +235,13 @@ public class RemoteOrderTests
         public decimal TaxAmount { get; set; }
 
         public decimal PaidAmount { get; set; }
+    }
+
+    private sealed class ReservedRow
+    {
+        public int Quantity { get; set; }
+
+        public int Orders { get; set; }
     }
 
     private sealed class DueRow

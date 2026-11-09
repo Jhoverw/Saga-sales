@@ -194,6 +194,11 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public Task<List<RemoteOrderDto>?> GetRemoteOrdersAsync() => GetAsync<List<RemoteOrderDto>>("api/orders/remote");
 
+    public Task<List<ReservedStockDto>?> GetReservedStockAsync() => GetAsync<List<ReservedStockDto>>("api/orders/reserved-stock");
+
+    public Task<List<ReservedOrderDto>?> GetReservedStockDetailAsync(Guid productId)
+        => GetAsync<List<ReservedOrderDto>>($"api/orders/reserved-stock/{productId}");
+
     public Task<SalesSettingsDto?> GetSalesSettingsAsync() => GetAsync<SalesSettingsDto>("api/orders/settings");
 
     public Task<(SalesSettingsDto? Value, System.Net.HttpStatusCode? Status, string? Error)> SetSalesSettingsAsync(int hours)

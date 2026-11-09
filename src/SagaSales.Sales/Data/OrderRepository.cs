@@ -56,6 +56,10 @@ public interface IOrderRepository
     Task<IReadOnlyList<(Guid TenantId, Guid OrderId)>> HoldsDueAsync(int maxRows, CancellationToken cancellationToken);
 
     Task MarkExpiredAsync(Guid orderId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ReservedStockDto>> ReservedStockAsync(CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ReservedOrderDto>> ReservedStockDetailAsync(Guid productId, CancellationToken cancellationToken);
 }
 
 public sealed record OrderListResult(IReadOnlyList<Order> Items, int TotalCount);
@@ -277,6 +281,55 @@ public sealed class OrderRepository(
     public Task MarkExpiredAsync(Guid orderId, CancellationToken cancellationToken)
         => executor.ExecuteProcAsync(
             "dbo.sp_order_mark_expired", SqlArgs.New().With("order_id", orderId), cancellationToken: cancellationToken);
+
+    public async Task<IReadOnlyList<ReservedStockDto>> ReservedStockAsync(CancellationToken cancellationToken)
+        => (await executor.QueryProcAsync<ReservedStockDto>(
+               "dbo.sp_order_reserved_stock", SqlArgs.New(), cancellationToken: cancellationToken)).ToList();
+
+    public async Task<IReadOnlyList<ReservedOrderDto>> ReservedStockDetailAsync(Guid productId, CancellationToken cancellationToken)
+    {
+        var rows = await executor.QueryProcAsync<ReservedRow>(
+            "dbo.sp_order_reserved_stock_detail",
+            SqlArgs.New().With("product_id", productId),
+            cancellationToken: cancellationToken);
+
+        return rows.Select(r => new ReservedOrderDto
+        {
+            OrderId = r.OrderId,
+            OrderNumber = r.OrderNumber,
+            CustomerId = r.CustomerId,
+            Status = ((OrderStatus)r.Status).ToString(),
+            Quantity = r.Quantity,
+            HoldUntil = Utc(r.HoldUntil),
+            CashOnDelivery = r.CashOnDelivery,
+            OrderDate = DateTime.SpecifyKind(r.OrderDate, DateTimeKind.Utc),
+            VerifiedAmount = r.VerifiedAmount,
+            Total = r.Total,
+        }).ToList();
+    }
+
+    private sealed class ReservedRow
+    {
+        public Guid OrderId { get; set; }
+
+        public string? OrderNumber { get; set; }
+
+        public Guid CustomerId { get; set; }
+
+        public short Status { get; set; }
+
+        public int Quantity { get; set; }
+
+        public DateTime? HoldUntil { get; set; }
+
+        public bool CashOnDelivery { get; set; }
+
+        public DateTime OrderDate { get; set; }
+
+        public decimal VerifiedAmount { get; set; }
+
+        public decimal Total { get; set; }
+    }
 
     private async Task<Order> AdjustAsync(string procedure, Guid orderId, decimal amount, CancellationToken cancellationToken)
     {

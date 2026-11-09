@@ -47,6 +47,7 @@
 <div class="d-flex flex-wrap gap-3 my-3">
     <span class="chip">Productos: @Rows.Count</span>
     <span class="chip">A reponer: @Rows.Count(r => r.NeedsReorder)</span>
+    <span class="chip" title="Unidades apartadas por pedidos que todavía no salen">Apartado en pedidos: @Reserved.Sum(r => r.Quantity)</span>
     <span class="chip">Valor del inventario: @Rows.Where(r => r.InventoryValue.HasValue).Sum(r => r.InventoryValue!.Value).ToString("C")</span>
     @if (Rows.Any(r => !r.UnitCost.HasValue))
     {
@@ -65,7 +66,9 @@
                     <th>Fabricante</th>
                     <th>Descripción</th>
                     <th>Costo por artículo</th>
-                    <th>Cantidad de existencias</th>
+                    <th title="Lo que se puede vender ahora">Disponible</th>
+                    <th title="Apartado por pedidos que todavía no salen">Apartado</th>
+                    <th title="Disponible + apartado: lo que físicamente hay">En bodega</th>
                     <th>Valor del inventario</th>
                     <th>Nivel de reposición</th>
                     <th>Días por reposición</th>
@@ -89,6 +92,18 @@
                         <td>@row.Description</td>
                         <td class="inv-num">@(row.UnitCost?.ToString("C") ?? "sin costo")</td>
                         <td class="inv-num">@row.Stock</td>
+                        <td class="inv-num">
+                            @if (ReservedOf(row.ProductId) is { } reserved)
+                            {
+                                <button class="btn btn-link btn-sm p-0" @onclick="() => ToggleReservedAsync(row.ProductId)"
+                                        title="Ver los pedidos que lo apartan">@reserved.Quantity</button>
+                            }
+                            else
+                            {
+                                <span>0</span>
+                            }
+                        </td>
+                        <td class="inv-num"><strong>@(row.Stock + (ReservedOf(row.ProductId)?.Quantity ?? 0))</strong></td>
                         <td class="inv-num">@(row.InventoryValue?.ToString("C") ?? "—")</td>
                         <td class="inv-num">@row.ReorderLevel</td>
                         <td class="inv-num">@row.LeadTimeDays</td>
@@ -100,10 +115,41 @@
                             <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(row)" disabled="@Busy">Editar</button>
                         </td>
                     </tr>
+                    @if (ShowingReservedFor == row.ProductId)
+                    {
+                        <tr class="inv-edit">
+                            <td colspan="17">
+                                <div class="small mb-1"><strong>Apartado por pedidos que todavía no salen</strong></div>
+                                @if (ReservedOrders.Count == 0)
+                                {
+                                    <div class="small">Sin pedidos.</div>
+                                }
+                                else
+                                {
+                                    <table class="inv-table">
+                                        <thead><tr><th>Pedido</th><th>Fecha</th><th>Estado</th><th>Cant.</th><th>Pago</th><th>Se libera</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var reservedOrder in ReservedOrders)
+                                            {
+                                                <tr>
+                                                    <td><code>@(reservedOrder.OrderNumber ?? "—")</code></td>
+                                                    <td>@reservedOrder.OrderDate.ToString("dd/MM HH:mm")</td>
+                                                    <td>@ReservedStatus(reservedOrder)</td>
+                                                    <td class="inv-num">@reservedOrder.Quantity</td>
+                                                    <td>@(reservedOrder.CashOnDelivery ? "Contra entrega" : reservedOrder.PaymentVerified ? "Verificado" : "Por verificar")</td>
+                                                    <td>@(reservedOrder.HoldUntil is { } until && !reservedOrder.PaymentVerified ? until.ToString("dd/MM HH:mm") : "al enviar")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </td>
+                        </tr>
+                    }
                     @if (EditingId == row.ProductId)
                     {
                         <tr class="inv-edit">
-                            <td colspan="15">
+                            <td colspan="17">
                                 <div class="row g-2 align-items-end">
                                     <div class="col-md-2">
                                         <label class="form-label small">N.º de artículo</label>
@@ -154,6 +200,34 @@
 @code {
     private List<InventoryReportRowDto> Rows { get; set; } = [];
     private List<BranchDto> Branches { get; set; } = [];
+
+    // ── spec 008: stock apartado por pedidos ────────────────────────────────
+    private List<ReservedStockDto> Reserved { get; set; } = [];
+
+    private Guid? ShowingReservedFor { get; set; }
+
+    private List<ReservedOrderDto> ReservedOrders { get; set; } = [];
+
+    private ReservedStockDto? ReservedOf(Guid productId) => Reserved.FirstOrDefault(r => r.ProductId == productId);
+
+    private async Task ToggleReservedAsync(Guid productId)
+    {
+        if (ShowingReservedFor == productId)
+        {
+            ShowingReservedFor = null;
+            return;
+        }
+
+        ReservedOrders = await Api.GetReservedStockDetailAsync(productId) ?? [];
+        ShowingReservedFor = productId;
+    }
+
+    private static string ReservedStatus(ReservedOrderDto order) => order.Status switch
+    {
+        "Processing" => "En preparación",
+        "Confirmed" => "Confirmado",
+        _ => "Pendiente",
+    };
     private string BranchFilter { get; set; } = string.Empty;
 
     private Guid? EditingId { get; set; }
@@ -192,6 +266,11 @@
         try
         {
             Rows = await Api.GetInventoryReportAsync(SelectedBranch) ?? [];
+
+            // Pedidos reserve in the default branch: show them for "all branches" or for that branch.
+            var showsDefault = SelectedBranch is null || Branches.Any(b => b.Id == SelectedBranch && b.IsDefault);
+            Reserved = showsDefault ? await Api.GetReservedStockAsync() ?? [] : [];
+            ShowingReservedFor = null;
             if (Error && Message?.StartsWith("No se pudo cargar el reporte", StringComparison.Ordinal) == true)
             {
                 Message = null;

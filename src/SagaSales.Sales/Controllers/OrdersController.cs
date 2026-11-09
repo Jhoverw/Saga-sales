@@ -155,6 +155,24 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    /// <summary>Unidades apartadas por pedidos que aún no salen, por producto (siguen en la bodega).</summary>
+    [HttpGet("reserved-stock")]
+    [ProducesResponseType(typeof(IReadOnlyList<ReservedStockDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReservedStock(CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Queries.GetReservedStockQuery(), cancellationToken);
+        return Ok(result.Value);
+    }
+
+    /// <summary>Qué pedidos apartan un producto.</summary>
+    [HttpGet("reserved-stock/{productId:guid}")]
+    [ProducesResponseType(typeof(IReadOnlyList<ReservedOrderDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReservedStockDetail(Guid productId, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Queries.GetReservedStockDetailQuery(productId), cancellationToken);
+        return Ok(result.Value);
+    }
+
     [HttpGet("settings")]
     [ProducesResponseType(typeof(SalesSettingsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSettings(CancellationToken cancellationToken)
