@@ -28,6 +28,11 @@ public interface IOrderRepository
 
     Task<Order> ChangeStatusAsync(Guid orderId, OrderStatus newStatus, CancellationToken cancellationToken);
 
+    /// <summary>Pasa a Enviado registrando cómo sale el pedido (spec 007).</summary>
+    Task<Order> ShipAsync(Guid orderId, ShipmentRequest shipment, CancellationToken cancellationToken);
+
+    Task<OrderShipmentDto?> GetShipmentAsync(Guid orderId, CancellationToken cancellationToken);
+
     Task<Order> RegisterPaymentAsync(Guid orderId, decimal amount, CancellationToken cancellationToken);
 }
 
@@ -129,6 +134,50 @@ public sealed class OrderRepository(
             "dbo.sp_order_change_status", arguments, cancellationToken: cancellationToken);
 
         return row!.ToOrder([]);
+    }
+
+    public async Task<Order> ShipAsync(Guid orderId, ShipmentRequest shipment, CancellationToken cancellationToken)
+    {
+        var arguments = SqlArgs.New()
+            .With("order_id", orderId)
+            .With("shipping_method", (short)shipment.ShippingMethod)
+            .With("courier_company", shipment.CourierCompany)
+            .With("tracking_number", shipment.TrackingNumber);
+
+        // VALIDATION_ERROR (falta empresa o guía) e INVALID_TRANSITION vienen del procedure.
+        var row = await executor.QueryProcSingleAsync<OrderRow>(
+            "dbo.sp_order_ship", arguments, cancellationToken: cancellationToken);
+
+        return row!.ToOrder([]);
+    }
+
+    public async Task<OrderShipmentDto?> GetShipmentAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var row = await executor.QueryProcSingleAsync<ShipmentRow>(
+            "dbo.sp_order_shipment_get",
+            SqlArgs.New().With("order_id", orderId),
+            cancellationToken: cancellationToken);
+
+        return row is null
+            ? null
+            : new OrderShipmentDto
+            {
+                ShippingMethod = row.ShippingMethod,
+                CourierCompany = row.CourierCompany,
+                TrackingNumber = row.TrackingNumber,
+                ShippedAt = row.ShippedAt is { } at ? DateTime.SpecifyKind(at, DateTimeKind.Utc) : null,
+            };
+    }
+
+    private sealed class ShipmentRow
+    {
+        public short? ShippingMethod { get; set; }
+
+        public string? CourierCompany { get; set; }
+
+        public string? TrackingNumber { get; set; }
+
+        public DateTime? ShippedAt { get; set; }
     }
 
     public async Task<Order> RegisterPaymentAsync(Guid orderId, decimal amount, CancellationToken cancellationToken)

@@ -167,6 +167,8 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
 
         public decimal? ChangeGiven { get; set; }
 
+        public int AttachmentCount { get; set; }
+
         public PaymentDto ToDto() => new()
         {
             Id = Id,
@@ -184,6 +186,7 @@ public sealed class PaymentRepository(IStoredProcedureExecutor executor) : IPaym
             RefundedAt = RefundedAt,
             CashReceived = CashReceived,
             ChangeGiven = ChangeGiven,
+            AttachmentCount = AttachmentCount,
         };
     }
 }

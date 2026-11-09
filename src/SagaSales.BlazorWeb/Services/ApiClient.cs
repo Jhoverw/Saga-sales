@@ -166,11 +166,58 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     public Task<OrderDto?> CreateOrderAsync(CreateOrderRequest request)
         => PostAsync<OrderDto>("api/orders", request);
 
-    public async Task<bool> UpdateOrderStatusAsync(Guid orderId, OrderStatus status)
+    /// <summary>Cambia el estado; al pasar a Enviado lleva el envío (spec 007). Devuelve el motivo si se rechaza.</summary>
+    public async Task<(bool Ok, string? Error)> UpdateOrderStatusAsync(Guid orderId, OrderStatus status, ShipmentRequest? shipment = null)
     {
-        var request = await BuildAsync(HttpMethod.Put, $"api/orders/{orderId}/status", new UpdateOrderStatusRequest { NewStatus = (int)status });
+        var request = await BuildAsync(
+            HttpMethod.Put,
+            $"api/orders/{orderId}/status",
+            new UpdateOrderStatusRequest { NewStatus = (int)status, Shipment = shipment });
         var response = await http.SendAsync(request);
-        return response.IsSuccessStatusCode;
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
+
+    public Task<OrderShipmentDto?> GetOrderShipmentAsync(Guid orderId)
+        => GetAsync<OrderShipmentDto>($"api/orders/{orderId}/shipment");
+
+    // ── comprobantes de pago (spec 007) ─────────────────────────────────────
+    public async Task<(PaymentAttachmentDto? Value, string? Error)> UploadPaymentAttachmentAsync(
+        Guid paymentId, byte[] bytes, string fileName, string contentType)
+    {
+        using var content = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(bytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(
+            string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
+        content.Add(fileContent, "file", fileName);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/payments/{paymentId}/attachments");
+        await ApplyHeadersAsync(request);
+        request.Content = content;
+
+        var response = await http.SendAsync(request);
+        return response.IsSuccessStatusCode
+            ? (await response.Content.ReadFromJsonAsync<PaymentAttachmentDto>(), null)
+            : (null, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
+
+    public Task<List<PaymentAttachmentDto>?> GetPaymentAttachmentsAsync(Guid paymentId)
+        => GetAsync<List<PaymentAttachmentDto>>($"api/payments/{paymentId}/attachments");
+
+    /// <summary>Descarga el comprobante con la sesión del usuario: no hay URL pública.</summary>
+    public async Task<(byte[] Content, string ContentType)?> DownloadPaymentAttachmentAsync(Guid attachmentId)
+    {
+        var request = await BuildAsync(HttpMethod.Get, $"api/payments/attachments/{attachmentId}", null);
+        var response = await http.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var type = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        return (bytes, type);
     }
 
     public Task<OrderDto?> GetOrderAsync(Guid orderId) => GetAsync<OrderDto>($"api/orders/{orderId}");

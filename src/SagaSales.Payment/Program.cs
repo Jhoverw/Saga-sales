@@ -17,6 +17,8 @@ builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Payment
 // Persistence: stored procedures only (constitution §VIII).
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IMyDayRepository, MyDayRepository>();
+builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+builder.Services.AddSingleton<SagaSales.Payment.Services.IReceiptStorage, SagaSales.Payment.Services.ReceiptStorage>();
 
 // Sales owns orders; Payment asks it to reflect the money received.
 builder.Services.AddTransient<ForwardIdentityHandler>();

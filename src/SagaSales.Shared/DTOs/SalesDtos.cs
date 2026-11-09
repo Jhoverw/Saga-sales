@@ -92,4 +92,29 @@ public class OrderItemRequest
 public class UpdateOrderStatusRequest
 {
     public int NewStatus { get; set; }
+
+    /// <summary>Obligatorio al pasar a Enviado (spec 007).</summary>
+    public ShipmentRequest? Shipment { get; set; }
+}
+
+/// <summary>Cómo sale un pedido (spec 007): 1 courier · 2 entrega propia o retiro.</summary>
+public class ShipmentRequest
+{
+    public int ShippingMethod { get; set; } = 1;
+
+    public string? CourierCompany { get; set; }
+
+    public string? TrackingNumber { get; set; }
+}
+
+public class OrderShipmentDto
+{
+    /// <summary>1 courier · 2 entrega propia o retiro · null si aún no se envía.</summary>
+    public int? ShippingMethod { get; set; }
+
+    public string? CourierCompany { get; set; }
+
+    public string? TrackingNumber { get; set; }
+
+    public DateTime? ShippedAt { get; set; }
 }

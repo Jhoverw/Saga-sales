@@ -24,6 +24,12 @@ builder.Services
         http.BaseAddress = new Uri(builder.Configuration["Services:Catalog"] ?? "http://localhost:5002"))
     .AddHttpMessageHandler<ForwardCredentialsHandler>();
 
+// Payment confirma que los pagos de un pedido tienen comprobante antes de enviarlo (spec 007).
+builder.Services
+    .AddHttpClient<IPaymentClient, PaymentClient>(http =>
+        http.BaseAddress = new Uri(builder.Configuration["Services:Payment"] ?? "http://localhost:5004"))
+    .AddHttpMessageHandler<ForwardCredentialsHandler>();
+
 builder.Services.AddSagaSalesMessageBus(builder.Configuration);
 
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateOrderCommandHandler).Assembly));

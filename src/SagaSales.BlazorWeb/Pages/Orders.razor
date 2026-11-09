@@ -1,6 +1,7 @@
 @page "/orders"
 @attribute [Authorize]
 @inject ApiClient Api
+@inject IJSRuntime Js
 
 <div class="page-head">
     <div>
@@ -174,6 +175,54 @@
             <div class="panel">
                 <div class="panel__head">Avanzar estado</div>
                 <div class="panel__body">
+                    @if (Selected.Status == "Processing")
+                    {
+                        <AuthorizeView Roles="@SagaSalesRoles.ManagerOrOwner" Context="auth">
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">Envío</label>
+                                    <select class="form-select" @bind="ShipMethod">
+                                        <option value="1">Courier</option>
+                                        <option value="2">Entrega propia o retiro</option>
+                                    </select>
+                                </div>
+                                @if (ShipMethod == 1)
+                                {
+                                    <div class="col-md-4">
+                                        <label class="form-label">Empresa de courier</label>
+                                        <input class="form-control" list="couriers" maxlength="60" @bind="CourierCompany" />
+                                        <datalist id="couriers">
+                                            @foreach (var courier in KnownCouriers)
+                                            {
+                                                <option value="@courier"></option>
+                                            }
+                                        </datalist>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">N.º de guía</label>
+                                        <input class="form-control" maxlength="60" @bind="TrackingNumber" />
+                                    </div>
+                                }
+                            </div>
+                            @if (MissingProofs > 0 || PaymentList.Count(p => p.Status is PaymentStatus.Captured or PaymentStatus.PartiallyRefunded) == 0)
+                            {
+                                <div class="alert alert-warning py-2 small">
+                                    @(MissingProofs > 0
+                                        ? $"Para enviar falta el comprobante de {MissingProofs} pago(s) que no son en efectivo."
+                                        : "Para enviar registra primero la forma de pago del pedido.")
+                                </div>
+                            }
+                        </AuthorizeView>
+                    }
+                    @if (Shipment?.ShippedAt is not null)
+                    {
+                        <div class="mb-2 small">
+                            <strong>Enviado</strong> el @Shipment.ShippedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ·
+                            @(Shipment.ShippingMethod == 1
+                                ? $"{Shipment.CourierCompany}, guía {Shipment.TrackingNumber}"
+                                : "entrega propia o retiro")
+                        </div>
+                    }
                     <div class="d-flex align-items-center gap-2">
                         <span class="chip chip--info">@StatusLabel(Selected.Status)</span>
                         @if (NextTransition(Selected.Status) is { } next)
@@ -238,6 +287,14 @@
                                 <label class="form-label">@(MethodId == 1 ? "Últimos 4 dígitos (opcional)" : "Referencia (opcional)")</label>
                                 <input class="form-control" @bind="Reference" />
                             </div>
+                            <div class="mt-2">
+                                <label class="form-label">Comprobante (foto del recibo, captura de la transferencia o PDF) *</label>
+                                <InputFile class="form-control" accept="image/jpeg,image/png,image/webp,application/pdf" OnChange="PickProofAsync" />
+                                @if (ProofFile is not null)
+                                {
+                                    <div class="small mt-1">@ProofFile.Value.Name · @((ProofFile.Value.Bytes.Length / 1024.0).ToString("0.#")) KB</div>
+                                }
+                            </div>
                         }
                         <div class="page-head__sub mt-2 mb-0">Pendiente de cobro: @Pending.ToString("C")</div>
                     }
@@ -263,16 +320,34 @@
                 <div class="panel__body p-0">
                     <table class="table mb-0">
                         <thead>
-                            <tr><th>Fecha</th><th class="text-end">Importe</th><th class="text-end">Devuelto</th><th>Estado</th><th></th></tr>
+                            <tr><th>Fecha</th><th>Medio</th><th class="text-end">Importe</th><th class="text-end">Devuelto</th><th>Estado</th><th>Comprobante</th><th></th></tr>
                         </thead>
                         <tbody>
                             @foreach (var payment in PaymentList)
                             {
                                 <tr>
                                     <td>@payment.CreatedAt.ToString("dd/MM HH:mm")</td>
+                                    <td>@MethodLabel(payment)</td>
                                     <td class="text-end">@payment.Amount.ToString("C")</td>
                                     <td class="text-end">@payment.RefundedAmount.ToString("C")</td>
                                     <td><span class="chip">@PaymentStatusLabel(payment.Status)</span></td>
+                                    <td>
+                                        @foreach (var file in AttachmentsOf(payment.Id))
+                                        {
+                                            <button class="btn btn-link btn-sm p-0 me-2" @onclick="() => OpenAttachmentAsync(file)" title="@file.FileName">
+                                                @(file.ContentType == "application/pdf" ? "PDF" : "Foto")
+                                            </button>
+                                        }
+                                        @if (payment.NeedsProof && payment.AttachmentCount == 0)
+                                        {
+                                            <span class="chip chip--warn me-1">Falta</span>
+                                        }
+                                        @if (payment.NeedsProof)
+                                        {
+                                            <InputFile class="form-control form-control-sm mt-1" accept="image/jpeg,image/png,image/webp,application/pdf"
+                                                       OnChange="args => UploadProofAsync(payment, args)" title="Subir comprobante" />
+                                        }
+                                    </td>
                                     <td class="text-end">
                                         @if (payment.RefundableAmount > 0)
                                         {
@@ -283,7 +358,7 @@
                             }
                             @if (PaymentList.Count == 0)
                             {
-                                <tr><td colspan="5" class="text-center py-3">Sin pagos.</td></tr>
+                                <tr><td colspan="7" class="text-center py-3">Sin pagos.</td></tr>
                             }
                         </tbody>
                     </table>
@@ -300,6 +375,26 @@
 
     private OrderDto? Selected { get; set; }
     private List<PaymentDto> PaymentList { get; set; } = [];
+
+    // ── spec 007: comprobantes y envío ──────────────────────────────────────
+    private const long MaxProofBytes = 5 * 1024 * 1024;
+
+    private static readonly string[] KnownCouriers = ["Servientrega", "Laar Courier", "Tramaco", "Urbano", "Correos del Ecuador"];
+
+    private Dictionary<Guid, List<PaymentAttachmentDto>> Attachments { get; set; } = new();
+
+    private (string Name, string ContentType, byte[] Bytes)? ProofFile { get; set; }
+
+    private OrderShipmentDto? Shipment { get; set; }
+
+    private int ShipMethod { get; set; } = 1;
+
+    private string CourierCompany { get; set; } = string.Empty;
+
+    private string TrackingNumber { get; set; } = string.Empty;
+
+    private int MissingProofs => PaymentList.Count(p =>
+        p.Status is PaymentStatus.Captured or PaymentStatus.PartiallyRefunded && p.NeedsProof && p.AttachmentCount == 0);
 
     private Guid CustomerId { get; set; } = Guid.Empty;
     private List<LineDraft> Lines { get; set; } = [new()];
@@ -377,6 +472,7 @@
             Selected = await Api.GetOrderAsync(Selected.Id) ?? Selected;
             PaymentList = (await Api.GetPaymentsByOrderAsync(Selected.Id))?.ToList() ?? [];
             Amount = Pending;
+            await LoadProofsAndShipmentAsync();
         }
     }
 
@@ -385,6 +481,10 @@
         Selected = await Api.GetOrderAsync(order.Id) ?? order;
         PaymentList = (await Api.GetPaymentsByOrderAsync(order.Id))?.ToList() ?? [];
         Amount = Math.Max(0, Selected.Total - Selected.PaidAmount);
+        ProofFile = null;
+        CourierCompany = string.Empty;
+        TrackingNumber = string.Empty;
+        await LoadProofsAndShipmentAsync();
         Message = null;
         Error = false;
     }
@@ -468,6 +568,14 @@
                 return;
             }
 
+            // Spec 007: un pedido cobrado con tarjeta, transferencia o depósito lleva su respaldo.
+            if (MethodId is 1 or 4 or 9 && ProofFile is null)
+            {
+                Message = "Sube la foto del recibo, la captura de la transferencia o el PDF del depósito.";
+                Error = true;
+                return;
+            }
+
             var payment = await Api.CreatePaymentAsync(new ManualPaymentRequest
             {
                 OrderId = Selected.Id,
@@ -487,6 +595,22 @@
             {
                 CashReceived = null;
                 Reference = string.Empty;
+
+                if (payment.NeedsProof && ProofFile is { } proof)
+                {
+                    var (_, uploadError) = await Api.UploadPaymentAttachmentAsync(payment.Id, proof.Bytes, proof.Name, proof.ContentType);
+                    ProofFile = null;
+
+                    if (uploadError is not null)
+                    {
+                        Message = $"Cobro registrado, pero el comprobante no se subió: {uploadError} Súbelo desde la lista de pagos.";
+                        Error = true;
+                        await LoadOrdersAsync();
+                        return;
+                    }
+
+                    Message += " Comprobante adjunto.";
+                }
             }
             Error = payment is null;
 
@@ -529,8 +653,24 @@
 
         try
         {
-            var ok = await Api.UpdateOrderStatusAsync(Selected.Id, Enum.Parse<OrderStatus>(next));
-            Message = ok ? $"Pedido pasado a {StatusLabel(next)}." : "No se pudo cambiar el estado (transición no permitida).";
+            ShipmentRequest? shipment = next == "Shipped"
+                ? new ShipmentRequest
+                {
+                    ShippingMethod = ShipMethod,
+                    CourierCompany = ShipMethod == 1 ? CourierCompany.Trim() : null,
+                    TrackingNumber = ShipMethod == 1 ? TrackingNumber.Trim() : null,
+                }
+                : null;
+
+            if (shipment is { ShippingMethod: 1 } && (string.IsNullOrWhiteSpace(shipment.CourierCompany) || string.IsNullOrWhiteSpace(shipment.TrackingNumber)))
+            {
+                Message = "Para enviar por courier indica la empresa y el número de guía.";
+                Error = true;
+                return;
+            }
+
+            var (ok, failure) = await Api.UpdateOrderStatusAsync(Selected.Id, Enum.Parse<OrderStatus>(next), shipment);
+            Message = ok ? $"Pedido pasado a {StatusLabel(next)}." : failure ?? "No se pudo cambiar el estado (transición no permitida).";
             Error = !ok;
 
             await LoadOrdersAsync();
@@ -559,6 +699,88 @@
         "Processing" => "Enviado",
         "Shipped" => "Entregado",
         _ => null,
+    };
+
+    private async Task LoadProofsAndShipmentAsync()
+    {
+        Attachments = new();
+        foreach (var payment in PaymentList.Where(p => p.AttachmentCount > 0))
+        {
+            Attachments[payment.Id] = await Api.GetPaymentAttachmentsAsync(payment.Id) ?? [];
+        }
+
+        Shipment = Selected is null ? null : await Api.GetOrderShipmentAsync(Selected.Id);
+    }
+
+    private List<PaymentAttachmentDto> AttachmentsOf(Guid paymentId)
+        => Attachments.TryGetValue(paymentId, out var files) ? files : [];
+
+    private static async Task<(string Name, string ContentType, byte[] Bytes)?> ReadProofAsync(IBrowserFile file)
+    {
+        if (file.Size > MaxProofBytes)
+        {
+            return null;
+        }
+
+        var buffer = new byte[file.Size];
+        await using (var stream = file.OpenReadStream(maxAllowedSize: MaxProofBytes))
+        {
+            await stream.ReadExactlyAsync(buffer);
+        }
+
+        return (file.Name, file.ContentType, buffer);
+    }
+
+    private async Task PickProofAsync(InputFileChangeEventArgs args)
+    {
+        ProofFile = await ReadProofAsync(args.File);
+        Error = ProofFile is null;
+        Message = ProofFile is null ? "El comprobante no puede superar los 5 MB." : null;
+    }
+
+    private async Task UploadProofAsync(PaymentDto payment, InputFileChangeEventArgs args)
+    {
+        var proof = await ReadProofAsync(args.File);
+        if (proof is null)
+        {
+            Message = "El comprobante no puede superar los 5 MB.";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+        var (_, failure) = await Api.UploadPaymentAttachmentAsync(payment.Id, proof.Value.Bytes, proof.Value.Name, proof.Value.ContentType);
+        Busy = false;
+
+        Message = failure ?? "Comprobante adjunto.";
+        Error = failure is not null;
+        await LoadOrdersAsync();
+    }
+
+    private async Task OpenAttachmentAsync(PaymentAttachmentDto file)
+    {
+        var download = await Api.DownloadPaymentAttachmentAsync(file.Id);
+        if (download is null)
+        {
+            Message = "No se pudo abrir el comprobante.";
+            Error = true;
+            return;
+        }
+
+        var opened = await Js.InvokeAsync<bool>("sagaOpenFile", download.Value.ContentType, Convert.ToBase64String(download.Value.Content));
+        if (!opened)
+        {
+            await Js.InvokeVoidAsync("sagaDownload", file.FileName, download.Value.ContentType, Convert.ToBase64String(download.Value.Content));
+        }
+    }
+
+    private static string MethodLabel(PaymentDto payment) => (int)payment.Method switch
+    {
+        1 => "Tarjeta",
+        4 => "Transferencia",
+        5 => "Efectivo",
+        9 => "Depósito",
+        _ => payment.Method.ToString(),
     };
 
     private async Task RefundAsync(PaymentDto payment)

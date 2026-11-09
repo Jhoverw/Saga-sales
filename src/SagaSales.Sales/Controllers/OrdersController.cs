@@ -71,6 +71,15 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    /// <summary>Cómo salió el pedido: método, courier, guía y fecha (spec 007).</summary>
+    [HttpGet("{id:guid}/shipment")]
+    [ProducesResponseType(typeof(OrderShipmentDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetShipment(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Queries.GetOrderShipmentQuery(id), cancellationToken);
+        return Ok(result.Value);
+    }
+
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPut("{id:guid}/status")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
@@ -80,7 +89,7 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         CancellationToken cancellationToken)
     {
         // A new command is built from the route id: records are immutable.
-        var command = new Commands.UpdateOrderStatusCommand(id, (OrderStatus)request.NewStatus);
+        var command = new Commands.UpdateOrderStatusCommand(id, (OrderStatus)request.NewStatus, request.Shipment);
         var result = await mediator.Send(command, cancellationToken);
         return Ok(result.Value);
     }

@@ -151,6 +151,8 @@ services:
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=saga_sales;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SagaSales_Dev_2026!};TrustServerCertificate=True"
       Jwt__Key: "${JWT_KEY:-SagaSales-dev-signing-key-please-replace-in-production-2026}"
       Services__Catalog: "http://catalog:80"
+      # Antes de enviar un pedido Sales pregunta si sus pagos tienen comprobante (spec 007).
+      Services__Payment: "http://payment:80"
     ports:
       - "5003:80"
     depends_on:
@@ -178,8 +180,12 @@ services:
       PayPal__ClientId: "${PAYPAL_CLIENT_ID}"
       PayPal__ClientSecret: "${PAYPAL_CLIENT_SECRET}"
       PayPal__Mode: sandbox
+      # Comprobantes de pago (spec 007): fuera de cualquier carpeta servida en público.
+      Storage__ReceiptRoot: "/app/receipts"
     ports:
       - "5004:80"
+    volumes:
+      - payment_receipts:/app/receipts
     depends_on: *app-depends
     networks:
       - saga-sales-network
@@ -257,6 +263,7 @@ volumes:
   rabbitmq_data:
   seq_data:
   catalog_images:
+  payment_receipts:
 
 networks:
   saga-sales-network:

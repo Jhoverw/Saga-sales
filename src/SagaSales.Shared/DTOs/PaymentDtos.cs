@@ -35,6 +35,38 @@ public class PaymentDto
 
     /// <summary>Cash only: CashReceived − Amount (H-09).</summary>
     public decimal? ChangeGiven { get; set; }
+
+    /// <summary>Comprobantes subidos (spec 007).</summary>
+    public int AttachmentCount { get; set; }
+
+    /// <summary>Tarjeta, transferencia o depósito: para enviar el pedido necesita comprobante (spec 007).</summary>
+    public bool NeedsProof => (int)Method is 1 or 4 or 9;
+}
+
+/// <summary>Foto o PDF que respalda un pago (spec 007).</summary>
+public class PaymentAttachmentDto
+{
+    public Guid Id { get; set; }
+
+    public Guid PaymentId { get; set; }
+
+    public string FileName { get; set; } = string.Empty;
+
+    public string ContentType { get; set; } = string.Empty;
+
+    public int SizeBytes { get; set; }
+
+    public DateTime UploadedAt { get; set; }
+}
+
+/// <summary>Lo que Sales pregunta antes de enviar un pedido (spec 007, FR-003).</summary>
+public class OrderProofStatusDto
+{
+    /// <summary>Pagos vigentes del pedido.</summary>
+    public int Payments { get; set; }
+
+    /// <summary>Pagos vigentes con tarjeta, transferencia o depósito sin comprobante.</summary>
+    public int WithoutProof { get; set; }
 }
 
 /// <summary>Online payment — v1 (E-04b). Not used in the MVP.</summary>
