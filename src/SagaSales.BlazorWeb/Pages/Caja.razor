@@ -230,17 +230,26 @@
 
     protected override async Task OnInitializedAsync()
     {
-        TaxRate = await Api.GetCurrentTaxAsync(DateTime.UtcNow);
-        if (TaxRate is null)
+        // A failing API call must not blank the page: the cashier sees why instead.
+        try
         {
-            Message = "No hay IVA vigente para hoy. Configúralo en Configuración Fiscal antes de vender.";
-            Error = true;
-        }
+            TaxRate = await Api.GetCurrentTaxAsync(DateTime.UtcNow);
+            if (TaxRate is null)
+            {
+                Message = "No hay IVA vigente para hoy. Configúralo en Configuración Fiscal antes de vender.";
+                Error = true;
+            }
 
-        Customer = await FindOrCreateConsumerAsync();
-        if (Customer is null)
+            Customer = await FindOrCreateConsumerAsync();
+            if (Customer is null)
+            {
+                Message = "No se pudo preparar el cliente 'consumidor final'. Revisa la conexión con el servidor.";
+                Error = true;
+            }
+        }
+        catch (Exception ex)
         {
-            Message = "No se pudo preparar el cliente 'consumidor final'.";
+            Message = $"Caja no pudo cargar sus datos: {ex.Message}. Recarga la página o revisa la sesión.";
             Error = true;
         }
     }
@@ -271,9 +280,18 @@
         }
 
         // Search is by name until the barcode lookup (V-01) is built.
-        var page = await Api.GetProductsAsync(1, 8, SearchText.Trim());
-        Results = page?.Items.ToList() ?? [];
-        ActiveResult = 0;
+        try
+        {
+            var page = await Api.GetProductsAsync(1, 8, SearchText.Trim());
+            Results = page?.Items.ToList() ?? [];
+            ActiveResult = 0;
+        }
+        catch (Exception ex)
+        {
+            Results = [];
+            Message = $"No se pudo buscar el producto: {ex.Message}";
+            Error = true;
+        }
     }
 
     private async Task SearchKeyDown(KeyboardEventArgs e)
@@ -417,6 +435,11 @@
             Reference = string.Empty;
             Amount = 0;
             await Js.InvokeVoidAsync("sagaFocus", "caja-search");
+        }
+        catch (Exception ex)
+        {
+            Message = $"No se pudo completar la venta: {ex.Message}. Revisa Pedidos antes de reintentar.";
+            Error = true;
         }
         finally
         {
