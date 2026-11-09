@@ -19,7 +19,21 @@ public class OrderItem
 
     public int ProductSnapshotStockAtPurchase { get; set; }
 
+    /// <summary>Whether the product carries VAT (spec 003, FR-003).</summary>
+    public bool IsTaxable { get; set; } = true;
+
+    /// <summary>True when UnitPrice is the PVP (VAT included); false for lines priced before spec 003.</summary>
+    public bool PriceIncludesTax { get; set; }
+
+    // Amounts computed and stored by sp_order_create (zero until the order is saved and read back).
+    public decimal UnitPriceWithTax { get; set; }
+
+    public decimal LineNet { get; set; }
+
+    public decimal LineTax { get; set; }
+
+    public decimal LineTotal { get; set; }
+
     public Order? Order { get; set; }
 
-    public decimal LineTotal => Quantity * UnitPrice;
 }

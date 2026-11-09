@@ -58,6 +58,8 @@ public sealed class OrderRepository(
                 unitPrice = l.UnitPrice,
                 priceSource = (short)PriceSource.Base,
                 stockAtPurchase = l.ProductSnapshotStockAtPurchase,
+                isTaxable = l.IsTaxable,
+                priceIncludesTax = l.PriceIncludesTax,
             }),
             Json);
 
@@ -206,6 +208,18 @@ public sealed class OrderRepository(
 
         public short PriceSource { get; set; }
 
+        public bool IsTaxable { get; set; } = true;
+
+        public bool PriceIncludesTax { get; set; }
+
+        public decimal UnitPriceWithTax { get; set; }
+
+        public decimal LineNet { get; set; }
+
+        public decimal LineTax { get; set; }
+
+        public decimal LineTotal { get; set; }
+
         public OrderItem ToItem() => new()
         {
             ProductId = ProductId,
@@ -213,6 +227,12 @@ public sealed class OrderRepository(
             Quantity = Quantity,
             UnitPrice = UnitPrice,
             ProductSnapshotPrice = UnitPrice,
+            IsTaxable = IsTaxable,
+            PriceIncludesTax = PriceIncludesTax,
+            UnitPriceWithTax = UnitPriceWithTax,
+            LineNet = LineNet,
+            LineTax = LineTax,
+            LineTotal = LineTotal,
         };
     }
 }

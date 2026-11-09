@@ -253,6 +253,8 @@ public sealed class ProductRepository(
 
         public bool IsTaxable { get; set; } = true;
 
+        public bool PriceIncludesTax { get; set; } = true;
+
         public string? ImagePath { get; set; }
 
         public int TotalCount { get; set; }
@@ -272,6 +274,7 @@ public sealed class ProductRepository(
             Cost = Cost,
             TracksBatches = TracksBatches,
             IsTaxable = IsTaxable,
+            PriceIncludesTax = PriceIncludesTax,
             ImagePath = ImagePath,
         };
     }

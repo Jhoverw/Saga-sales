@@ -39,15 +39,47 @@ public class OrderContractTests
 
         var order = await response.Content.ReadFromJsonAsync<OrderDto>();
         Assert.NotNull(order);
-        Assert.Equal(50m, order!.Subtotal);
-        Assert.Equal(7.50m, order.TaxAmount);   // V-03: 15 % in force on the order date
-        Assert.Equal(57.50m, order.Total);
+        // Spec 003: 25 is the PVP. 2 × 25 = 50.00 with VAT; base 50 / 1.15 = 43.48; VAT 6.52 (15 % in force).
+        Assert.Equal(43.48m, order!.Subtotal);
+        Assert.Equal(6.52m, order.TaxAmount);
+        Assert.Equal(50.00m, order.Total);
         Assert.Matches(@"^PED-[0-9A-F]{6}-\d{6}$", order.OrderNumber);   // V021: receipt number
         Assert.False(string.IsNullOrWhiteSpace(order.CreatedByName));     // H-06: seller on the receipt
         Assert.Equal(customerId, order.CustomerId);
         Assert.Single(order.Items);
         Assert.Equal(25m, order.Items[0].UnitPrice);
         Assert.Equal("Snapshot product", order.Items[0].ProductName);
+    }
+
+    [Fact]
+    public async Task Two_units_of_a_pvp_of_0_40_are_charged_0_80()
+    {
+        if (Gateway.TryAnnounceSkip(nameof(Two_units_of_a_pvp_of_0_40_are_charged_0_80)))
+        {
+            return;
+        }
+
+        // The case reported on 2026-11-08: 2 Coca-Cola at 0.40 were charged 0.81 (spec 003, SC-001).
+        using var client = Gateway.CreateClient();
+        var session = await SignedInStore.CreateAsync(client);
+        var product = await CreateProductAsync(client, session, "Coca-Cola 500 ml", 0.40m);
+
+        using var response = await client.SendAsync(
+            Authorized(HttpMethod.Post, "api/orders", session, new CreateOrderRequest
+            {
+                CustomerId = Guid.NewGuid(),
+                ShippingAddress = "Mostrador",
+                Items = [new OrderItemRequest { ProductId = product.Id, Quantity = 2 }],
+            }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var order = await response.Content.ReadFromJsonAsync<OrderDto>();
+        Assert.NotNull(order);
+        Assert.Equal(0.80m, order!.Total);
+        Assert.Equal(0.70m, order.Subtotal);
+        Assert.Equal(0.10m, order.TaxAmount);
+        Assert.Equal(0.40m, order.Items[0].UnitPriceWithTax);
+        Assert.Equal(0.80m, order.Items[0].LineTotal);
     }
 
     [Fact]
@@ -119,9 +151,9 @@ public class OrderContractTests
 
         using var client = Gateway.CreateClient();
         var session = await SignedInStore.CreateAsync(client);
-        var product = await CreateProductAsync(client, session, "Split payment product", 25m);
+        var product = await CreateProductAsync(client, session, "Split payment product", 28.75m);
 
-        // Total with 15 % VAT: 25 + 3.75 = 28.75 (H-08).
+        // Spec 003: the price is the PVP, so one unit totals 28.75 (H-08).
         using var created = await client.SendAsync(
             Authorized(HttpMethod.Post, "api/orders", session, new CreateOrderRequest
             {

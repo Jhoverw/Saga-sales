@@ -24,7 +24,7 @@
                 <input class="form-control" placeholder="Ej. Laptop Gamer" @bind="NewName" @bind:event="oninput" />
             </div>
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted">Precio (USD)</label>
+                <label class="form-label small fw-bold text-muted">PVP (USD, IVA incluido)</label>
                 <div class="input-group">
                     <span class="input-group-text">$</span>
                     <InputText @bind-value="NewPriceString"
@@ -69,7 +69,7 @@ else
             <tr>
                 <th style="width:64px;">Foto</th>
                 <th>Nombre</th>
-                <th>Precio</th>
+                <th>PVP</th>
                 <th>Stock</th>
                 <th>Estado</th>
                 <th style="width:110px;"></th>

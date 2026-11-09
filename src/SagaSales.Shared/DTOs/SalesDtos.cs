@@ -9,12 +9,29 @@ public class OrderLineDto
 
     public int Quantity { get; set; }
 
+    /// <summary>
+    /// Price per unit as charged: the PVP when <see cref="PriceIncludesTax"/>, otherwise the price
+    /// without VAT (orders placed before spec 003).
+    /// </summary>
     public decimal UnitPrice { get; set; }
 
     /// <summary>Whether the list price or the base price was applied (FR-007b).</summary>
     public Enums.PriceSource PriceSource { get; set; }
 
-    public decimal LineTotal => Quantity * UnitPrice;
+    public bool IsTaxable { get; set; } = true;
+
+    public bool PriceIncludesTax { get; set; }
+
+    /// <summary>What one unit cost the buyer, VAT included.</summary>
+    public decimal UnitPriceWithTax { get; set; }
+
+    /// <summary>Base without VAT, as stored by the server (spec 003, FR-008).</summary>
+    public decimal LineNet { get; set; }
+
+    public decimal LineTax { get; set; }
+
+    /// <summary>Line total with VAT, as stored by the server.</summary>
+    public decimal LineTotal { get; set; }
 }
 
 public class OrderDto

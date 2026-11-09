@@ -54,7 +54,7 @@ else
 
         <table class="receipt__lines">
             <thead>
-                <tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio</th><th class="text-end">Total</th></tr>
+                <tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio c/IVA</th><th class="text-end">Total c/IVA</th></tr>
             </thead>
             <tbody>
                 @foreach (var line in Order.Items)
@@ -62,7 +62,7 @@ else
                     <tr>
                         <td>@line.ProductName</td>
                         <td class="text-end">@line.Quantity</td>
-                        <td class="text-end">@line.UnitPrice.ToString("C")</td>
+                        <td class="text-end">@line.UnitPriceWithTax.ToString("C")</td>
                         <td class="text-end">@line.LineTotal.ToString("C")</td>
                     </tr>
                 }

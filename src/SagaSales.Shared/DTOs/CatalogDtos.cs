@@ -38,6 +38,15 @@ public class ProductDto
             ? Math.Round(((BasePrice - Cost.Value) / BasePrice) * 100m, 2)
             : null;
 
+    /// <summary>Whether the product carries VAT (spec 003, FR-003).</summary>
+    public bool IsTaxable { get; set; } = true;
+
+    /// <summary>
+    /// True when BasePrice is the PVP (VAT included). False only for products priced before spec 003
+    /// that scripts/convert-prices-to-pvp.ps1 has not converted yet.
+    /// </summary>
+    public bool PriceIncludesTax { get; set; } = true;
+
     /// <summary>
     /// True when the product carries lots with an expiry date. Receiving it then requires a lot
     /// code, and selling consumes the oldest expiry first (E-13, D17/D18).

@@ -1,19 +1,19 @@
 <#
 .SYNOPSIS
-    Verifies feature 002 (Caja: cliente y detalle) end to end and leaves a log Claude can read.
+    Verifies the current branch end to end and leaves a log Claude can read.
 
 .DESCRIPTION
     Runs, in order, and stops at the first failure:
-      1. git push of the feature branch (skip with -SkipPush),
+      1. git push of the current branch (skip with -SkipPush),
       2. dotnet build of the solution (fails fast on compile errors),
       3. ./scripts/up.ps1 -Rebuild (rebuilds images, starts the stack, applies the dev schema),
       4. ./scripts/apply-db.ps1 -UseContainer -DatabaseSuffix '_test' (schema for integration tests),
       5. ./scripts/test.ps1 (unit, contract and integration suites).
 
-    Everything is written to deploy\verify-002.log (ignored by git through *.log).
+    Everything is written to deploy\verify.log (ignored by git through *.log).
 
 .EXAMPLE
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-002.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 #>
 [CmdletBinding()]
 param(
@@ -22,9 +22,9 @@ param(
 
 $ErrorActionPreference = 'Continue'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$log = Join-Path $repoRoot 'deploy\verify-002.log'
+$log = Join-Path $repoRoot 'deploy\verify.log'
 
-Set-Content -Path $log -Value ("verify-002 started " + (Get-Date -Format 's')) -Encoding UTF8
+Set-Content -Path $log -Value ("verify started " + (Get-Date -Format 's')) -Encoding UTF8
 
 function Write-Log {
     param([string]$Text, [string]$Color = 'Gray')
@@ -58,7 +58,7 @@ function Invoke-Step {
 Push-Location $repoRoot
 
 if (-not $SkipPush) {
-    Invoke-Step 'git push' { git push -u origin 002-caja-cliente-detalle }
+    Invoke-Step 'git push' { git push -u origin HEAD }
 }
 
 Invoke-Step 'dotnet build' { dotnet build SagaSales.sln -c Debug --nologo }
@@ -67,6 +67,6 @@ Invoke-Step "apply-db.ps1 _test" { & (Join-Path $PSScriptRoot 'apply-db.ps1') -U
 Invoke-Step 'test.ps1' { & (Join-Path $PSScriptRoot 'test.ps1') }
 
 Write-Log ''
-Write-Log 'VERIFICACIÓN 002: TODO OK. Prueba Caja a mano: consumidor final, buscar cliente y registrar uno nuevo.' 'Green'
+Write-Log 'VERIFICACIÓN: TODO OK.' 'Green'
 Pop-Location
 exit 0

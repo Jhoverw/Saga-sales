@@ -12,6 +12,8 @@ public static class ProductMapping
         BasePrice = product.Price,
         Cost = product.Cost,
         TracksBatches = product.TracksBatches,
+        IsTaxable = product.IsTaxable,
+        PriceIncludesTax = product.PriceIncludesTax,
         ImagePath = product.ImagePath,
         Currency = product.Currency,
         StockQuantity = product.StockQuantity,

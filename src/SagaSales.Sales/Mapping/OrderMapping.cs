@@ -28,6 +28,12 @@ public static class OrderMapping
         ProductName = item.ProductSnapshotName,
         Quantity = item.Quantity,
         UnitPrice = item.UnitPrice,
+        IsTaxable = item.IsTaxable,
+        PriceIncludesTax = item.PriceIncludesTax,
+        UnitPriceWithTax = item.UnitPriceWithTax,
+        LineNet = item.LineNet,
+        LineTax = item.LineTax,
+        LineTotal = item.LineTotal,
 
         // Until pricing per customer type reaches the order (phase US2/US3), every line is priced
         // from the product's base price.

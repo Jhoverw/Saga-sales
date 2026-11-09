@@ -28,6 +28,9 @@ public class Product
     /// <summary>Indicates if the product is subject to tax/VAT.</summary>
     public bool IsTaxable { get; set; } = true;
 
+    /// <summary>True when Price is the PVP (VAT included). Products priced before spec 003 are false until converted.</summary>
+    public bool PriceIncludesTax { get; set; } = true;
+
     /// <summary>Relative path of the picture, or null.</summary>
     public string? ImagePath { get; set; }
 

@@ -54,6 +54,8 @@ public sealed class CreateOrderCommandHandler(
                     ProductSnapshotName = product.Name,
                     ProductSnapshotPrice = product.BasePrice,
                     ProductSnapshotStockAtPurchase = product.StockQuantity,
+                    IsTaxable = product.IsTaxable,
+                    PriceIncludesTax = product.PriceIncludesTax,
                 });
             }
 
@@ -67,8 +69,12 @@ public sealed class CreateOrderCommandHandler(
                 currentUser.DisplayName,
                 cancellationToken);
 
-            var snapshot = lines
-                .Select(i => new OrderItemSnapshot(i.ProductId, i.ProductSnapshotName, i.Quantity, i.UnitPrice))
+            // The server priced every line (spec 003): read them back so the event and the response carry
+            // the stored base, VAT and total instead of recomputing them here.
+            var stored = await repository.GetLinesAsync(order.Id, cancellationToken);
+
+            var snapshot = stored
+                .Select(i => new OrderItemSnapshot(i.ProductId, i.ProductSnapshotName, i.Quantity, i.UnitPrice, i.LineNet))
                 .ToList();
 
             await eventBus.PublishAsync(
@@ -89,7 +95,7 @@ public sealed class CreateOrderCommandHandler(
                     cancellationToken);
             }
 
-            return Result<OrderDto>.Success(order.ToDtoWith(lines));
+            return Result<OrderDto>.Success(order.ToDtoWith(stored));
         }
         catch
         {

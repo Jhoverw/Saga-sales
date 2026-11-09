@@ -1,5 +1,6 @@
 @page "/caja"
 @attribute [Authorize]
+@using SagaSales.Shared.Pricing
 @using SagaSales.Shared.Validation
 @inject ApiClient Api
 @inject IJSRuntime Js
@@ -175,7 +176,7 @@
                                     <input class="form-control form-control-sm caja__qty ms-auto" type="number" lang="en-US" min="1"
                                            value="@line.Quantity" @onchange="e => ChangeQuantity(line, e)" />
                                 </td>
-                                <td class="caja__num">@GrossUnit(line.UnitNet).ToString("C")</td>
+                                <td class="caja__num">@UnitWithTax(line).ToString("C")</td>
                                 <td class="caja__num"><strong>@GrossLine(line).ToString("C")</strong></td>
                                 <td class="caja__num @(line.Quantity > line.Stock ? "text-danger" : "")"
                                     title="@(line.Quantity > line.Stock ? "La cantidad supera el stock" : null)">@line.Stock</td>
@@ -199,7 +200,7 @@
                                             <button type="button" class="@(index == ActiveResult ? "is-active" : "")"
                                                     @onclick="() => AddProduct(product)">
                                                 <span>@product.Name</span>
-                                                <small>@GrossUnit(product.BasePrice).ToString("C") · stock @product.StockQuantity</small>
+                                                <small>@UnitWithTax(product).ToString("C") · stock @product.StockQuantity</small>
                                             </button>
                                         }
                                     </div>
@@ -326,7 +327,12 @@
 
         public string Description { get; init; } = string.Empty;
 
-        public decimal UnitNet { get; init; }
+        /// <summary>The product price: the PVP, or the price without VAT for a product not yet converted.</summary>
+        public decimal UnitPrice { get; init; }
+
+        public bool IsTaxable { get; init; } = true;
+
+        public bool PriceIncludesTax { get; init; }
 
         public int Stock { get; init; }
 
@@ -337,14 +343,15 @@
 
     private string TaxPercentLabel => TaxRate is null ? "(sin IVA vigente)" : $"({Rate * 100:0.##} %)";
 
-    // VAT per line, rounded to cents, exactly as sp_order_create (V024) does it on the server.
-    private decimal GrossUnit(decimal net) => net + Math.Round(net * Rate, 2, MidpointRounding.AwayFromZero);
+    // Same rule as sp_order_create (spec 003): the price is the PVP, so the line total is price × quantity.
+    private decimal UnitWithTax(ProductDto product)
+        => LinePricing.UnitPriceWithTax(product.BasePrice, product.IsTaxable, product.PriceIncludesTax, Rate);
+
+    private decimal UnitWithTax(CartLine line)
+        => LinePricing.UnitPriceWithTax(line.UnitPrice, line.IsTaxable, line.PriceIncludesTax, Rate);
 
     private decimal GrossLine(CartLine line)
-    {
-        var net = line.UnitNet * line.Quantity;
-        return net + Math.Round(net * Rate, 2, MidpointRounding.AwayFromZero);
-    }
+        => LinePricing.Compute(line.UnitPrice, line.Quantity, line.IsTaxable, line.PriceIncludesTax, Rate).Total;
 
     private decimal GrossTotal => Cart.Sum(GrossLine);
 
@@ -646,7 +653,9 @@
                 ProductId = product.Id,
                 Name = product.Name,
                 Description = product.Description ?? string.Empty,
-                UnitNet = product.BasePrice,
+                UnitPrice = product.BasePrice,
+                IsTaxable = product.IsTaxable,
+                PriceIncludesTax = product.PriceIncludesTax,
                 Stock = product.StockQuantity,
             });
         }

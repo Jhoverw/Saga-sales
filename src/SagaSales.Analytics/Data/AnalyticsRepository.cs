@@ -77,7 +77,7 @@ public sealed class AnalyticsRepository(IStoredProcedureExecutor executor) : IAn
                     .With("product_id", item.ProductId)
                     .With("product_name", item.ProductName)
                     .With("quantity", item.Quantity)
-                    .With("revenue", item.Quantity * item.UnitPrice),
+                    .With("revenue", item.LineNet ?? item.Quantity * item.UnitPrice),
                 cancellationToken: cancellationToken);
         }
     }

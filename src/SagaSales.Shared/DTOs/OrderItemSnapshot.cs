@@ -7,4 +7,5 @@ public record OrderItemSnapshot(
     Guid ProductId,
     string ProductName,
     int Quantity,
-    decimal UnitPrice);
+    decimal UnitPrice,
+    decimal? LineNet = null);

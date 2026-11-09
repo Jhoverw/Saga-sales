@@ -52,7 +52,7 @@
                         <input class="form-control" type="number" lang="en-US" min="1" @bind="line.Quantity" placeholder="Cant." />
                     </div>
                     <div class="col-md-3 text-end">
-                        <span class="page-head__sub">@LinePreview(line).ToString("C") sin IVA</span>
+                        <span class="page-head__sub">@LinePreviewText(line)</span>
                     </div>
                     <div class="col-md-1 text-end">
                         <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(line)" disabled="@(Lines.Count == 1)">×</button>
@@ -136,7 +136,7 @@
                 <div class="panel__body p-0">
                     <table class="table mb-0">
                         <thead>
-                            <tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio</th><th class="text-end">Total</th></tr>
+                            <tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio c/IVA</th><th class="text-end">Total c/IVA</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var line in Selected.Items)
@@ -144,7 +144,7 @@
                                 <tr>
                                     <td>@line.ProductName</td>
                                     <td class="text-end">@line.Quantity</td>
-                                    <td class="text-end">@line.UnitPrice.ToString("C")</td>
+                                    <td class="text-end">@line.UnitPriceWithTax.ToString("C")</td>
                                     <td class="text-end">@line.LineTotal.ToString("C")</td>
                                 </tr>
                             }
@@ -316,11 +316,20 @@
         if (Lines.Count > 1) { Lines.Remove(line); }
     }
 
-    // Preview only: base price times quantity. The stored subtotal and the VAT come from the server.
-    private decimal LinePreview(LineDraft line)
+    // Preview only; the stored amounts come from the server. A PVP already includes VAT (spec 003);
+    // a product not yet converted shows its base and the server adds the VAT.
+    private string LinePreviewText(LineDraft line)
     {
         var product = Products.FirstOrDefault(p => p.Id == line.ProductId);
-        return product is null ? 0m : product.BasePrice * Math.Max(1, line.Quantity);
+        if (product is null)
+        {
+            return 0m.ToString("C");
+        }
+
+        var amount = product.BasePrice * Math.Max(1, line.Quantity);
+        return product.PriceIncludesTax || !product.IsTaxable
+            ? $"{amount:C} con IVA"
+            : $"{amount:C} sin IVA";
     }
 
     private decimal Amount { get; set; }
