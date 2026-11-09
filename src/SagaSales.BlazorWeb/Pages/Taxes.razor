@@ -61,7 +61,7 @@ else
                     <td>@rate.StartDate.ToString("yyyy-MM-dd")</td>
                     <td>@(rate.EndDate?.ToString("yyyy-MM-dd") ?? "Vigente")</td>
                     <td>
-                        @if (rate.EndDate == null || rate.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                        @if (rate.EndDate == null || rate.EndDate.Value.Date >= DateTime.Today)
                         {
                             <span class="chip chip--ok">Activo</span>
                         }
@@ -79,7 +79,7 @@ else
 @code {
     private IReadOnlyList<SagaSales.Shared.DTOs.TaxRateDto>? Rates { get; set; }
     private decimal NewRate { get; set; } = 15.00m;
-    private DateOnly NewStart { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    private DateOnly NewStart { get; set; } = DateOnly.FromDateTime(DateTime.Today);
     private DateOnly? NewEnd { get; set; }
     private string NewDescription { get; set; } = string.Empty;
     private bool Busy { get; set; }

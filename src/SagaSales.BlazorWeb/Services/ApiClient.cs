@@ -10,16 +10,22 @@ namespace SagaSales.BlazorWeb.Services;
 /// </summary>
 public sealed class ApiClient(HttpClient http, TokenStore store)
 {
+    // Every date shown in the panel is local time (Ecuador, GMT−5); see LocalDateTimeConverter.
+    private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web)
+    {
+        Converters = { new SagaSales.Shared.Time.LocalDateTimeConverter() },
+    };
+
     // ── auth ────────────────────────────────────────────────────────────────
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
-        var response = await http.PostAsJsonAsync("api/auth/login", request);
+        var response = await http.PostAsJsonAsync("api/auth/login", request, Json);
         if (!response.IsSuccessStatusCode)
         {
             return null;
         }
 
-        var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        var login = await response.Content.ReadFromJsonAsync<LoginResponse>(Json);
         if (login is null)
         {
             return null;
@@ -41,11 +47,11 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     /// </summary>
     public async Task<(RegisterTenantResponse? Response, string? Error)> RegisterTenantAsync(RegisterTenantRequest request)
     {
-        var response = await http.PostAsJsonAsync("api/auth/register-tenant", request);
+        var response = await http.PostAsJsonAsync("api/auth/register-tenant", request, Json);
 
         if (response.IsSuccessStatusCode)
         {
-            return (await response.Content.ReadFromJsonAsync<RegisterTenantResponse>(), null);
+            return (await response.Content.ReadFromJsonAsync<RegisterTenantResponse>(Json), null);
         }
 
         var body = await response.Content.ReadAsStringAsync();
@@ -73,7 +79,7 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
         request.Content = content;
 
         var response = await http.SendAsync(request);
-        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ProductDto>() : null;
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ProductDto>(Json) : null;
     }
 
     /// <summary>Turns the stored relative path (e.g. <c>images/products/x.png</c>) into a full URL.</summary>
@@ -107,7 +113,7 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
         if (response.IsSuccessStatusCode)
         {
-            return (await response.Content.ReadFromJsonAsync<CustomerDto>(), response.StatusCode, null);
+            return (await response.Content.ReadFromJsonAsync<CustomerDto>(Json), response.StatusCode, null);
         }
 
         var body = await response.Content.ReadAsStringAsync();
@@ -139,9 +145,9 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public async Task<CustomerDto?> UpdateCustomerAsync(Guid id, UpdateCustomerRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/customers/{id}", request);
+        var response = await http.PutAsJsonAsync($"api/customers/{id}", request, Json);
         return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<CustomerDto>()
+            ? await response.Content.ReadFromJsonAsync<CustomerDto>(Json)
             : null;
     }
 
@@ -223,7 +229,7 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
         var response = await http.SendAsync(request);
         return response.IsSuccessStatusCode
-            ? (await response.Content.ReadFromJsonAsync<PaymentAttachmentDto>(), null)
+            ? (await response.Content.ReadFromJsonAsync<PaymentAttachmentDto>(Json), null)
             : (null, ExtractError(await response.Content.ReadAsStringAsync()));
     }
 
@@ -289,14 +295,14 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     {
         var request = await BuildAsync(HttpMethod.Get, path, null);
         var response = await http.SendAsync(request);
-        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<T>() : default;
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<T>(Json) : default;
     }
 
     private async Task<T?> PostAsync<T>(string path, object body)
     {
         var request = await BuildAsync(HttpMethod.Post, path, body);
         var response = await http.SendAsync(request);
-        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<T>() : default;
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<T>(Json) : default;
     }
 
     private async Task<HttpRequestMessage> BuildAsync(HttpMethod method, string path, object? body)
@@ -306,7 +312,7 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
         if (body is not null)
         {
-            request.Content = JsonContent.Create(body);
+            request.Content = JsonContent.Create(body, options: Json);
         }
 
         return request;
@@ -378,9 +384,9 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public async Task<BranchDto?> UpdateBranchAsync(Guid id, UpdateBranchRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/branches/{id}", request);
+        var response = await http.PutAsJsonAsync($"api/branches/{id}", request, Json);
         return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<BranchDto>()
+            ? await response.Content.ReadFromJsonAsync<BranchDto>(Json)
             : null;
     }
 
@@ -394,9 +400,9 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public async Task<SettingsDto?> UpdateSettingsAsync(UpdateSettingsRequest request)
     {
-        var response = await http.PutAsJsonAsync("api/settings", request);
+        var response = await http.PutAsJsonAsync("api/settings", request, Json);
         return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<SettingsDto>()
+            ? await response.Content.ReadFromJsonAsync<SettingsDto>(Json)
             : null;
     }
 
@@ -409,9 +415,9 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public async Task<SupplierDto?> UpdateSupplierAsync(Guid id, UpdateSupplierRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/suppliers/{id}", request);
+        var response = await http.PutAsJsonAsync($"api/suppliers/{id}", request, Json);
         return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<SupplierDto>()
+            ? await response.Content.ReadFromJsonAsync<SupplierDto>(Json)
             : null;
     }
 
@@ -429,9 +435,9 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public async Task<PurchaseDto?> CreatePurchaseAsync(CreatePurchaseRequest request)
     {
-        var response = await http.PostAsJsonAsync("api/purchases", request);
+        var response = await http.PostAsJsonAsync("api/purchases", request, Json);
         return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<PurchaseDto>()
+            ? await response.Content.ReadFromJsonAsync<PurchaseDto>(Json)
             : null;
     }
 
@@ -439,7 +445,7 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     {
         var response = await http.PostAsync($"api/purchases/{id}/receive", null);
         return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<PurchaseDto>()
+            ? await response.Content.ReadFromJsonAsync<PurchaseDto>(Json)
             : null;
     }
 
@@ -449,7 +455,7 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
     public async Task<bool> SetLocationAsync(Guid productId, SetLocationRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/inventory/products/{productId}/location", request);
+        var response = await http.PutAsJsonAsync($"api/inventory/products/{productId}/location", request, Json);
         return response.IsSuccessStatusCode;
     }
 
@@ -556,7 +562,7 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
 
         if (response.IsSuccessStatusCode)
         {
-            return (await response.Content.ReadFromJsonAsync<T>(), response.StatusCode, null);
+            return (await response.Content.ReadFromJsonAsync<T>(Json), response.StatusCode, null);
         }
 
         return (default, response.StatusCode, ExtractError(await response.Content.ReadAsStringAsync()));

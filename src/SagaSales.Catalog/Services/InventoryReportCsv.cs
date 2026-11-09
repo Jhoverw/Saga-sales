@@ -37,7 +37,7 @@ public static class InventoryReportCsv
                 Money(row.InventoryValue),
                 Whole(row.ReorderLevel),
                 Whole(row.LeadTimeDays),
-                row.LastSaleAt?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+                row.LastSaleAt is { } sold ? SagaSales.Shared.Time.BusinessTime.ToLocal(sold).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : string.Empty,
                 Whole(row.ReorderQuantity),
                 Text(row.Notes),
                 Text(row.LastSupplier),

@@ -149,7 +149,7 @@ public sealed class InventoryController(IMediator mediator) : ControllerBase
             .Concat(System.Text.Encoding.UTF8.GetBytes(text))
             .ToArray();
 
-        return File(bytes, "text/csv", $"control-inventario-{DateTime.UtcNow:yyyyMMdd}.csv");
+        return File(bytes, "text/csv", $"control-inventario-{SagaSales.Shared.Time.BusinessTime.Now:yyyyMMdd}.csv");
     }
 
     /// <summary>Reorder data of a product; never changes price or stock (spec 004, FR-008).</summary>

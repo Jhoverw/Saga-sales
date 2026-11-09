@@ -28,7 +28,7 @@
         <div class="row g-2 align-items-end">
             <div class="col-md-4">
                 <label class="form-label">Cliente</label>
-                <select class="form-select" @bind="CustomerId">
+                <select class="form-select" @bind="CustomerId" @bind:after="FillAddressAsync">
                     <option value="@Guid.Empty">— elige —</option>
                     @foreach (var customer in Customers)
                     {
@@ -38,7 +38,7 @@
             </div>
             <div class="col-md-8">
                 <label class="form-label">Dirección de envío</label>
-                <input class="form-control" @bind="ShippingAddress" @bind:event="oninput" placeholder="Calle, ciudad" />
+                <input class="form-control" @bind="ShippingAddress" @bind:event="oninput" placeholder="Se llena con la dirección del cliente" />
             </div>
         </div>
 
@@ -211,7 +211,7 @@
                             }
                             else if (f.HoldUntil is { } hold && !f.PaymentVerified && Selected.Status is "Pending" or "Confirmed")
                             {
-                                <span class="chip @(hold < DateTime.UtcNow.AddHours(6) ? "chip--danger" : "chip--neutral")">
+                                <span class="chip @(hold < DateTime.Now.AddHours(6) ? "chip--danger" : "chip--neutral")">
                                     Stock apartado hasta @hold.ToLocalTime().ToString("dd/MM HH:mm") (@HoursLeft(hold))
                                 </span>
                             }
@@ -280,7 +280,7 @@
             </div>
 
             <div class="panel mt-3">
-                <div class="panel__head">Cobro</div>
+                <div class="panel__head">Registrar el pago del cliente</div>
                 <div class="panel__body">
                     @if (Pending > 0)
                     {
@@ -593,6 +593,9 @@
         CourierCompany = string.Empty;
         TrackingNumber = string.Empty;
         await LoadProofsAndShipmentAsync();
+
+        // A pedido is usually paid by transfer: start there, so the receipt upload is in sight.
+        MethodId = Fulfillment?.Channel == 2 ? 4 : 5;
         Message = null;
         Error = false;
     }
@@ -824,9 +827,37 @@
         Fulfillment = Selected is null ? null : await Api.GetOrderFulfillmentAsync(Selected.Id);
     }
 
-    private static string HoursLeft(DateTime holdUntilUtc)
+    private string LastAutoAddress { get; set; } = string.Empty;
+
+    /// <summary>Fills the shipping address with the customer's own, unless someone already typed another.</summary>
+    private async Task FillAddressAsync()
     {
-        var left = holdUntilUtc - DateTime.UtcNow;
+        if (CustomerId == Guid.Empty)
+        {
+            return;
+        }
+
+        var customer = await Api.GetCustomerAsync(CustomerId);
+        var address = customer?.Addresses.FirstOrDefault();
+        if (address is null)
+        {
+            return;
+        }
+
+        var text = string.Join(", ", new[] { address.Line1, address.City, address.StateProvince }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Select(part => part.Trim()));
+
+        if (string.IsNullOrWhiteSpace(ShippingAddress) || ShippingAddress == LastAutoAddress)
+        {
+            ShippingAddress = text;
+            LastAutoAddress = text;
+        }
+    }
+
+    private static string HoursLeft(DateTime holdUntil)
+    {
+        var left = holdUntil - DateTime.Now;
         return left <= TimeSpan.Zero ? "vencido, se anula en minutos" : $"quedan {(int)left.TotalHours} h {left.Minutes} min";
     }
 

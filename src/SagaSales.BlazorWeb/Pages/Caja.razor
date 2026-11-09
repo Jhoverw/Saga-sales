@@ -389,7 +389,7 @@
         // A failing API call must not blank the page: the cashier sees why instead.
         try
         {
-            TaxRate = await Api.GetCurrentTaxAsync(DateTime.UtcNow);
+            TaxRate = await Api.GetCurrentTaxAsync(DateTime.Now);
             if (TaxRate is null)
             {
                 Message = "No hay IVA vigente para hoy. Configúralo en Configuración Fiscal antes de vender.";
