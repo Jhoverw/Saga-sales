@@ -1,5 +1,5 @@
 @page "/suppliers"
-@attribute [Authorize]
+@attribute [Authorize(Roles = SagaSalesRoles.ManagerOrOwner)]
 @inject ApiClient Api
 
 <div class="page-head">

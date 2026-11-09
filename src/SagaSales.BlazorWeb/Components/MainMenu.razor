@@ -23,6 +23,7 @@
             <span class="nav-text">Pedidos</span>
         </NavLink>
 
+        <AuthorizeView Roles="@SagaSalesRoles.ManagerOrOwner" Context="auth">
         <NavLink class="nav-item nav-highlight" href="analytics">
             <i class="fa-solid fa-chart-line fa-fw icon-purple"></i>
             <span class="nav-text">Analítica</span>
@@ -54,12 +55,22 @@
             <i class="fa-solid fa-receipt fa-fw icon-orange-dark"></i>
             <span class="nav-text">Compras</span>
         </NavLink>
+        </AuthorizeView>
 
         <div class="sidebar__section">Administración</div>
         <NavLink class="nav-item" href="customers">
             <i class="fa-solid fa-users fa-fw icon-pink"></i>
             <span class="nav-text">Clientes</span>
         </NavLink>
+
+        <AuthorizeView Roles="@SagaSalesRoles.Owner" Context="auth">
+        <NavLink class="nav-item" href="users">
+            <i class="fa-solid fa-user-shield fa-fw icon-red"></i>
+            <span class="nav-text">Usuarios</span>
+        </NavLink>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="@SagaSalesRoles.ManagerOrOwner" Context="auth">
 
         <NavLink class="nav-item" href="settings">
             <i class="fa-solid fa-cog fa-fw icon-gray"></i>
@@ -75,6 +86,7 @@
             <i class="fa-solid fa-file-invoice fa-fw icon-green-dark"></i>
             <span class="nav-text">Facturación EC</span>
         </NavLink>
+        </AuthorizeView>
     </nav>
 
     <div class="sidebar__foot">

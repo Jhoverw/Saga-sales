@@ -8,6 +8,7 @@ using SagaSales.Shared.Enums;
 namespace SagaSales.Catalog.Controllers;
 
 [ApiController]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
 [Route("api/catalog/products")]
 public class ProductLookupController : ControllerBase
 {

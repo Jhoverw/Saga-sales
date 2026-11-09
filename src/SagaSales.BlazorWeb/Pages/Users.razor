@@ -1,0 +1,273 @@
+@page "/users"
+@attribute [Authorize(Roles = SagaSalesRoles.Owner)]
+@inject ApiClient Api
+
+<PageTitle>Usuarios</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Usuarios</h1>
+        <div class="page-head__sub">Dueño, administradores y cajeros de la tienda · solo el dueño ve esta página</div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @(Error ? "alert-danger" : "alert-info")">@Message</div>
+}
+
+<div class="panel">
+    <div class="panel__head">Nuevo usuario</div>
+    <div class="panel__body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Nombre</label>
+                <input class="form-control" maxlength="100" @bind="NewName" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Email (para iniciar sesión)</label>
+                <input class="form-control" type="email" maxlength="255" @bind="NewEmail" placeholder="maria@mitienda.ec" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Rol</label>
+                <select class="form-select" @bind="NewRole">
+                    <option value="@SagaSalesRoles.Cashier">Cajero</option>
+                    <option value="@SagaSalesRoles.Manager">Administrador</option>
+                    <option value="@SagaSalesRoles.Owner">Dueño</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Contraseña (8+)</label>
+                <input class="form-control" type="password" autocomplete="new-password" @bind="NewPassword" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" @onclick="CreateAsync" disabled="@Busy">Crear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panel mt-3">
+    <div class="panel__head">Usuarios de la tienda</div>
+    <div class="panel__body p-0">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Rol</th>
+                    <th>Estado</th>
+                    <th>Último ingreso</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in Users)
+                {
+                    <tr class="@(user.IsActive ? "" : "opacity-50")">
+                        @if (EditingId == user.Id)
+                        {
+                            <td><input class="form-control form-control-sm" maxlength="100" @bind="EditName" /></td>
+                            <td>@user.Email</td>
+                            <td>
+                                <select class="form-select form-select-sm" @bind="EditRole">
+                                    <option value="@SagaSalesRoles.Cashier">Cajero</option>
+                                    <option value="@SagaSalesRoles.Manager">Administrador</option>
+                                    <option value="@SagaSalesRoles.Owner">Dueño</option>
+                                </select>
+                            </td>
+                            <td>
+                                <label class="form-check-label">
+                                    <input class="form-check-input" type="checkbox" @bind="EditActive" /> Activo
+                                </label>
+                            </td>
+                            <td></td>
+                            <td class="text-end text-nowrap">
+                                <button class="btn btn-sm btn-primary" @onclick="() => SaveAsync(user)" disabled="@Busy">Guardar</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelEdit" disabled="@Busy">Cancelar</button>
+                            </td>
+                        }
+                        else
+                        {
+                            <td>@user.DisplayName</td>
+                            <td>@user.Email</td>
+                            <td>@SagaSalesRoles.Label(user.Role)</td>
+                            <td>@(user.IsActive ? "Activo" : "Inactivo")</td>
+                            <td>@(user.LastLoginAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "nunca")</td>
+                            <td class="text-end text-nowrap">
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(user)" disabled="@Busy">Editar</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartReset(user)" disabled="@Busy">Contraseña</button>
+                            </td>
+                        }
+                    </tr>
+                    @if (ResetId == user.Id)
+                    {
+                        <tr>
+                            <td colspan="6">
+                                <div class="d-flex gap-2 align-items-center">
+                                    <span class="small">Nueva contraseña para @user.DisplayName (8+ caracteres):</span>
+                                    <input class="form-control form-control-sm" style="max-width:220px;" type="password" autocomplete="new-password" @bind="ResetPassword" />
+                                    <button class="btn btn-sm btn-primary" @onclick="() => ResetAsync(user)" disabled="@Busy">Guardar contraseña</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => ResetId = null" disabled="@Busy">Cancelar</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private List<UserDto> Users { get; set; } = [];
+
+    private string NewName { get; set; } = string.Empty;
+    private string NewEmail { get; set; } = string.Empty;
+    private string NewRole { get; set; } = SagaSalesRoles.Cashier;
+    private string NewPassword { get; set; } = string.Empty;
+
+    private Guid? EditingId { get; set; }
+    private string EditName { get; set; } = string.Empty;
+    private string EditRole { get; set; } = SagaSalesRoles.Cashier;
+    private bool EditActive { get; set; } = true;
+
+    private Guid? ResetId { get; set; }
+    private string ResetPassword { get; set; } = string.Empty;
+
+    private string? Message { get; set; }
+    private bool Error { get; set; }
+    private bool Busy { get; set; }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            Users = await Api.GetUsersAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            Message = $"No se pudieron cargar los usuarios: {ex.Message}";
+            Error = true;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewName) || string.IsNullOrWhiteSpace(NewEmail) || NewPassword.Length < 8)
+        {
+            Message = "Completa nombre, email y una contraseña de al menos 8 caracteres.";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+        try
+        {
+            var (user, status, failure) = await Api.CreateUserAsync(new CreateUserRequest
+            {
+                DisplayName = NewName.Trim(),
+                Email = NewEmail.Trim(),
+                Role = NewRole,
+                Password = NewPassword,
+            });
+
+            if (user is null)
+            {
+                Message = status == System.Net.HttpStatusCode.Conflict
+                    ? "Ese email ya se usa para iniciar sesión (en esta u otra tienda). Usa otro o reactiva el usuario."
+                    : $"No se pudo crear el usuario: {failure}";
+                Error = true;
+                return;
+            }
+
+            Message = $"{user.DisplayName} creado como {SagaSalesRoles.Label(user.Role)}. Ya puede iniciar sesión con {user.Email}.";
+            Error = false;
+            NewName = NewEmail = NewPassword = string.Empty;
+            NewRole = SagaSalesRoles.Cashier;
+            await LoadAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private void StartEdit(UserDto user)
+    {
+        ResetId = null;
+        EditingId = user.Id;
+        EditName = user.DisplayName;
+        EditRole = user.Role;
+        EditActive = user.IsActive;
+    }
+
+    private void CancelEdit() => EditingId = null;
+
+    private async Task SaveAsync(UserDto user)
+    {
+        Busy = true;
+        try
+        {
+            var (updated, status, failure) = await Api.UpdateUserAsync(user.Id, new UpdateUserRequest
+            {
+                DisplayName = EditName.Trim(),
+                Role = EditRole,
+                IsActive = EditActive,
+            });
+
+            if (updated is null)
+            {
+                Message = status == System.Net.HttpStatusCode.Conflict
+                    ? "No se pudo guardar: la tienda necesita al menos un dueño activo, o el email ya se usa en otra tienda."
+                    : $"No se pudo guardar: {failure}";
+                Error = true;
+                return;
+            }
+
+            EditingId = null;
+            Message = updated.IsActive
+                ? $"{updated.DisplayName} guardado."
+                : $"{updated.DisplayName} desactivado: no podrá iniciar sesión (una sesión abierta dura hasta 60 minutos).";
+            Error = false;
+            await LoadAsync();
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private void StartReset(UserDto user)
+    {
+        EditingId = null;
+        ResetId = user.Id;
+        ResetPassword = string.Empty;
+    }
+
+    private async Task ResetAsync(UserDto user)
+    {
+        if (ResetPassword.Length < 8)
+        {
+            Message = "La contraseña debe tener al menos 8 caracteres.";
+            Error = true;
+            return;
+        }
+
+        Busy = true;
+        try
+        {
+            var (ok, failure) = await Api.ResetUserPasswordAsync(user.Id, ResetPassword);
+            Message = ok ? $"Contraseña de {user.DisplayName} actualizada." : $"No se pudo cambiar la contraseña: {failure}";
+            Error = !ok;
+            ResetId = null;
+            ResetPassword = string.Empty;
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+}

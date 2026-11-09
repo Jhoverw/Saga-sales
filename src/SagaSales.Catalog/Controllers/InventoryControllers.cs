@@ -9,6 +9,7 @@ using SagaSales.Shared.DTOs;
 [Route("api/branches")]
 public sealed class BranchesController(IMediator mediator) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPost]
     [ProducesResponseType(typeof(BranchDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(
@@ -29,6 +30,7 @@ public sealed class BranchesController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(BranchDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(
@@ -40,6 +42,7 @@ public sealed class BranchesController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
@@ -63,6 +66,7 @@ public sealed class SettingsController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPut]
     [ProducesResponseType(typeof(SettingsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(
@@ -80,6 +84,7 @@ public sealed class SettingsController(IMediator mediator) : ControllerBase
 [Route("api/inventory")]
 public sealed class InventoryController(IMediator mediator) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpGet("products/{productId:guid}/branches")]
     [ProducesResponseType(typeof(IReadOnlyList<StockByBranchDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> StockByBranch(Guid productId, CancellationToken cancellationToken)
@@ -88,6 +93,7 @@ public sealed class InventoryController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPut("products/{productId:guid}/location")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetLocation(
@@ -99,6 +105,7 @@ public sealed class InventoryController(IMediator mediator) : ControllerBase
         return NoContent();
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpGet("expiring")]
     [ProducesResponseType(typeof(IReadOnlyList<ExpiringBatchDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Expiring(
@@ -111,6 +118,7 @@ public sealed class InventoryController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>Inventory control report (spec 004): what to restock first, value, last sale, supplier.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpGet("report")]
     [ProducesResponseType(typeof(IReadOnlyList<InventoryReportRowDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Report([FromQuery] Guid? branchId = null, CancellationToken cancellationToken = default)
@@ -120,6 +128,7 @@ public sealed class InventoryController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>The same report as CSV: semicolons, decimal point and UTF-8 BOM so Excel opens it directly.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpGet("report.csv")]
     [Produces("text/csv")]
     public async Task<IActionResult> ReportCsv([FromQuery] Guid? branchId = null, CancellationToken cancellationToken = default)
@@ -134,6 +143,7 @@ public sealed class InventoryController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>Reorder data of a product; never changes price or stock (spec 004, FR-008).</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPut("products/{productId:guid}/settings")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetSettings(

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 namespace SagaSales.Reports.Controllers;
 
 [ApiController]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
 [Route("api/reports")]
 public class TaxReportController : ControllerBase
 {

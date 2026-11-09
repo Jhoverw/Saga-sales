@@ -46,6 +46,7 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPut("{id:guid}/status")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateStatus(
@@ -78,6 +79,7 @@ public sealed class OrdersController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>Cancels the order and returns its stock to the branch it came from.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPost("{id:guid}/cancel")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)

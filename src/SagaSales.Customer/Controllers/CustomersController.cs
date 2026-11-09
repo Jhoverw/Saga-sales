@@ -77,6 +77,7 @@ public sealed class CustomersController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)

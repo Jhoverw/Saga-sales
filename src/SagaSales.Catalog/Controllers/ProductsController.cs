@@ -49,6 +49,7 @@ public sealed class ProductsController(IMediator mediator, IProductImageStorage 
     }
 
     [Authorize]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPost]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create([FromBody] CreateProductRequest request, CancellationToken cancellationToken)
@@ -68,6 +69,7 @@ public sealed class ProductsController(IMediator mediator, IProductImageStorage 
     }
 
     [Authorize]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(
@@ -91,6 +93,7 @@ public sealed class ProductsController(IMediator mediator, IProductImageStorage 
     }
 
     [Authorize]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
@@ -100,6 +103,7 @@ public sealed class ProductsController(IMediator mediator, IProductImageStorage 
     }
 
     [Authorize]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPut("{id:guid}/prices/{customerType}")]
     [ProducesResponseType(typeof(PriceQuoteDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> SetPrice(
@@ -115,6 +119,7 @@ public sealed class ProductsController(IMediator mediator, IProductImageStorage 
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
     [HttpPost("{id:guid}/stock/reserve")]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> ReserveStock(
@@ -129,6 +134,7 @@ public sealed class ProductsController(IMediator mediator, IProductImageStorage 
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
     [HttpPost("{id:guid}/stock/release")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> ReleaseStock(
@@ -141,6 +147,7 @@ public sealed class ProductsController(IMediator mediator, IProductImageStorage 
     }
 
     [Authorize]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpGet("{id:guid}/movements")]
     [ProducesResponseType(typeof(IReadOnlyList<StockMovementDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Movements(
@@ -153,6 +160,7 @@ public sealed class ProductsController(IMediator mediator, IProductImageStorage 
     }
 
     [Authorize]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPost("{id:guid}/image")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]

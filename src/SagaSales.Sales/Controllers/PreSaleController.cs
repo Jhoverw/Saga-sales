@@ -8,6 +8,7 @@ using SagaSales.Sales.Domain;
 namespace SagaSales.Sales.Controllers;
 
 [ApiController]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.Staff)]
 [Route("api/sales/pre-sales")]
 public class PreSaleController : ControllerBase
 {

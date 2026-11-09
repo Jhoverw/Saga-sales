@@ -7,6 +7,7 @@ using SagaSales.EcuadorInvoicing.Queries;
 namespace SagaSales.EcuadorInvoicing.Controllers;
 
 [ApiController]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
 [Route("api/ecuador-invoicing")]
 public class EcuadorInvoicingController : ControllerBase
 {

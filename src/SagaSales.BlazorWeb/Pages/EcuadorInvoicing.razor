@@ -1,5 +1,5 @@
 @page "/ecuador-invoicing"
-@attribute [Authorize]
+@attribute [Authorize(Roles = SagaSalesRoles.ManagerOrOwner)]
 
 <div class="page-head">
     <div>

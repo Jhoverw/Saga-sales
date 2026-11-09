@@ -16,6 +16,7 @@ public sealed class CategoriesController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPost]
     [ProducesResponseType(typeof(CategoryDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(

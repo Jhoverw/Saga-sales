@@ -51,6 +51,7 @@ public sealed class PaymentsController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>Refunds all or part of a charge. Past what was charged returns 409.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPost("{id:guid}/refund")]
     [ProducesResponseType(typeof(PaymentDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Refund(

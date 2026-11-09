@@ -414,4 +414,39 @@ public sealed class ApiClient(HttpClient http, TokenStore store)
     }
 
     private static string BranchQuery(Guid? branchId) => branchId is { } id ? $"?branchId={id}" : string.Empty;
+
+    // ── users (spec 005, owner only) ────────────────────────────────────────
+    public Task<List<UserDto>?> GetUsersAsync() => GetAsync<List<UserDto>>("api/users");
+
+    public Task<(UserDto? Value, System.Net.HttpStatusCode? Status, string? Error)> CreateUserAsync(CreateUserRequest request)
+        => SendForResultAsync<UserDto>(HttpMethod.Post, "api/users", request);
+
+    public Task<(UserDto? Value, System.Net.HttpStatusCode? Status, string? Error)> UpdateUserAsync(Guid id, UpdateUserRequest request)
+        => SendForResultAsync<UserDto>(HttpMethod.Put, $"api/users/{id}", request);
+
+    public async Task<(bool Ok, string? Error)> ResetUserPasswordAsync(Guid id, string password)
+    {
+        var message = await BuildAsync(HttpMethod.Post, $"api/users/{id}/password", new ResetPasswordRequest { Password = password });
+        var response = await http.SendAsync(message);
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
+
+    /// <summary>Sends a request and keeps the status and reason when it fails (409, 400...).</summary>
+    private async Task<(T? Value, System.Net.HttpStatusCode? Status, string? Error)> SendForResultAsync<T>(
+        HttpMethod method,
+        string path,
+        object body)
+    {
+        var message = await BuildAsync(method, path, body);
+        var response = await http.SendAsync(message);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return (await response.Content.ReadFromJsonAsync<T>(), response.StatusCode, null);
+        }
+
+        return (default, response.StatusCode, ExtractError(await response.Content.ReadAsStringAsync()));
+    }
 }

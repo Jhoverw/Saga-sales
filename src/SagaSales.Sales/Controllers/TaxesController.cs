@@ -29,6 +29,7 @@ public sealed class TaxesController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] SagaSales.Shared.DTOs.CreateTaxRateRequest request, CancellationToken cancellationToken)
     {

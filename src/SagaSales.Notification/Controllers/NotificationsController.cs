@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Authorize]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
 [Route("api/notifications")]
 public sealed class NotificationsController(IMediator mediator) : ControllerBase
 {

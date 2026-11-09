@@ -6,6 +6,7 @@ using SagaSales.Shared.DTOs;
 
 [ApiController]
 [Authorize]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
 [Route("api/suppliers")]
 public sealed class SuppliersController(IMediator mediator) : ControllerBase
 {
@@ -52,6 +53,7 @@ public sealed class SuppliersController(IMediator mediator) : ControllerBase
 
 [ApiController]
 [Authorize]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
 [Route("api/purchases")]
 public sealed class PurchasesController(IMediator mediator) : ControllerBase
 {

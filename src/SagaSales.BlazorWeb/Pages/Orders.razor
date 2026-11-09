@@ -178,9 +178,11 @@
                         <span class="chip chip--info">@StatusLabel(Selected.Status)</span>
                         @if (NextTransition(Selected.Status) is { } next)
                         {
-                            <button class="btn btn-sm btn-primary" @onclick="AdvanceAsync" disabled="@Busy">
-                                @NextTransitionLabel(Selected.Status)
-                            </button>
+                            <AuthorizeView Roles="@SagaSalesRoles.ManagerOrOwner" Context="auth">
+                                <button class="btn btn-sm btn-primary" @onclick="AdvanceAsync" disabled="@Busy">
+                                    @NextTransitionLabel(Selected.Status)
+                                </button>
+                            </AuthorizeView>
                         }
                         else
                         {
@@ -246,10 +248,12 @@
 
                     @if (Selected.Status is "Pending" or "Confirmed" or "Processing")
                     {
-                        <hr class="divider" />
-                        <button class="btn btn-outline-danger" @onclick="CancelAsync" disabled="@Busy">
-                            Cancelar pedido y devolver stock
-                        </button>
+                        <AuthorizeView Roles="@SagaSalesRoles.ManagerOrOwner" Context="auth">
+                            <hr class="divider" />
+                            <button class="btn btn-outline-danger" @onclick="CancelAsync" disabled="@Busy">
+                                Cancelar pedido y devolver stock
+                            </button>
+                        </AuthorizeView>
                     }
                 </div>
             </div>
@@ -272,7 +276,7 @@
                                     <td class="text-end">
                                         @if (payment.RefundableAmount > 0)
                                         {
-                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => RefundAsync(payment)">Reembolsar</button>
+                                            <AuthorizeView Roles="@SagaSalesRoles.ManagerOrOwner" Context="auth"><button class="btn btn-sm btn-outline-secondary" @onclick="() => RefundAsync(payment)">Reembolsar</button></AuthorizeView>
                                         }
                                     </td>
                                 </tr>

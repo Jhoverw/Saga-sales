@@ -15,6 +15,7 @@ builder.Services.AddSagaSalesTelemetry(builder.Configuration, "SagaSales.Identit
 
 // Persistence: stored procedures only. The tenant is the first parameter of every procedure.
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 builder.Services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
 

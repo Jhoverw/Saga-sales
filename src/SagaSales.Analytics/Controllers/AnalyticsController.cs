@@ -6,6 +6,7 @@ using SagaSales.Analytics.Services;
 
 [ApiController]
 [Authorize]
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = SagaSales.Shared.Constants.SagaSalesRoles.ManagerOrOwner)]
 [Route("api/analytics")]
 public sealed class AnalyticsController(IMediator mediator, ISalesSummaryCsvExporter csvExporter) : ControllerBase
 {

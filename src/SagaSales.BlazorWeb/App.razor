@@ -3,10 +3,20 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                 <NotAuthorized>
-                    <div class="alert alert-warning">
-                        Necesitas iniciar sesión para ver esta página.
-                        <a href="/login" class="alert-link">Ir al login</a>
-                    </div>
+                    @if (context.User.Identity?.IsAuthenticated == true)
+                    {
+                        <div class="alert alert-warning">
+                            Tu usuario no tiene permiso para esta página.
+                            <a href="/caja" class="alert-link">Ir a Caja</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            Necesitas iniciar sesión para ver esta página.
+                            <a href="/login" class="alert-link">Ir al login</a>
+                        </div>
+                    }
                 </NotAuthorized>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
